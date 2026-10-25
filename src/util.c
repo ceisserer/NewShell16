@@ -33,6 +33,31 @@ void FillSolid(HDC hdc, const RECT FAR *lprc, COLORREF clr)
     SetBkColor(hdc, clrOld);
 }
 
+/*
+ * The focus rectangle of a list item. DrawFocusRect inverts, which turns
+ * into a yellow frame on a highlighted (dark blue) item; there the dots
+ * are drawn in the highlight text colour instead.
+ */
+void DrawItemFocus(HDC hdc, const RECT FAR *lprc, BOOL bSel)
+{
+    COLORREF clr;
+    int x, y;
+
+    if (!bSel) {
+        DrawFocusRect(hdc, lprc);
+        return;
+    }
+    clr = GetSysColor(COLOR_HIGHLIGHTTEXT);
+    for (x = lprc->left; x < lprc->right; x += 2) {
+        SetPixel(hdc, x, lprc->top, clr);
+        SetPixel(hdc, x, lprc->bottom - 1, clr);
+    }
+    for (y = lprc->top; y < lprc->bottom; y += 2) {
+        SetPixel(hdc, lprc->left, y, clr);
+        SetPixel(hdc, lprc->right - 1, y, clr);
+    }
+}
+
 static void FillXY(HDC hdc, int l, int t, int r, int b, COLORREF clr)
 {
     RECT rc;

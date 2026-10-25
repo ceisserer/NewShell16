@@ -367,7 +367,7 @@ static void DrawTask(DRAWITEMSTRUCT FAR *lpdis)
     DrawText(hdc, t->szTitle, -1, &rcText, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
     rcText.left -= 2;
     if (lpdis->itemState & ODS_FOCUS)
-        DrawFocusRect(hdc, &rcText);
+        DrawItemFocus(hdc, &rcText, bSel);
     SetTextColor(hdc, GetSysColor(COLOR_WINDOWTEXT));
     SetRect(&rcText, rc.left + COL_TASK_CX + 4, rc.top, rc.right, rc.bottom);
     DrawText(hdc, t->szModule, -1, &rcText, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);

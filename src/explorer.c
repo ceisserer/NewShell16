@@ -338,7 +338,7 @@ static void DrawNode(LPEXPLORER e, DRAWITEMSTRUCT FAR *lpdis)
     DrawText(hdc, n->szName, -1, &rcText,
              DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
     if (lpdis->itemState & ODS_FOCUS)
-        DrawFocusRect(hdc, &rcText);
+        DrawItemFocus(hdc, &rcText, bSel && GetFocus() == e->hwndTree);
     SelectObject(hdc, hfOld);
 }
 
