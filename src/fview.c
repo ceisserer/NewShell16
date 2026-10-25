@@ -1,0 +1,1630 @@
+/*
+ * NewShell16 - a Calmira-style shell for Windows 3.1
+ * Copyright (C) 2026 NewShell16 contributors
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+/*
+ * fview.c - the folder view control
+ *
+ * A child window showing the contents of a directory (or the drives of
+ * the computer when the path is ""), in large icon, small icon or details
+ * view. It handles selection, keyboard navigation, renaming, the item
+ * context menu, clipboard commands and drag and drop. Folder windows and
+ * the Explorer embed it; they get notified via WM_NS_FVNOTIFY.
+ */
+#include <stdlib.h>
+#include <string.h>
+#include <dos.h>
+#include <i86.h>
+#include "newshell.h"
+
+#define MAX_VIEWS       64
+#define MARGIN          4
+#define LARGE_CX        80
+#define LARGE_CY        58
+#define SMALL_CY        18
+#define DRAG_THRESHOLD  4
+#define ID_RENAME       100
+
+/* details view columns */
+#define COL_NAME_CX     140
+#define COL_SIZE_CX     70
+#define COL_TYPE_CX     70
+#define COL_DATE_CX     110
+
+typedef struct tagFITEM {
+    char  szName[16];       /* file name, or "C:" for drives */
+    BYTE  bKind;            /* FK_* */
+    BYTE  bAttr;
+    BYTE  bSel;
+    BYTE  bDriveType;
+    DWORD dwSize;
+    WORD  wDate, wTime;
+    HICON hIcon;
+} FITEM, FAR *LPFITEM;
+
+typedef struct tagFVIEW {
+    char    szPath[MAXPATHLEN];     /* "" = Computer */
+    LPFITEM lpItems;
+    int     nItems;
+    int     nCap;
+    int     nFocus;
+    int     nAnchor;
+    int     nTop;                   /* first visible row */
+    int     nMode;                  /* FV_* */
+    int     nSort;                  /* FS_* */
+    int     nCols;
+    int     nVisRows;
+    int     cxCell, cyCell;
+    int     cyHeader;               /* details view column header */
+    int     cyText;
+    DWORD   dwTotal;
+    /* mouse */
+    BOOL    bPressed;
+    BOOL    bDragging;
+    BOOL    bDeferSelect;
+    POINT   ptDown;
+    int     nDownItem;
+    /* inline rename */
+    HWND    hwndEdit;
+    int     nRenaming;
+} FVIEW, FAR *LPFVIEW;
+
+static HWND    s_hwndViews[MAX_VIEWS];
+static int     s_nViews;
+static FARPROC s_lpfnEditProc;
+static WNDPROC s_lpfnOldEdit;
+
+/* internal clipboard for Cut/Copy/Paste */
+static HGLOBAL s_hClip;
+static BOOL    s_bClipCut;
+
+static LPFVIEW GetView(HWND hwnd)
+{
+    return (LPFVIEW)GetWindowLong(hwnd, 0);
+}
+
+static void Notify(HWND hwnd, UINT uCode, LPARAM lParam)
+{
+    SendMessage(GetParent(hwnd), WM_NS_FVNOTIFY, uCode, lParam);
+}
+
+/* -------------------------------------------------------------------- */
+/* Reading                                                              */
+/* -------------------------------------------------------------------- */
+
+static LPFITEM AddItem(LPFVIEW v)
+{
+    if (v->nItems >= v->nCap) {
+        int nCap = v->nCap ? v->nCap * 2 : 64;
+        LPFITEM lpNew;
+
+        if ((long)nCap * sizeof(FITEM) > 65000L)
+            return NULL;
+        lpNew = (LPFITEM)realloc(v->lpItems, nCap * sizeof(FITEM));
+        if (!lpNew)
+            return NULL;
+        v->lpItems = lpNew;
+        v->nCap = nCap;
+    }
+    _fmemset(&v->lpItems[v->nItems], 0, sizeof(FITEM));
+    return &v->lpItems[v->nItems++];
+}
+
+static int s_nSortMode;
+
+static int CompareItems(const void *a, const void *b)
+{
+    LPFITEM p = (LPFITEM)a, q = (LPFITEM)b;
+    int n;
+
+    if (p->bKind != q->bKind)
+        return (int)q->bKind - (int)p->bKind;   /* drives, dirs, files */
+    switch (s_nSortMode) {
+    case FS_TYPE:
+        n = lstrcmpi(PathExtension(p->szName), PathExtension(q->szName));
+        if (n)
+            return n;
+        break;
+    case FS_SIZE:
+        if (p->dwSize != q->dwSize)
+            return p->dwSize < q->dwSize ? 1 : -1;
+        break;
+    case FS_DATE:
+        if (p->wDate != q->wDate)
+            return p->wDate < q->wDate ? 1 : -1;
+        if (p->wTime != q->wTime)
+            return p->wTime < q->wTime ? 1 : -1;
+        break;
+    }
+    return lstrcmpi(p->szName, q->szName);
+}
+
+static void SortItems(LPFVIEW v)
+{
+    s_nSortMode = v->nSort;
+    if (v->nItems > 1)
+        qsort(v->lpItems, v->nItems, sizeof(FITEM), CompareItems);
+}
+
+static void ReadDrives(LPFVIEW v)
+{
+    int d, nType, idi;
+    LPFITEM p;
+
+    for (d = 0; d < 26; d++) {
+        nType = GetDriveType(d);
+        if (nType == 0)
+            continue;
+        p = AddItem(v);
+        if (!p)
+            break;
+        idi = DriveIcon(d, &p->bDriveType);
+        wsprintf(p->szName, "%c:", 'A' + d);
+        p->bKind = FK_DRIVE;
+        p->hIcon = IconStock(idi);
+    }
+}
+
+static void ReadDirectory(LPFVIEW v)
+{
+    struct find_t ft;
+    char szPattern[MAXPATHLEN + 4];
+    char szFull[MAXPATHLEN + 14];
+    unsigned uAttr = _A_NORMAL | _A_RDONLY | _A_SUBDIR | _A_ARCH;
+    UINT uOldMode;
+    LPFITEM p;
+
+    if (g_cfg.bShowHidden)
+        uAttr |= _A_HIDDEN | _A_SYSTEM;
+
+    lstrcpy(szPattern, v->szPath);
+    PathAppend(szPattern, "*.*");
+    uOldMode = SetErrorMode(1);
+    if (_dos_findfirst(szPattern, uAttr, &ft) == 0) {
+        do {
+            if (ft.name[0] == '.')
+                continue;
+            if (!g_cfg.bShowHidden && (ft.attrib & (_A_HIDDEN | _A_SYSTEM)))
+                continue;
+            p = AddItem(v);
+            if (!p)
+                break;
+            lstrcpyn(p->szName, ft.name, sizeof(p->szName));
+            p->bAttr = ft.attrib;
+            p->dwSize = ft.size;
+            p->wDate = ft.wr_date;
+            p->wTime = ft.wr_time;
+            p->bKind = (ft.attrib & _A_SUBDIR) ? FK_DIR : FK_FILE;
+            if (p->bKind == FK_FILE)
+                v->dwTotal += ft.size;
+        } while (_dos_findnext(&ft) == 0);
+    }
+    SetErrorMode(uOldMode);
+
+    /* icons are looked up after reading so FindExecutable cannot upset the
+       DOS find state */
+    for (p = v->lpItems; p < v->lpItems + v->nItems; p++) {
+        lstrcpy(szFull, v->szPath);
+        PathAppend(szFull, p->szName);
+        p->hIcon = IconForFile(szFull, p->bKind == FK_DIR);
+    }
+}
+
+static void ReadFolder(LPFVIEW v)
+{
+    HCURSOR hcurOld = SetCursor(LoadCursor(NULL, IDC_WAIT));
+
+    v->nItems = 0;
+    v->dwTotal = 0;
+    if (v->szPath[0] == '\0')
+        ReadDrives(v);
+    else
+        ReadDirectory(v);
+    SortItems(v);
+    v->nFocus = v->nItems > 0 ? 0 : -1;
+    v->nAnchor = v->nFocus;
+    SetCursor(hcurOld);
+}
+
+/* -------------------------------------------------------------------- */
+/* Layout                                                               */
+/* -------------------------------------------------------------------- */
+
+static void UpdateLayout(HWND hwnd, LPFVIEW v)
+{
+    RECT rc;
+    int nRows, nMax, i, cx;
+    HDC hdc;
+    HFONT hfOld;
+
+    GetClientRect(hwnd, &rc);
+    v->cyHeader = 0;
+    switch (v->nMode) {
+    case FV_LARGE:
+        v->cxCell = LARGE_CX;
+        v->cyCell = LARGE_CY;
+        break;
+    case FV_SMALL:
+        hdc = GetDC(hwnd);
+        hfOld = SelectObject(hdc, g_hfontUI);
+        v->cxCell = 80;
+        for (i = 0; i < v->nItems; i++) {
+            cx = TextWidth(hdc, v->lpItems[i].szName) + 30;
+            if (cx > v->cxCell)
+                v->cxCell = cx;
+        }
+        if (v->cxCell > 160)
+            v->cxCell = 160;
+        SelectObject(hdc, hfOld);
+        ReleaseDC(hwnd, hdc);
+        v->cyCell = SMALL_CY;
+        break;
+    default:
+        v->cxCell = rc.right - 2 * MARGIN;
+        if (v->cxCell < COL_NAME_CX)
+            v->cxCell = COL_NAME_CX;
+        v->cyCell = SMALL_CY;
+        v->cyHeader = v->cyText + 6;
+        break;
+    }
+    v->nCols = (v->nMode == FV_DETAILS) ? 1 : (rc.right - 2 * MARGIN) / v->cxCell;
+    if (v->nCols < 1)
+        v->nCols = 1;
+    v->nVisRows = (rc.bottom - v->cyHeader - MARGIN) / v->cyCell;
+    if (v->nVisRows < 1)
+        v->nVisRows = 1;
+    nRows = (v->nItems + v->nCols - 1) / v->nCols;
+    nMax = nRows - v->nVisRows;
+    if (nMax < 0)
+        nMax = 0;
+    if (v->nTop > nMax)
+        v->nTop = nMax;
+    SetScrollRange(hwnd, SB_VERT, 0, nMax, FALSE);
+    SetScrollPos(hwnd, SB_VERT, v->nTop, TRUE);
+}
+
+static void CellRect(LPFVIEW v, int i, RECT FAR *lprc)
+{
+    int x = MARGIN + (i % v->nCols) * v->cxCell;
+    int y = MARGIN + v->cyHeader + (i / v->nCols - v->nTop) * v->cyCell;
+
+    SetRect(lprc, x, y, x + v->cxCell, y + v->cyCell);
+}
+
+/* The part of an item that reacts to the mouse */
+static void HotRect(HWND hwnd, LPFVIEW v, int i, RECT FAR *lprc)
+{
+    CellRect(v, i, lprc);
+    if (v->nMode == FV_LARGE) {
+        InflateRect(lprc, -6, 0);
+    } else {
+        HDC hdc = GetDC(hwnd);
+        HFONT hfOld = SelectObject(hdc, g_hfontUI);
+        int cx = 22 + TextWidth(hdc, v->lpItems[i].szName) + 4;
+
+        SelectObject(hdc, hfOld);
+        ReleaseDC(hwnd, hdc);
+        if (v->nMode == FV_DETAILS && cx > COL_NAME_CX)
+            cx = COL_NAME_CX;
+        if (lprc->left + cx < lprc->right)
+            lprc->right = lprc->left + cx;
+    }
+}
+
+static int HitTest(HWND hwnd, LPFVIEW v, int x, int y)
+{
+    int col, row, i;
+    RECT rc;
+    POINT pt;
+
+    if (x < MARGIN || y < MARGIN + v->cyHeader)
+        return -1;
+    col = (x - MARGIN) / v->cxCell;
+    row = (y - MARGIN - v->cyHeader) / v->cyCell + v->nTop;
+    if (col >= v->nCols)
+        return -1;
+    i = row * v->nCols + col;
+    if (i >= v->nItems)
+        return -1;
+    HotRect(hwnd, v, i, &rc);
+    pt.x = x;
+    pt.y = y;
+    return PtInRect(&rc, pt) ? i : -1;
+}
+
+/* -------------------------------------------------------------------- */
+/* Painting                                                             */
+/* -------------------------------------------------------------------- */
+
+static void FormatDateTime(WORD wDate, WORD wTime, LPSTR lpBuf)
+{
+    wsprintf(lpBuf, "%02u.%02u.%04u %02u:%02u",
+             wDate & 31, (wDate >> 5) & 15, (wDate >> 9) + 1980,
+             wTime >> 11, (wTime >> 5) & 63);
+}
+
+static void TypeName(LPFITEM p, LPSTR lpBuf)
+{
+    static const char *s_szDrive[] = { "Drive", "Floppy disk", "Hard disk",
+                                       "Network drive", "CD-ROM" };
+    char szName[16];
+    LPSTR lpExt;
+
+    if (p->bKind == FK_DRIVE) {
+        lstrcpy(lpBuf, s_szDrive[p->bDriveType < 5 ? p->bDriveType : 0]);
+        return;
+    }
+    if (p->bKind == FK_DIR) {
+        lstrcpy(lpBuf, "Folder");
+        return;
+    }
+    lstrcpy(szName, p->szName);
+    lpExt = PathExtension(szName);
+    if (*lpExt)
+        wsprintf(lpBuf, "%s File", lpExt);
+    else
+        lstrcpy(lpBuf, "File");
+}
+
+static void DrawLabel(HWND hwnd, HDC hdc, LPFVIEW v, int i, RECT FAR *lprc,
+                      LPCSTR lpText, UINT uFormat)
+{
+    LPFITEM p = &v->lpItems[i];
+
+    if (p->bSel) {
+        FillSolid(hdc, lprc, GetSysColor(COLOR_HIGHLIGHT));
+        SetTextColor(hdc, GetSysColor(COLOR_HIGHLIGHTTEXT));
+    } else
+        SetTextColor(hdc, GetSysColor(COLOR_WINDOWTEXT));
+    DrawText(hdc, lpText, -1, lprc, uFormat | DT_SINGLELINE | DT_NOPREFIX | DT_VCENTER);
+    if (i == v->nFocus && GetFocus() == hwnd)
+        DrawFocusRect(hdc, lprc);
+}
+
+static void PaintItem(HWND hwnd, HDC hdc, LPFVIEW v, int i)
+{
+    RECT rc, rcText;
+    LPFITEM p = &v->lpItems[i];
+    char szLabel[48];
+    int cx, x;
+
+    CellRect(v, i, &rc);
+
+    if (v->nMode == FV_LARGE) {
+        DrawIcon(hdc, rc.left + (v->cxCell - 32) / 2, rc.top + 2, p->hIcon);
+        FitText(hdc, p->szName, szLabel, sizeof(szLabel), v->cxCell - 6);
+        cx = TextWidth(hdc, szLabel);
+        rcText.left = rc.left + (v->cxCell - cx) / 2 - 2;
+        rcText.right = rcText.left + cx + 4;
+        rcText.top = rc.top + 37;
+        rcText.bottom = rcText.top + v->cyText + 2;
+        if (i == v->nRenaming)
+            return;
+        DrawLabel(hwnd, hdc, v, i, &rcText, szLabel, DT_CENTER);
+        return;
+    }
+
+    DrawIconSmall(hdc, rc.left + 2, rc.top + 1, p->hIcon,
+                  GetSysColor(COLOR_WINDOW));
+    x = rc.left + 22;
+    cx = (v->nMode == FV_DETAILS ? COL_NAME_CX : v->cxCell) - 26;
+    FitText(hdc, p->szName, szLabel, sizeof(szLabel), cx);
+    SetRect(&rcText, x, rc.top + 1, x + TextWidth(hdc, szLabel) + 4,
+            rc.bottom - 1);
+    if (i != v->nRenaming) {
+        rcText.left -= 2;
+        DrawLabel(hwnd, hdc, v, i, &rcText, szLabel, DT_CENTER);
+    }
+
+    if (v->nMode == FV_DETAILS) {
+        SetTextColor(hdc, GetSysColor(COLOR_WINDOWTEXT));
+        x = rc.left + COL_NAME_CX;
+        if (p->bKind == FK_FILE) {
+            if (p->dwSize < 1024L)
+                wsprintf(szLabel, "%lu bytes", p->dwSize);
+            else
+                wsprintf(szLabel, "%luKB", (p->dwSize + 1023L) / 1024L);
+            SetRect(&rcText, x, rc.top, x + COL_SIZE_CX - 8, rc.bottom);
+            DrawText(hdc, szLabel, -1, &rcText,
+                     DT_RIGHT | DT_SINGLELINE | DT_VCENTER);
+        }
+        x += COL_SIZE_CX;
+        TypeName(p, szLabel);
+        SetRect(&rcText, x, rc.top, x + COL_TYPE_CX - 4, rc.bottom);
+        DrawText(hdc, szLabel, -1, &rcText, DT_LEFT | DT_SINGLELINE | DT_VCENTER);
+        x += COL_TYPE_CX;
+        if (p->bKind != FK_DRIVE) {
+            FormatDateTime(p->wDate, p->wTime, szLabel);
+            SetRect(&rcText, x, rc.top, x + COL_DATE_CX - 4, rc.bottom);
+            DrawText(hdc, szLabel, -1, &rcText, DT_LEFT | DT_SINGLELINE | DT_VCENTER);
+            x += COL_DATE_CX;
+            wsprintf(szLabel, "%s%s%s%s",
+                     (LPSTR)((p->bAttr & _A_RDONLY) ? "R" : ""),
+                     (LPSTR)((p->bAttr & _A_HIDDEN) ? "H" : ""),
+                     (LPSTR)((p->bAttr & _A_SYSTEM) ? "S" : ""),
+                     (LPSTR)((p->bAttr & _A_ARCH) ? "A" : ""));
+            SetRect(&rcText, x, rc.top, rc.right, rc.bottom);
+            DrawText(hdc, szLabel, -1, &rcText, DT_LEFT | DT_SINGLELINE | DT_VCENTER);
+        }
+    }
+}
+
+static void PaintHeader(HWND hwnd, HDC hdc, LPFVIEW v)
+{
+    static const char *s_szCols[] = { "Name", "Size", "Type", "Modified", "Attr" };
+    static const int s_cx[] = { COL_NAME_CX, COL_SIZE_CX, COL_TYPE_CX,
+                                COL_DATE_CX, 0 };
+    RECT rcClient, rc;
+    int i, x = 0;
+
+    GetClientRect(hwnd, &rcClient);
+    for (i = 0; i < 5; i++) {
+        int cx = s_cx[i] ? s_cx[i] : rcClient.right - x;
+        if (i == 0)
+            cx += MARGIN;
+        SetRect(&rc, x, 0, x + cx, v->cyHeader);
+        FillSolid(hdc, &rc, GetSysColor(COLOR_BTNFACE));
+        Draw3DEdge(hdc, &rc, FALSE, FALSE);
+        SetTextColor(hdc, GetSysColor(COLOR_BTNTEXT));
+        InflateRect(&rc, -4, 0);
+        if (i == 1)
+            rc.right -= 4;
+        DrawText(hdc, s_szCols[i], -1, &rc,
+                 (i == 1 ? DT_RIGHT : DT_LEFT) | DT_SINGLELINE | DT_VCENTER);
+        x += cx;
+    }
+}
+
+static void PaintView(HWND hwnd, HDC hdc, LPFVIEW v, const RECT FAR *lprcPaint)
+{
+    HFONT hfOld = SelectObject(hdc, g_hfontUI);
+    RECT rc, rcClip;
+    int i, iFirst, iLast;
+
+    SetBkMode(hdc, TRANSPARENT);
+    if (v->nMode == FV_DETAILS) {
+        PaintHeader(hwnd, hdc, v);
+        GetClientRect(hwnd, &rc);
+        IntersectClipRect(hdc, 0, v->cyHeader, rc.right, rc.bottom);
+    }
+    iFirst = v->nTop * v->nCols;
+    iLast = iFirst + (v->nVisRows + 1) * v->nCols;
+    if (iLast > v->nItems)
+        iLast = v->nItems;
+    for (i = iFirst; i < iLast; i++) {
+        CellRect(v, i, &rc);
+        if (IntersectRect(&rcClip, &rc, lprcPaint))
+            PaintItem(hwnd, hdc, v, i);
+    }
+    if (v->nItems == 0 && v->szPath[0]) {
+        GetClientRect(hwnd, &rc);
+        rc.top = v->cyHeader + 8;
+        SetTextColor(hdc, GetSysColor(COLOR_GRAYTEXT));
+        DrawText(hdc, "This folder is empty.", -1, &rc, DT_CENTER | DT_SINGLELINE);
+    }
+    SelectObject(hdc, hfOld);
+}
+
+static void InvalidateItem(HWND hwnd, LPFVIEW v, int i)
+{
+    RECT rc;
+
+    if (i < 0 || i >= v->nItems)
+        return;
+    CellRect(v, i, &rc);
+    InvalidateRect(hwnd, &rc, TRUE);
+}
+
+/* -------------------------------------------------------------------- */
+/* Selection and scrolling                                              */
+/* -------------------------------------------------------------------- */
+
+static void ScrollTo(HWND hwnd, LPFVIEW v, int nTop)
+{
+    int nMin, nMax;
+
+    GetScrollRange(hwnd, SB_VERT, &nMin, &nMax);
+    if (nTop > nMax)
+        nTop = nMax;
+    if (nTop < 0)
+        nTop = 0;
+    if (nTop == v->nTop)
+        return;
+    v->nTop = nTop;
+    SetScrollPos(hwnd, SB_VERT, nTop, TRUE);
+    InvalidateRect(hwnd, NULL, TRUE);
+}
+
+static void EnsureVisible(HWND hwnd, LPFVIEW v, int i)
+{
+    int nRow;
+
+    if (i < 0)
+        return;
+    nRow = i / v->nCols;
+    if (nRow < v->nTop)
+        ScrollTo(hwnd, v, nRow);
+    else if (nRow >= v->nTop + v->nVisRows)
+        ScrollTo(hwnd, v, nRow - v->nVisRows + 1);
+}
+
+static void SetFocusItem(HWND hwnd, LPFVIEW v, int i)
+{
+    int nOld = v->nFocus;
+
+    v->nFocus = i;
+    InvalidateItem(hwnd, v, nOld);
+    InvalidateItem(hwnd, v, i);
+    EnsureVisible(hwnd, v, i);
+}
+
+static void SelectNone(HWND hwnd, LPFVIEW v)
+{
+    int i;
+
+    for (i = 0; i < v->nItems; i++)
+        if (v->lpItems[i].bSel) {
+            v->lpItems[i].bSel = FALSE;
+            InvalidateItem(hwnd, v, i);
+        }
+}
+
+static void SelectItem(HWND hwnd, LPFVIEW v, int i, BOOL bSel)
+{
+    if (i < 0 || i >= v->nItems || v->lpItems[i].bSel == (BYTE)bSel)
+        return;
+    v->lpItems[i].bSel = (BYTE)bSel;
+    InvalidateItem(hwnd, v, i);
+}
+
+static void SelectRange(HWND hwnd, LPFVIEW v, int a, int b)
+{
+    int i;
+
+    if (a > b) {
+        i = a;
+        a = b;
+        b = i;
+    }
+    for (i = 0; i < v->nItems; i++)
+        SelectItem(hwnd, v, i, i >= a && i <= b);
+}
+
+/* Moves the focus as a result of a key or click, honouring Shift/Ctrl */
+static void MoveFocusTo(HWND hwnd, LPFVIEW v, int i, BOOL bShift, BOOL bCtrl)
+{
+    if (v->nItems == 0)
+        return;
+    if (i < 0)
+        i = 0;
+    if (i >= v->nItems)
+        i = v->nItems - 1;
+    if (bShift && v->nAnchor >= 0) {
+        SelectRange(hwnd, v, v->nAnchor, i);
+    } else if (!bCtrl) {
+        SelectNone(hwnd, v);
+        SelectItem(hwnd, v, i, TRUE);
+        v->nAnchor = i;
+    }
+    SetFocusItem(hwnd, v, i);
+    Notify(hwnd, FVN_SELCHANGE, 0L);
+}
+
+int FViewSelCount(HWND hwnd)
+{
+    LPFVIEW v = GetView(hwnd);
+    int i, n = 0;
+
+    if (!v)
+        return 0;
+    for (i = 0; i < v->nItems; i++)
+        if (v->lpItems[i].bSel)
+            n++;
+    return n;
+}
+
+static void ItemPath(LPFVIEW v, int i, LPSTR lpBuf)
+{
+    LPFITEM p = &v->lpItems[i];
+
+    if (p->bKind == FK_DRIVE) {
+        wsprintf(lpBuf, "%s\\", (LPSTR)p->szName);
+        return;
+    }
+    lstrcpy(lpBuf, v->szPath);
+    PathAppend(lpBuf, p->szName);
+}
+
+/* Returns the selected items as a path list (NULL if none) */
+HGLOBAL FViewGetSelection(HWND hwnd)
+{
+    LPFVIEW v = GetView(hwnd);
+    char szPath[MAXPATHLEN];
+    HGLOBAL hList = NULL;
+    int i;
+
+    if (!v)
+        return NULL;
+    for (i = 0; i < v->nItems; i++)
+        if (v->lpItems[i].bSel) {
+            ItemPath(v, i, szPath);
+            PathListAdd(&hList, szPath);
+        }
+    return hList;
+}
+
+/* -------------------------------------------------------------------- */
+/* Status text                                                          */
+/* -------------------------------------------------------------------- */
+
+void FViewGetStatus(HWND hwnd, LPSTR lpBuf, int cbBuf)
+{
+    LPFVIEW v = GetView(hwnd);
+    char szText[96], szSize[24];
+    DWORD dwSel = 0;
+    int i, nSel = 0;
+
+    if (!v) {
+        lpBuf[0] = '\0';
+        return;
+    }
+    for (i = 0; i < v->nItems; i++)
+        if (v->lpItems[i].bSel) {
+            nSel++;
+            dwSel += v->lpItems[i].dwSize;
+        }
+    if (v->szPath[0] == '\0') {
+        wsprintf(szText, "%d drive(s)", v->nItems);
+    } else if (nSel > 0) {
+        FormatBytes(dwSel, szSize);
+        wsprintf(szText, "%d object(s) selected  %s", nSel, (LPSTR)szSize);
+    } else {
+        FormatBytes(v->dwTotal, szSize);
+        wsprintf(szText, "%d object(s)  %s", v->nItems, (LPSTR)szSize);
+    }
+    lstrcpyn(lpBuf, szText, cbBuf);
+}
+
+/* -------------------------------------------------------------------- */
+/* Opening and commands                                                 */
+/* -------------------------------------------------------------------- */
+
+static BOOL DriveReady(int nDrive)
+{
+    struct find_t ft;
+    char szPattern[8];
+    UINT uOldMode = SetErrorMode(1);    /* SEM_FAILCRITICALERRORS */
+    unsigned rc;
+
+    wsprintf(szPattern, "%c:\\*.*", 'A' + nDrive);
+    rc = _dos_findfirst(szPattern, _A_NORMAL | _A_SUBDIR | _A_VOLID, &ft);
+    SetErrorMode(uOldMode);
+    return rc == 0 || rc == 0x12;       /* 0x12 = no more files (empty) */
+}
+
+static void OpenItem(HWND hwnd, LPFVIEW v, int i, BOOL bExplore)
+{
+    char szPath[MAXPATHLEN];
+    char szMsg[80];
+    LPFITEM p;
+
+    if (i < 0 || i >= v->nItems)
+        return;
+    p = &v->lpItems[i];
+    ItemPath(v, i, szPath);
+    if (p->bKind == FK_DRIVE && !DriveReady(p->szName[0] - 'A')) {
+        wsprintf(szMsg, "Drive %s is not ready.", (LPSTR)p->szName);
+        MessageBox(hwnd, szMsg, NS_APPNAME, MB_OK | MB_ICONEXCLAMATION);
+        return;
+    }
+    if (p->bKind == FK_FILE) {
+        OpenPath(hwnd, szPath);
+        return;
+    }
+    if (bExplore)
+        ExplorerOpen(szPath);
+    else
+        Notify(hwnd, FVN_OPENFOLDER, (LPARAM)(LPSTR)szPath);
+}
+
+static void OpenSelection(HWND hwnd, LPFVIEW v)
+{
+    int i, n = 0;
+
+    for (i = 0; i < v->nItems; i++)
+        if (v->lpItems[i].bSel && n++ < 16)
+            OpenItem(hwnd, v, i, FALSE);
+    if (n == 0 && v->nFocus >= 0)
+        OpenItem(hwnd, v, v->nFocus, FALSE);
+}
+
+static void DoDelete(HWND hwnd, LPFVIEW v, BOOL bPermanent)
+{
+    HGLOBAL hList = FViewGetSelection(hwnd);
+
+    if (!hList || v->szPath[0] == '\0') {
+        if (hList)
+            GlobalFree(hList);
+        return;
+    }
+    FileOpDelete(hwnd, hList, g_cfg.bDeleteToBin && !bPermanent);
+    GlobalFree(hList);
+}
+
+static void DoCutCopy(HWND hwnd, BOOL bCut)
+{
+    HGLOBAL hList = FViewGetSelection(hwnd);
+
+    if (!hList)
+        return;
+    if (s_hClip)
+        GlobalFree(s_hClip);
+    s_hClip = hList;
+    s_bClipCut = bCut;
+}
+
+static void DoPaste(HWND hwnd, LPFVIEW v)
+{
+    if (!s_hClip || v->szPath[0] == '\0')
+        return;
+    FileOpCopyMove(hwnd, s_hClip, v->szPath, s_bClipCut);
+    if (s_bClipCut) {
+        GlobalFree(s_hClip);
+        s_hClip = NULL;
+    }
+}
+
+static void DoNewFolder(HWND hwnd, LPFVIEW v)
+{
+    char szName[16];
+    int i;
+
+    if (v->szPath[0] == '\0')
+        return;
+    if (!FileOpNewFolder(hwnd, v->szPath, szName))
+        return;
+    FViewRefresh(hwnd);
+    for (i = 0; i < v->nItems; i++)
+        if (lstrcmpi(v->lpItems[i].szName, szName) == 0) {
+            MoveFocusTo(hwnd, v, i, FALSE, FALSE);
+            FViewCommand(hwnd, CMD_F_RENAME);
+            break;
+        }
+}
+
+static void DoProperties(HWND hwnd, LPFVIEW v)
+{
+    HGLOBAL hList = FViewGetSelection(hwnd);
+
+    if (!hList) {
+        if (v->szPath[0])
+            PathListAdd(&hList, v->szPath);
+        else
+            return;
+    }
+    PropertiesDialog(hwnd, hList);
+    GlobalFree(hList);
+}
+
+/* -------------------------------------------------------------------- */
+/* Inline rename                                                        */
+/* -------------------------------------------------------------------- */
+
+static void EndRename(HWND hwnd, LPFVIEW v, BOOL bCommit)
+{
+    char szOld[MAXPATHLEN], szNew[16];
+    HWND hwndEdit = v->hwndEdit;
+    int i = v->nRenaming;
+
+    if (!hwndEdit)
+        return;
+    v->hwndEdit = NULL;
+    v->nRenaming = -1;
+    GetWindowText(hwndEdit, szNew, sizeof(szNew));
+    DestroyWindow(hwndEdit);
+    InvalidateItem(hwnd, v, i);
+    if (!bCommit || i < 0 || i >= v->nItems)
+        return;
+    if (lstrcmpi(szNew, v->lpItems[i].szName) == 0 || szNew[0] == '\0')
+        return;
+    ItemPath(v, i, szOld);
+    if (FileOpRename(hwnd, szOld, szNew))
+        FViewRefreshPath(v->szPath);
+}
+
+LRESULT CALLBACK NSEXPORT RenameEditProc(HWND hwnd, UINT msg, WPARAM wParam,
+                                         LPARAM lParam)
+{
+    HWND hwndView = GetParent(hwnd);
+
+    if (msg == WM_GETDLGCODE)
+        return DLGC_WANTALLKEYS;
+    if (msg == WM_KEYDOWN && (wParam == VK_RETURN || wParam == VK_ESCAPE)) {
+        EndRename(hwndView, GetView(hwndView), wParam == VK_RETURN);
+        SetFocus(hwndView);
+        return 0;
+    }
+    if (msg == WM_CHAR && (wParam == VK_RETURN || wParam == VK_ESCAPE))
+        return 0;
+    if (msg == WM_KILLFOCUS) {
+        LRESULT lr = CallWindowProc(s_lpfnOldEdit, hwnd, msg, wParam, lParam);
+        PostMessage(hwndView, WM_NS_ENDRENAME, 0, 0L);
+        return lr;
+    }
+    return CallWindowProc(s_lpfnOldEdit, hwnd, msg, wParam, lParam);
+}
+
+static void BeginRename(HWND hwnd, LPFVIEW v)
+{
+    RECT rc;
+    int i = v->nFocus;
+
+    if (i < 0 || v->lpItems[i].bKind == FK_DRIVE || v->hwndEdit)
+        return;
+    EnsureVisible(hwnd, v, i);
+    CellRect(v, i, &rc);
+    if (v->nMode == FV_LARGE) {
+        rc.top += 36;
+        rc.bottom = rc.top + v->cyText + 4;
+    } else {
+        rc.left += 20;
+        rc.right = rc.left + 100;
+    }
+    v->nRenaming = i;
+    v->hwndEdit = CreateWindow("EDIT", v->lpItems[i].szName,
+                               WS_CHILD | WS_BORDER | ES_AUTOHSCROLL | ES_UPPERCASE,
+                               rc.left, rc.top, rc.right - rc.left,
+                               rc.bottom - rc.top, hwnd, (HMENU)ID_RENAME,
+                               g_hInst, NULL);
+    if (!v->hwndEdit) {
+        v->nRenaming = -1;
+        return;
+    }
+    if (!s_lpfnEditProc)
+        s_lpfnEditProc = MakeProcInstance((FARPROC)RenameEditProc, g_hInst);
+    s_lpfnOldEdit = (WNDPROC)SetWindowLong(v->hwndEdit, GWL_WNDPROC,
+                                           (LONG)s_lpfnEditProc);
+    SendMessage(v->hwndEdit, WM_SETFONT, (WPARAM)g_hfontUI, 0L);
+    SendMessage(v->hwndEdit, EM_LIMITTEXT, 12, 0L);
+    SendMessage(v->hwndEdit, EM_SETSEL, 0, MAKELONG(0, -1));
+    ShowWindow(v->hwndEdit, SW_SHOW);
+    SetFocus(v->hwndEdit);
+    InvalidateItem(hwnd, v, i);
+}
+
+/* -------------------------------------------------------------------- */
+/* Drag and drop                                                        */
+/* -------------------------------------------------------------------- */
+
+/*
+ * Works out what is under a screen point during a drag: a folder (path in
+ * lpDir), the Bin, or nothing. Folder views, the Explorer tree and desktop
+ * icons can be targets.
+ */
+int DropTargetAt(POINT pt, LPSTR lpDir)
+{
+    HWND hwnd = WindowFromPoint(pt);
+    char szClass[32];
+    LPFVIEW v;
+    int i;
+
+    lpDir[0] = '\0';
+    if (!hwnd)
+        return DT_NONE;
+    GetClassName(hwnd, szClass, sizeof(szClass));
+    if (lstrcmpi(szClass, CLS_FVIEW) == 0) {
+        v = GetView(hwnd);
+        if (!v)
+            return DT_NONE;
+        ScreenToClient(hwnd, &pt);
+        i = HitTest(hwnd, v, pt.x, pt.y);
+        if (i >= 0 && v->lpItems[i].bKind != FK_FILE) {
+            ItemPath(v, i, lpDir);
+            return DT_FOLDER;
+        }
+        if (v->szPath[0] == '\0')
+            return DT_NONE;
+        lstrcpy(lpDir, v->szPath);
+        return DT_FOLDER;
+    }
+    if (lstrcmpi(szClass, CLS_DESKICON) == 0)
+        return DesktopDropTarget(hwnd, lpDir);
+    return ExplorerDropTarget(hwnd, pt, lpDir);
+}
+
+static HCURSOR DragCursor(int nTarget, BOOL bCopy)
+{
+    if (nTarget == DT_NONE)
+        return LoadCursor(g_hInst, MAKEINTRESOURCE(IDC_NODROP));
+    if (nTarget == DT_BIN)
+        return LoadCursor(g_hInst, MAKEINTRESOURCE(IDC_DRAGMOVE));
+    return LoadCursor(g_hInst, MAKEINTRESOURCE(bCopy ? IDC_DRAGCOPY : IDC_DRAGMOVE));
+}
+
+/* Copy or move? Ctrl forces copy, Shift forces move, else by drive */
+static BOOL IsCopyDrop(LPFVIEW v, LPCSTR lpDir)
+{
+    if (GetKeyState(VK_CONTROL) & 0x8000)
+        return TRUE;
+    if (GetKeyState(VK_SHIFT) & 0x8000)
+        return FALSE;
+    if (v->szPath[0] == '\0')
+        return TRUE;
+    return (v->szPath[0] & ~0x20) != (lpDir[0] & ~0x20);
+}
+
+static void DoDrop(HWND hwnd, LPFVIEW v, POINT ptScreen)
+{
+    char szDir[MAXPATHLEN];
+    HGLOBAL hList;
+    int nTarget = DropTargetAt(ptScreen, szDir);
+
+    if (nTarget == DT_NONE)
+        return;
+    hList = FViewGetSelection(hwnd);
+    if (!hList)
+        return;
+    if (nTarget == DT_BIN) {
+        if (v->szPath[0])
+            FileOpDelete(hwnd, hList, TRUE);
+    } else if (lstrcmpi(szDir, v->szPath) != 0 && v->szPath[0]) {
+        FileOpCopyMove(hwnd, hList, szDir, !IsCopyDrop(v, szDir));
+    }
+    GlobalFree(hList);
+}
+
+static void OnDropFiles(HWND hwnd, LPFVIEW v, HDROP hDrop)
+{
+    char szFile[MAXPATHLEN];
+    HGLOBAL hList = NULL;
+    UINT i, n;
+
+    n = DragQueryFile(hDrop, (UINT)-1, NULL, 0);
+    for (i = 0; i < n; i++) {
+        DragQueryFile(hDrop, i, szFile, sizeof(szFile));
+        PathListAdd(&hList, szFile);
+    }
+    DragFinish(hDrop);
+    if (hList && v->szPath[0])
+        FileOpCopyMove(hwnd, hList, v->szPath, FALSE);
+    if (hList)
+        GlobalFree(hList);
+}
+
+/* -------------------------------------------------------------------- */
+/* Context menu                                                         */
+/* -------------------------------------------------------------------- */
+
+static void AppendViewMenu(HMENU hMenu, LPFVIEW v)
+{
+    HMENU hView = CreatePopupMenu();
+    HMENU hSort = CreatePopupMenu();
+
+    AppendMenu(hView, MF_STRING | (v->nMode == FV_LARGE ? MF_CHECKED : 0),
+               CMD_F_LARGEICONS, "Lar&ge Icons");
+    AppendMenu(hView, MF_STRING | (v->nMode == FV_SMALL ? MF_CHECKED : 0),
+               CMD_F_SMALLICONS, "S&mall Icons");
+    AppendMenu(hView, MF_STRING | (v->nMode == FV_DETAILS ? MF_CHECKED : 0),
+               CMD_F_DETAILS, "&Details");
+    AppendMenu(hSort, MF_STRING | (v->nSort == FS_NAME ? MF_CHECKED : 0),
+               CMD_F_SORTNAME, "by &Name");
+    AppendMenu(hSort, MF_STRING | (v->nSort == FS_TYPE ? MF_CHECKED : 0),
+               CMD_F_SORTTYPE, "by &Type");
+    AppendMenu(hSort, MF_STRING | (v->nSort == FS_SIZE ? MF_CHECKED : 0),
+               CMD_F_SORTSIZE, "by &Size");
+    AppendMenu(hSort, MF_STRING | (v->nSort == FS_DATE ? MF_CHECKED : 0),
+               CMD_F_SORTDATE, "by &Date");
+    AppendMenu(hMenu, MF_POPUP, (UINT)hView, "&View");
+    AppendMenu(hMenu, MF_POPUP, (UINT)hSort, "Arrange &Icons");
+}
+
+static void ContextMenu(HWND hwnd, LPFVIEW v, POINT pt, BOOL bOnItem)
+{
+    HMENU hMenu = CreatePopupMenu();
+    BOOL bFolder = v->szPath[0] != '\0';
+    UINT uPaste = (s_hClip && bFolder) ? MF_ENABLED : MF_GRAYED;
+
+    if (bOnItem) {
+        BOOL bDir = v->nFocus >= 0 && v->lpItems[v->nFocus].bKind != FK_FILE;
+
+        AppendMenu(hMenu, MF_STRING, CMD_F_OPEN, "&Open");
+        if (bDir)
+            AppendMenu(hMenu, MF_STRING, CMD_F_EXPLORE, "&Explore");
+        AppendMenu(hMenu, MF_SEPARATOR, 0, NULL);
+        if (bFolder) {
+            AppendMenu(hMenu, MF_STRING, CMD_F_CUT, "Cu&t");
+            AppendMenu(hMenu, MF_STRING, CMD_F_COPY, "&Copy");
+            if (bDir)
+                AppendMenu(hMenu, MF_STRING | uPaste, CMD_F_PASTE, "&Paste");
+            AppendMenu(hMenu, MF_SEPARATOR, 0, NULL);
+            AppendMenu(hMenu, MF_STRING, CMD_F_DELETE, "&Delete");
+            AppendMenu(hMenu, MF_STRING, CMD_F_RENAME, "Rena&me");
+            AppendMenu(hMenu, MF_SEPARATOR, 0, NULL);
+        }
+        AppendMenu(hMenu, MF_STRING, CMD_F_PROPERTIES, "P&roperties");
+    } else {
+        AppendViewMenu(hMenu, v);
+        AppendMenu(hMenu, MF_SEPARATOR, 0, NULL);
+        if (bFolder) {
+            AppendMenu(hMenu, MF_STRING | uPaste, CMD_F_PASTE, "&Paste");
+            AppendMenu(hMenu, MF_STRING, CMD_F_NEWFOLDER, "New &Folder");
+            AppendMenu(hMenu, MF_SEPARATOR, 0, NULL);
+        }
+        AppendMenu(hMenu, MF_STRING, CMD_F_REFRESH, "&Refresh");
+        if (bFolder)
+            AppendMenu(hMenu, MF_STRING, CMD_F_PROPERTIES, "P&roperties");
+    }
+    ClientToScreen(hwnd, &pt);
+    TrackPopupMenu(hMenu, 0, pt.x, pt.y, 0, hwnd, NULL);
+    DestroyMenu(hMenu);
+}
+
+/* Handles a CMD_F_* command; returns FALSE if it is not a view command */
+BOOL FViewCommand(HWND hwnd, UINT id)
+{
+    LPFVIEW v = GetView(hwnd);
+    int i;
+
+    if (!v)
+        return FALSE;
+    switch (id) {
+    case CMD_F_OPEN:        OpenSelection(hwnd, v); break;
+    case CMD_F_EXPLORE:
+        if (v->nFocus >= 0)
+            OpenItem(hwnd, v, v->nFocus, TRUE);
+        else
+            ExplorerOpen(v->szPath);
+        break;
+    case CMD_F_UP:          Notify(hwnd, FVN_GOUP, 0L); break;
+    case CMD_F_REFRESH:     FViewRefresh(hwnd); break;
+    case CMD_F_SELALL:
+        for (i = 0; i < v->nItems; i++)
+            SelectItem(hwnd, v, i, TRUE);
+        Notify(hwnd, FVN_SELCHANGE, 0L);
+        break;
+    case CMD_F_INVERTSEL:
+        for (i = 0; i < v->nItems; i++)
+            SelectItem(hwnd, v, i, !v->lpItems[i].bSel);
+        Notify(hwnd, FVN_SELCHANGE, 0L);
+        break;
+    case CMD_F_LARGEICONS:  FViewSetMode(hwnd, FV_LARGE); break;
+    case CMD_F_SMALLICONS:  FViewSetMode(hwnd, FV_SMALL); break;
+    case CMD_F_DETAILS:     FViewSetMode(hwnd, FV_DETAILS); break;
+    case CMD_F_SORTNAME:    FViewSetSort(hwnd, FS_NAME); break;
+    case CMD_F_SORTTYPE:    FViewSetSort(hwnd, FS_TYPE); break;
+    case CMD_F_SORTSIZE:    FViewSetSort(hwnd, FS_SIZE); break;
+    case CMD_F_SORTDATE:    FViewSetSort(hwnd, FS_DATE); break;
+    case CMD_F_CUT:         DoCutCopy(hwnd, TRUE); break;
+    case CMD_F_COPY:        DoCutCopy(hwnd, FALSE); break;
+    case CMD_F_PASTE:       DoPaste(hwnd, v); break;
+    case CMD_F_DELETE:      DoDelete(hwnd, v, IsShiftDown()); break;
+    case CMD_F_RENAME:      BeginRename(hwnd, v); break;
+    case CMD_F_NEWFOLDER:   DoNewFolder(hwnd, v); break;
+    case CMD_F_PROPERTIES:  DoProperties(hwnd, v); break;
+    default:
+        return FALSE;
+    }
+    return TRUE;
+}
+
+/* Updates check marks in a frame window's menu */
+void FViewInitMenu(HWND hwnd, HMENU hMenu)
+{
+    LPFVIEW v = GetView(hwnd);
+    int nSel = FViewSelCount(hwnd);
+    BOOL bFolder;
+
+    if (!v)
+        return;
+    bFolder = v->szPath[0] != '\0';
+    CheckMenuItem(hMenu, CMD_F_LARGEICONS, v->nMode == FV_LARGE ? MF_CHECKED : MF_UNCHECKED);
+    CheckMenuItem(hMenu, CMD_F_SMALLICONS, v->nMode == FV_SMALL ? MF_CHECKED : MF_UNCHECKED);
+    CheckMenuItem(hMenu, CMD_F_DETAILS, v->nMode == FV_DETAILS ? MF_CHECKED : MF_UNCHECKED);
+    CheckMenuItem(hMenu, CMD_F_SORTNAME, v->nSort == FS_NAME ? MF_CHECKED : MF_UNCHECKED);
+    CheckMenuItem(hMenu, CMD_F_SORTTYPE, v->nSort == FS_TYPE ? MF_CHECKED : MF_UNCHECKED);
+    CheckMenuItem(hMenu, CMD_F_SORTSIZE, v->nSort == FS_SIZE ? MF_CHECKED : MF_UNCHECKED);
+    CheckMenuItem(hMenu, CMD_F_SORTDATE, v->nSort == FS_DATE ? MF_CHECKED : MF_UNCHECKED);
+    EnableMenuItem(hMenu, CMD_F_CUT, (bFolder && nSel) ? MF_ENABLED : MF_GRAYED);
+    EnableMenuItem(hMenu, CMD_F_COPY, (bFolder && nSel) ? MF_ENABLED : MF_GRAYED);
+    EnableMenuItem(hMenu, CMD_F_PASTE, (bFolder && s_hClip) ? MF_ENABLED : MF_GRAYED);
+    EnableMenuItem(hMenu, CMD_F_DELETE, (bFolder && nSel) ? MF_ENABLED : MF_GRAYED);
+    EnableMenuItem(hMenu, CMD_F_RENAME, (bFolder && nSel == 1) ? MF_ENABLED : MF_GRAYED);
+    EnableMenuItem(hMenu, CMD_F_NEWFOLDER, bFolder ? MF_ENABLED : MF_GRAYED);
+    EnableMenuItem(hMenu, CMD_F_UP, bFolder ? MF_ENABLED : MF_GRAYED);
+}
+
+/* -------------------------------------------------------------------- */
+/* Keyboard                                                             */
+/* -------------------------------------------------------------------- */
+
+static void OnKeyDown(HWND hwnd, LPFVIEW v, WPARAM vk)
+{
+    BOOL bShift = IsShiftDown();
+    BOOL bCtrl = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
+    int i = v->nFocus < 0 ? 0 : v->nFocus;
+    int nPage = v->nCols * v->nVisRows;
+
+    switch (vk) {
+    case VK_LEFT:   MoveFocusTo(hwnd, v, v->nMode == FV_DETAILS ? i : i - 1, bShift, bCtrl); break;
+    case VK_RIGHT:  MoveFocusTo(hwnd, v, v->nMode == FV_DETAILS ? i : i + 1, bShift, bCtrl); break;
+    case VK_UP:     if (i - v->nCols >= 0) MoveFocusTo(hwnd, v, i - v->nCols, bShift, bCtrl); break;
+    case VK_DOWN:   if (i + v->nCols < v->nItems) MoveFocusTo(hwnd, v, i + v->nCols, bShift, bCtrl); break;
+    case VK_HOME:   MoveFocusTo(hwnd, v, 0, bShift, bCtrl); break;
+    case VK_END:    MoveFocusTo(hwnd, v, v->nItems - 1, bShift, bCtrl); break;
+    case VK_PRIOR:  MoveFocusTo(hwnd, v, i - nPage, bShift, bCtrl); break;
+    case VK_NEXT:   MoveFocusTo(hwnd, v, i + nPage, bShift, bCtrl); break;
+    case VK_SPACE:
+        if (bCtrl && v->nFocus >= 0) {
+            SelectItem(hwnd, v, v->nFocus, !v->lpItems[v->nFocus].bSel);
+            Notify(hwnd, FVN_SELCHANGE, 0L);
+        }
+        break;
+    case VK_RETURN: FViewCommand(hwnd, CMD_F_OPEN); break;
+    case VK_BACK:   FViewCommand(hwnd, CMD_F_UP); break;
+    case VK_TAB:    Notify(hwnd, FVN_TAB, 0L); break;
+    case VK_F5:     FViewCommand(hwnd, CMD_F_REFRESH); break;
+    case VK_F2:     FViewCommand(hwnd, CMD_F_RENAME); break;
+    case VK_DELETE: FViewCommand(hwnd, CMD_F_DELETE); break;
+    default:
+        if (bCtrl) {
+            switch (vk) {
+            case 'A': FViewCommand(hwnd, CMD_F_SELALL); break;
+            case 'C': FViewCommand(hwnd, CMD_F_COPY); break;
+            case 'X': FViewCommand(hwnd, CMD_F_CUT); break;
+            case 'V': FViewCommand(hwnd, CMD_F_PASTE); break;
+            }
+        }
+    }
+}
+
+/* Type-ahead: jump to the next item starting with the typed letter */
+static void OnChar(HWND hwnd, LPFVIEW v, WPARAM ch)
+{
+    int i, n;
+
+    if (ch < '!' || v->nItems == 0)
+        return;
+    ch = (WPARAM)(DWORD)AnsiUpper((LPSTR)(DWORD)ch);
+    for (n = 1; n <= v->nItems; n++) {
+        i = (v->nFocus + n) % v->nItems;
+        if ((WPARAM)(BYTE)v->lpItems[i].szName[0] == ch) {
+            MoveFocusTo(hwnd, v, i, FALSE, FALSE);
+            return;
+        }
+    }
+}
+
+/* -------------------------------------------------------------------- */
+/* Window procedure                                                     */
+/* -------------------------------------------------------------------- */
+
+static void RemoveView(HWND hwnd)
+{
+    int i;
+
+    for (i = 0; i < s_nViews; i++)
+        if (s_hwndViews[i] == hwnd) {
+            s_hwndViews[i] = s_hwndViews[--s_nViews];
+            return;
+        }
+}
+
+static void OnLButtonDown(HWND hwnd, LPFVIEW v, int x, int y)
+{
+    BOOL bShift = IsShiftDown();
+    BOOL bCtrl = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
+    int i = HitTest(hwnd, v, x, y);
+
+    if (v->hwndEdit)
+        EndRename(hwnd, v, TRUE);
+    SetFocus(hwnd);
+    v->nDownItem = i;
+    v->bDeferSelect = FALSE;
+    if (i < 0) {
+        if (!bCtrl && !bShift) {
+            SelectNone(hwnd, v);
+            Notify(hwnd, FVN_SELCHANGE, 0L);
+        }
+        return;
+    }
+    if (bCtrl) {
+        SelectItem(hwnd, v, i, !v->lpItems[i].bSel);
+        v->nAnchor = i;
+        SetFocusItem(hwnd, v, i);
+        Notify(hwnd, FVN_SELCHANGE, 0L);
+    } else if (bShift) {
+        MoveFocusTo(hwnd, v, i, TRUE, FALSE);
+    } else if (v->lpItems[i].bSel) {
+        /* may be the start of a drag of the whole selection */
+        v->bDeferSelect = TRUE;
+        SetFocusItem(hwnd, v, i);
+    } else {
+        MoveFocusTo(hwnd, v, i, FALSE, FALSE);
+    }
+    if (v->lpItems[i].bSel) {
+        v->bPressed = TRUE;
+        v->ptDown.x = x;
+        v->ptDown.y = y;
+        SetCapture(hwnd);
+    }
+}
+
+LRESULT CALLBACK NSEXPORT FViewWndProc(HWND hwnd, UINT msg, WPARAM wParam,
+                                       LPARAM lParam)
+{
+    LPFVIEW v = GetView(hwnd);
+    PAINTSTRUCT ps;
+    POINT pt;
+    int i;
+
+    switch (msg) {
+    case WM_CREATE:
+        {
+            CREATESTRUCT FAR *lpcs = (CREATESTRUCT FAR *)lParam;
+            TEXTMETRIC tm;
+            HDC hdc;
+            HFONT hfOld;
+
+            v = (LPFVIEW)malloc(sizeof(FVIEW));
+            if (!v)
+                return -1;
+            _fmemset(v, 0, sizeof(FVIEW));
+            SetWindowLong(hwnd, 0, (LONG)v);
+            v->nRenaming = -1;
+            v->nMode = CfgGetInt("Folders", "View", FV_LARGE);
+            v->nSort = CfgGetInt("Folders", "Sort", FS_NAME);
+
+            hdc = GetDC(hwnd);
+            hfOld = SelectObject(hdc, g_hfontUI);
+            GetTextMetrics(hdc, &tm);
+            SelectObject(hdc, hfOld);
+            ReleaseDC(hwnd, hdc);
+            v->cyText = tm.tmHeight;
+
+            if (lpcs->lpCreateParams)
+                lstrcpyn(v->szPath, (LPCSTR)lpcs->lpCreateParams, sizeof(v->szPath));
+            ReadFolder(v);
+            if (s_nViews < MAX_VIEWS)
+                s_hwndViews[s_nViews++] = hwnd;
+            DragAcceptFiles(hwnd, TRUE);
+        }
+        return 0;
+
+    case WM_SIZE:
+        if (v) {
+            UpdateLayout(hwnd, v);
+            InvalidateRect(hwnd, NULL, TRUE);
+        }
+        return 0;
+
+    case WM_PAINT:
+        BeginPaint(hwnd, &ps);
+        if (v)
+            PaintView(hwnd, ps.hdc, v, &ps.rcPaint);
+        EndPaint(hwnd, &ps);
+        return 0;
+
+    case WM_SETFOCUS:
+    case WM_KILLFOCUS:
+        if (v)
+            InvalidateItem(hwnd, v, v->nFocus);
+        return 0;
+
+    case WM_GETDLGCODE:
+        return DLGC_WANTARROWS | DLGC_WANTCHARS;
+
+    case WM_VSCROLL:
+        if (!v)
+            break;
+        switch (wParam) {
+        case SB_LINEUP:         ScrollTo(hwnd, v, v->nTop - 1); break;
+        case SB_LINEDOWN:       ScrollTo(hwnd, v, v->nTop + 1); break;
+        case SB_PAGEUP:         ScrollTo(hwnd, v, v->nTop - v->nVisRows); break;
+        case SB_PAGEDOWN:       ScrollTo(hwnd, v, v->nTop + v->nVisRows); break;
+        case SB_THUMBTRACK:
+        case SB_THUMBPOSITION:  ScrollTo(hwnd, v, LOWORD(lParam)); break;
+        case SB_TOP:            ScrollTo(hwnd, v, 0); break;
+        case SB_BOTTOM:         ScrollTo(hwnd, v, 32767); break;
+        }
+        return 0;
+
+    case WM_LBUTTONDOWN:
+        if (!v)
+            break;
+        if (v->nMode == FV_DETAILS && (int)HIWORD(lParam) < v->cyHeader) {
+            /* header click: sort by that column */
+            int x = (int)LOWORD(lParam);
+            int nSort = x < COL_NAME_CX + MARGIN ? FS_NAME
+                      : x < COL_NAME_CX + MARGIN + COL_SIZE_CX ? FS_SIZE
+                      : x < COL_NAME_CX + MARGIN + COL_SIZE_CX + COL_TYPE_CX ? FS_TYPE
+                      : FS_DATE;
+            FViewSetSort(hwnd, nSort);
+            return 0;
+        }
+        OnLButtonDown(hwnd, v, (int)LOWORD(lParam), (int)HIWORD(lParam));
+        return 0;
+
+    case WM_MOUSEMOVE:
+        if (!v || !v->bPressed)
+            break;
+        pt.x = (int)LOWORD(lParam);
+        pt.y = (int)HIWORD(lParam);
+        if (!v->bDragging
+            && (abs(pt.x - v->ptDown.x) > DRAG_THRESHOLD
+                || abs(pt.y - v->ptDown.y) > DRAG_THRESHOLD))
+            v->bDragging = TRUE;
+        if (v->bDragging) {
+            char szDir[MAXPATHLEN];
+            int nTarget;
+
+            ClientToScreen(hwnd, &pt);
+            nTarget = DropTargetAt(pt, szDir);
+            if (nTarget == DT_FOLDER && lstrcmpi(szDir, v->szPath) == 0)
+                nTarget = DT_NONE;
+            SetCursor(DragCursor(nTarget, nTarget == DT_FOLDER && IsCopyDrop(v, szDir)));
+        }
+        return 0;
+
+    case WM_LBUTTONUP:
+        if (!v || !v->bPressed)
+            break;
+        v->bPressed = FALSE;
+        ReleaseCapture();
+        if (v->bDragging) {
+            v->bDragging = FALSE;
+            SetCursor(LoadCursor(NULL, IDC_ARROW));
+            pt.x = (int)LOWORD(lParam);
+            pt.y = (int)HIWORD(lParam);
+            ClientToScreen(hwnd, &pt);
+            DoDrop(hwnd, v, pt);
+        } else if (v->bDeferSelect && v->nDownItem >= 0) {
+            MoveFocusTo(hwnd, v, v->nDownItem, FALSE, FALSE);
+        }
+        v->bDeferSelect = FALSE;
+        return 0;
+
+    case WM_LBUTTONDBLCLK:
+        if (!v)
+            break;
+        i = HitTest(hwnd, v, (int)LOWORD(lParam), (int)HIWORD(lParam));
+        if (i >= 0)
+            OpenItem(hwnd, v, i, IsShiftDown());
+        return 0;
+
+    case WM_RBUTTONDOWN:
+        if (!v)
+            break;
+        SetFocus(hwnd);
+        i = HitTest(hwnd, v, (int)LOWORD(lParam), (int)HIWORD(lParam));
+        if (i >= 0 && !v->lpItems[i].bSel)
+            MoveFocusTo(hwnd, v, i, FALSE, FALSE);
+        else if (i >= 0)
+            SetFocusItem(hwnd, v, i);
+        return 0;
+
+    case WM_RBUTTONUP:
+        if (!v)
+            break;
+        pt.x = (int)LOWORD(lParam);
+        pt.y = (int)HIWORD(lParam);
+        ContextMenu(hwnd, v, pt, HitTest(hwnd, v, pt.x, pt.y) >= 0);
+        return 0;
+
+    case WM_KEYDOWN:
+        if (v)
+            OnKeyDown(hwnd, v, wParam);
+        return 0;
+
+    case WM_SYSKEYDOWN:
+        if (v && wParam == VK_RETURN) {
+            FViewCommand(hwnd, CMD_F_PROPERTIES);
+            return 0;
+        }
+        break;
+
+    case WM_CHAR:
+        if (v)
+            OnChar(hwnd, v, wParam);
+        return 0;
+
+    case WM_COMMAND:
+        if (wParam == ID_RENAME)
+            return 0;
+        if (!FViewCommand(hwnd, wParam))
+            SendMessage(GetParent(hwnd), WM_COMMAND, wParam, lParam);
+        return 0;
+
+    case WM_NS_ENDRENAME:
+        if (v && v->hwndEdit && GetFocus() != v->hwndEdit)
+            EndRename(hwnd, v, TRUE);
+        return 0;
+
+    case WM_DROPFILES:
+        if (v)
+            OnDropFiles(hwnd, v, (HDROP)wParam);
+        return 0;
+
+    case WM_DESTROY:
+        RemoveView(hwnd);
+        DragAcceptFiles(hwnd, FALSE);
+        if (v) {
+            if (v->lpItems)
+                free(v->lpItems);
+            free(v);
+            SetWindowLong(hwnd, 0, 0L);
+        }
+        return 0;
+    }
+    return DefWindowProc(hwnd, msg, wParam, lParam);
+}
+
+/* -------------------------------------------------------------------- */
+/* Public interface                                                     */
+/* -------------------------------------------------------------------- */
+
+BOOL FViewRegister(void)
+{
+    WNDCLASS wc;
+
+    _fmemset(&wc, 0, sizeof(wc));
+    wc.style = CS_DBLCLKS;
+    wc.lpfnWndProc = FViewWndProc;
+    wc.cbWndExtra = sizeof(LPFVIEW);
+    wc.hInstance = g_hInst;
+    wc.hCursor = LoadCursor(NULL, IDC_ARROW);
+    wc.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
+    wc.lpszClassName = CLS_FVIEW;
+    return RegisterClass(&wc);
+}
+
+HWND FViewCreate(HWND hwndParent, LPCSTR lpPath)
+{
+    return CreateWindow(CLS_FVIEW, "", WS_CHILD | WS_VISIBLE | WS_VSCROLL,
+                        0, 0, 0, 0, hwndParent, (HMENU)1, g_hInst,
+                        (LPVOID)lpPath);
+}
+
+LPCSTR FViewGetPath(HWND hwnd)
+{
+    LPFVIEW v = GetView(hwnd);
+    return v ? v->szPath : "";
+}
+
+void FViewSetPath(HWND hwnd, LPCSTR lpPath)
+{
+    LPFVIEW v = GetView(hwnd);
+
+    if (!v)
+        return;
+    if (v->hwndEdit)
+        EndRename(hwnd, v, FALSE);
+    lstrcpyn(v->szPath, lpPath, sizeof(v->szPath));
+    v->nTop = 0;
+    ReadFolder(v);
+    UpdateLayout(hwnd, v);
+    InvalidateRect(hwnd, NULL, TRUE);
+    Notify(hwnd, FVN_PATHCHANGED, 0L);
+}
+
+/* Re-reads the folder, keeping the selection and scroll position */
+void FViewRefresh(HWND hwnd)
+{
+    LPFVIEW v = GetView(hwnd);
+    HGLOBAL hSel;
+    LPCSTR lp;
+    char szFocus[16];
+    int i, nTop;
+
+    if (!v)
+        return;
+    if (v->szPath[0] && !PathIsDirectory(v->szPath)) {
+        /* the folder went away */
+        Notify(hwnd, FVN_GONE, 0L);
+        return;
+    }
+    hSel = FViewGetSelection(hwnd);
+    szFocus[0] = '\0';
+    if (v->nFocus >= 0 && v->nFocus < v->nItems)
+        lstrcpy(szFocus, v->lpItems[v->nFocus].szName);
+    nTop = v->nTop;
+    ReadFolder(v);
+    if (hSel) {
+        for (lp = PathListFirst(hSel); lp; lp = PathListNext(lp)) {
+            char szName[MAXPATHLEN];
+            lstrcpy(szName, lp);
+            for (i = 0; i < v->nItems; i++)
+                if (lstrcmpi(v->lpItems[i].szName, PathFileName(szName)) == 0)
+                    v->lpItems[i].bSel = TRUE;
+        }
+        PathListUnlock(hSel);
+        GlobalFree(hSel);
+    }
+    for (i = 0; i < v->nItems; i++)
+        if (lstrcmpi(v->lpItems[i].szName, szFocus) == 0)
+            v->nFocus = i;
+    v->nTop = nTop;
+    UpdateLayout(hwnd, v);
+    InvalidateRect(hwnd, NULL, TRUE);
+    Notify(hwnd, FVN_SELCHANGE, 0L);
+}
+
+void FViewSetMode(HWND hwnd, int nMode)
+{
+    LPFVIEW v = GetView(hwnd);
+
+    if (!v || v->nMode == nMode)
+        return;
+    v->nMode = nMode;
+    CfgSetInt("Folders", "View", nMode);
+    UpdateLayout(hwnd, v);
+    EnsureVisible(hwnd, v, v->nFocus);
+    InvalidateRect(hwnd, NULL, TRUE);
+}
+
+void FViewSetSort(HWND hwnd, int nSort)
+{
+    LPFVIEW v = GetView(hwnd);
+
+    if (!v)
+        return;
+    v->nSort = nSort;
+    CfgSetInt("Folders", "Sort", nSort);
+    FViewRefresh(hwnd);
+}
+
+/* Refreshes every view showing lpDir (or all views if lpDir is NULL) */
+void FViewRefreshPath(LPCSTR lpDir)
+{
+    char szDir[MAXPATHLEN];
+    HWND hwndList[MAX_VIEWS];
+    int i, n = s_nViews;
+
+    if (lpDir) {
+        lstrcpyn(szDir, lpDir, sizeof(szDir));
+        PathNormalize(szDir);
+    }
+    _fmemcpy(hwndList, s_hwndViews, n * sizeof(HWND));
+    for (i = 0; i < n; i++)
+        if (IsWindow(hwndList[i])
+            && (!lpDir || lstrcmpi(FViewGetPath(hwndList[i]), szDir) == 0))
+            FViewRefresh(hwndList[i]);
+}
+
+/* Drive type and icon for a drive number (0 = A:) */
+int DriveIcon(int nDrive, BYTE FAR *lpbType)
+{
+    union REGS r;
+
+    switch (GetDriveType(nDrive)) {
+    case DRIVE_REMOVABLE:
+        *lpbType = 1;
+        return IDI_FLOPPY;
+    case DRIVE_FIXED:
+        *lpbType = 2;
+        return IDI_HDD;
+    }
+    /* MSCDEX drives report as remote; ask MSCDEX */
+    r.x.ax = 0x150B;
+    r.x.bx = 0;
+    r.x.cx = nDrive;
+    int86(0x2F, &r, &r);
+    if (r.x.bx == 0xADAD && r.x.ax != 0) {
+        *lpbType = 4;
+        return IDI_CDROM;
+    }
+    *lpbType = 3;
+    return IDI_NETDRV;
+}

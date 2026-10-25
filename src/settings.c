@@ -50,13 +50,45 @@ void CfgSetStr(LPCSTR lpSection, LPCSTR lpKey, LPCSTR lpValue)
     WritePrivateProfileString(lpSection, lpKey, lpValue, NS_INIFILE);
 }
 
+typedef struct tagCFGENTRY {
+    LPCSTR lpSection;
+    LPCSTR lpKey;
+    BOOL  *pValue;
+    BOOL   bDefault;
+} CFGENTRY;
+
+static const CFGENTRY s_entries[] = {
+    { "Taskbar",     "Clock",         &g_cfg.bClock,           TRUE  },
+    { "Taskbar",     "HideMinApps",   &g_cfg.bHideMinApps,     TRUE  },
+    { "Taskbar",     "MaxClamp",      &g_cfg.bMaxClamp,        TRUE  },
+    { "Taskbar",     "CtrlEscStart",  &g_cfg.bCtrlEscStart,    FALSE },
+    { "Taskbar",     "WinKey",        &g_cfg.bWinKey,          TRUE  },
+    { "Desktop",     "Icons",         &g_cfg.bDesktopIcons,    TRUE  },
+    { "Desktop",     "Menu",          &g_cfg.bDesktopMenu,     TRUE  },
+    { "Startup",     "Run",           &g_cfg.bRunStartup,      TRUE  },
+    { "Preferences", "ConfirmExit",   &g_cfg.bConfirmExit,     TRUE  },
+    { "Folders",     "NewWindow",     &g_cfg.bFolderNewWindow, TRUE  },
+    { "Folders",     "ShowHidden",    &g_cfg.bShowHidden,      FALSE },
+    { "Folders",     "DeleteToBin",   &g_cfg.bDeleteToBin,     TRUE  },
+    { "Folders",     "ConfirmDelete", &g_cfg.bConfirmDelete,   TRUE  },
+    { "Folders",     "FileMonitor",   &g_cfg.bFileMonitor,     TRUE  },
+};
+
 void CfgLoad(void)
 {
-    g_cfg.bClock           = CfgGetInt("Taskbar", "Clock", 1);
-    g_cfg.bHideMinApps     = CfgGetInt("Taskbar", "HideMinApps", 1);
-    g_cfg.bDesktopIcons    = CfgGetInt("Desktop", "Icons", 1);
-    g_cfg.bRunStartup      = CfgGetInt("Startup", "Run", 1);
-    g_cfg.bConfirmExit     = CfgGetInt("Preferences", "ConfirmExit", 1);
-    g_cfg.bFolderNewWindow = CfgGetInt("Folders", "NewWindow", 1);
-    g_cfg.bShowHidden      = CfgGetInt("Folders", "ShowHidden", 0);
+    int i;
+
+    for (i = 0; i < sizeof(s_entries) / sizeof(s_entries[0]); i++)
+        *s_entries[i].pValue = CfgGetInt(s_entries[i].lpSection,
+                                         s_entries[i].lpKey,
+                                         s_entries[i].bDefault) != 0;
+}
+
+void CfgSave(void)
+{
+    int i;
+
+    for (i = 0; i < sizeof(s_entries) / sizeof(s_entries[0]); i++)
+        CfgSetInt(s_entries[i].lpSection, s_entries[i].lpKey,
+                  *s_entries[i].pValue ? 1 : 0);
 }

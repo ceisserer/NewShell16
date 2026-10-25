@@ -9,18 +9,29 @@ experience as a small, native 16-bit C program.
 
 ## Status
 
-Early but usable: it runs as the Windows 3.1 shell.
+Usable as the Windows 3.1 shell. Implemented so far:
 
-- Taskbar with Start button, a button per running application (with its
-  icon, click to activate/minimise, right-click for its system menu) and a
-  clock
-- Start menu with Program Manager groups under *Programs*, custom entries,
-  Computer, Settings, Run and Shut Down
-- Desktop icons (Computer plus configurable shortcuts), draggable
-- Folder windows with large icons (icons taken from the programs and file
-  associations) and a Computer window listing the drives
-- Run, Shut Down and About dialogs
-- Runs `load=`/`run=` and the StartUp group when it is the shell
+- **Taskbar** with Start button, a button per application (icon, click to
+  activate/minimise, right-click for its system menu), clock, and a menu to
+  cascade/tile/minimise windows. Minimised windows are kept off the
+  desktop and maximised windows stop above the taskbar.
+- **Start menu** in Calmira's START.INI format (`NSSTART.INI`), created
+  from the Program Manager groups on first use, with icons at every level.
+- **Desktop** with Computer, Bin and configurable shortcut icons, and a
+  right-click menu.
+- **Folder windows** and the **Computer** window: large icon, small icon
+  and details views, sorting, multiple selection, type-ahead, inline
+  rename, new folder, cut/copy/paste, delete (to the Bin), properties,
+  drag and drop between windows, onto folders and onto the Bin, and drops
+  from File Manager.
+- **Explorer**: folder tree beside a folder view.
+- **Bin**: deleted items can be restored or deleted for good.
+- **Task Manager** (Ctrl+Esc): switch to, hide, minimise, end or terminate
+  tasks, start new ones, cascade and tile.
+- **Find** files and folders.
+- Run, Shut Down, Properties, Options and About dialogs.
+- Folder windows refresh by themselves when files change.
+- As the shell it runs `load=`/`run=` and the StartUp group.
 
 See [docs/design.md](docs/design.md) for internals, configuration and the
 roadmap.
@@ -39,11 +50,12 @@ Details in [docs/building.md](docs/building.md).
 
 ## Installing
 
-1. Copy `build/newshell.exe` to e.g. `C:\NEWSHELL\NEWSHELL.EXE`.
+1. Copy `build/newshell.exe` and `build/nshook.dll` to a directory, e.g.
+   `C:\NEWSHELL\`.
 2. In `SYSTEM.INI`, `[boot]` section, set
    `shell=C:\NEWSHELL\NEWSHELL.EXE`.
 3. Optionally also set `taskman.exe=C:\NEWSHELL\NEWSHELL.EXE` so Ctrl+Esc
-   opens the Start menu.
+   opens NewShell's Task Manager (or the Start menu, see Options).
 
 NewShell16 can also be started from Program Manager to try it out; then
 *Shut Down → Close NewShell only* closes it again.

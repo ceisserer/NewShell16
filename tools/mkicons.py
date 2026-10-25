@@ -249,6 +249,185 @@ def dos(n):
     return img
 
 
+def bin_full(n):
+    img = bin_(n)
+    d = ImageDraw.Draw(img)
+    s = n / 32
+    d.polygon([(round(8 * s), round(8 * s)), (round(13 * s), round(1 * s)),
+               (round(22 * s), round(4 * s)), (round(23 * s), round(8 * s))],
+              fill=WHITE, outline=BLACK)
+    d.line([round(12 * s), round(4 * s), round(19 * s), round(6 * s)], fill=GRAY)
+    return img
+
+
+def explorer(n):
+    """A folder with a magnifying tree: folder plus a small tree diagram."""
+    img, d = canvas(n)
+    s = n / 32
+    box(d, round(1 * s), round(2 * s), round(30 * s), round(29 * s), fill=WHITE)
+    d.rectangle([round(2 * s), round(3 * s), round(29 * s), round(6 * s)], fill=NAVY)
+    d.line([round(11 * s), round(7 * s), round(11 * s), round(28 * s)], fill=GRAY)
+    for y in (10, 15, 20):
+        d.rectangle([round(3 * s), round(y * s), round(8 * s), round((y + 3) * s)],
+                    fill=YELLOW, outline=OLIVE)
+    for y in (10, 14, 18, 22):
+        d.rectangle([round(14 * s), round(y * s), round(17 * s), round((y + 2) * s)],
+                    fill=YELLOW, outline=OLIVE)
+        d.line([round(19 * s), round((y + 1) * s), round(27 * s), round((y + 1) * s)],
+               fill=BLACK)
+    return img
+
+
+def taskman(n):
+    img, d = canvas(n)
+    s = n / 32
+    box(d, round(2 * s), round(4 * s), round(29 * s), round(27 * s), fill=SILVER)
+    d.rectangle([round(3 * s), round(5 * s), round(28 * s), round(8 * s)], fill=NAVY)
+    box(d, round(5 * s), round(11 * s), round(26 * s), round(23 * s), fill=WHITE)
+    for i, y in enumerate((13, 17, 21)):
+        d.rectangle([round(7 * s), round(y * s), round(9 * s), round((y + 1) * s)],
+                    fill=(RED, GREEN, BLUE)[i])
+        d.line([round(12 * s), round(y * s), round(24 * s), round(y * s)], fill=BLACK)
+    return img
+
+
+def find_icon(n):
+    img = document(n)
+    d = ImageDraw.Draw(img)
+    s = n / 32
+    d.ellipse([round(9 * s), round(9 * s), round(23 * s), round(23 * s)],
+              fill=CYAN, outline=BLACK, width=max(1, round(2 * s)))
+    d.line([round(21 * s), round(21 * s), round(29 * s), round(29 * s)],
+           fill=BLACK, width=max(2, round(3 * s)))
+    return img
+
+
+def bin_small(n):
+    return bin_(n)
+
+
+def explorer_small(n):
+    img, d = canvas(n)
+    box(d, 0, 1, 15, 14, fill=WHITE)
+    d.rectangle([1, 2, 14, 3], fill=NAVY)
+    d.line([5, 4, 5, 13], fill=GRAY)
+    d.rectangle([1, 5, 3, 7], fill=YELLOW, outline=OLIVE)
+    d.rectangle([7, 6, 9, 8], fill=YELLOW, outline=OLIVE)
+    d.rectangle([7, 10, 9, 12], fill=YELLOW, outline=OLIVE)
+    d.line([11, 7, 13, 7], fill=BLACK)
+    d.line([11, 11, 13, 11], fill=BLACK)
+    return img
+
+
+def taskman_small(n):
+    img, d = canvas(n)
+    box(d, 0, 1, 15, 14, fill=SILVER)
+    d.rectangle([1, 2, 14, 3], fill=NAVY)
+    box(d, 2, 5, 13, 12, fill=WHITE)
+    d.point([4, 7], fill=RED)
+    d.point([4, 10], fill=GREEN)
+    d.line([6, 7, 11, 7], fill=BLACK)
+    d.line([6, 10, 11, 10], fill=BLACK)
+    return img
+
+
+# --------------------------------------------------------------------------
+# Cursors (monochrome 32x32): '.' transparent, '#' black, 'o' white
+# --------------------------------------------------------------------------
+
+ARROW = [
+    "#",
+    "##",
+    "#o#",
+    "#oo#",
+    "#ooo#",
+    "#oooo#",
+    "#ooooo#",
+    "#oooooo#",
+    "#ooooooo#",
+    "#oooooooo#",
+    "#ooooo#####",
+    "#oo#oo#",
+    "#o# #oo#",
+    "##  #oo#",
+    "#    #oo#",
+    "     #oo#",
+    "      ##",
+]
+
+
+def cursor_canvas():
+    return [["." for _ in range(32)] for _ in range(32)]
+
+
+def stamp(c, rows, x0, y0):
+    for y, row in enumerate(rows):
+        for x, ch in enumerate(row):
+            if ch in "#o":
+                c[y0 + y][x0 + x] = ch
+
+
+def drag_cursor(plus):
+    c = cursor_canvas()
+    stamp(c, ARROW, 0, 0)
+    page = ["##########", "#oooooooo#", "#o######o#", "#oooooooo#", "#o######o#",
+            "#oooooooo#", "#o####ooo#", "#oooooooo#", "##########"]
+    stamp(c, page, 9, 15)
+    if plus:
+        stamp(c, ["#####", "#ooo#", "#ooo#", "#ooo#", "#####"], 20, 19)
+        stamp(c, ["  #  ", "  #  ", "#####", "  #  ", "  #  "], 20, 19)
+    return c, (0, 0)
+
+
+def nodrop_cursor():
+    c = cursor_canvas()
+    for y in range(32):
+        for x in range(32):
+            r = ((x - 12) ** 2 + (y - 12) ** 2) ** 0.5
+            on_slash = abs((x - 12) - (y - 12)) <= 2 and r < 10
+            if 8 <= r <= 11 or on_slash:
+                c[y][x] = "#"
+            elif 7 <= r < 8 or 11 < r <= 12 or (abs((x - 12) - (y - 12)) == 3 and r < 9):
+                if c[y][x] == ".":
+                    c[y][x] = "o"
+    return c, (12, 12)
+
+
+def split_cursor():
+    c = cursor_canvas()
+    rows = [
+        "    ##  ##    ",
+        "    #o##o#    ",
+        "  # #o##o# #  ",
+        " ## #o##o# ## ",
+        "#o###o##o###o#",
+        "#oooooooooooo#",
+        "#o###o##o###o#",
+        " ## #o##o# ## ",
+        "  # #o##o# #  ",
+        "    #o##o#    ",
+        "    ##  ##    ",
+    ]
+    stamp(c, rows, 9, 10)
+    return c, (16, 15)
+
+
+def write_cur(path, cur):
+    c, (hx, hy) = cur
+    xor_rows, and_rows = [], []
+    for y in reversed(range(32)):
+        xor_rows.append(pack1([1 if c[y][x] == "o" else 0 for x in range(32)]))
+        and_rows.append(pack1([1 if c[y][x] == "." else 0 for x in range(32)]))
+    xor, and_ = b"".join(xor_rows), b"".join(and_rows)
+    pal = struct.pack("<BBBBBBBB", 0, 0, 0, 0, 255, 255, 255, 0)
+    bih = struct.pack("<IiiHHIIiiII", 40, 32, 64, 1, 1, 0, len(xor) + len(and_), 0, 0, 2, 0)
+    data = bih + pal + xor + and_
+    hdr = struct.pack("<HHH", 0, 2, 1)
+    entry = struct.pack("<BBBBHHII", 32, 32, 2, 0, hx, hy, len(data), 6 + 16)
+    with open(path, "wb") as f:
+        f.write(hdr + entry + data)
+
+
 # --------------------------------------------------------------------------
 # Writers
 # --------------------------------------------------------------------------
@@ -313,6 +492,7 @@ SMALL = [
     ("find", find), ("run", run), ("shutdown", shutdown), ("computer", computer),
     ("folder", folder), ("help", help_), ("printer", printer), ("control", control),
     ("about", about), ("dos", dos), ("application", application), ("start", start_logo),
+    ("explorer", explorer_small), ("bin", bin_small), ("taskman", taskman_small),
 ]
 
 ICONS = [
@@ -320,7 +500,13 @@ ICONS = [
     ("app", application), ("computer", computer),
     ("floppy", lambda n: drive(n, "floppy")), ("hdd", lambda n: drive(n, "hard")),
     ("cdrom", lambda n: drive(n, "cdrom")), ("netdrv", lambda n: drive(n, "net")),
-    ("bin", bin_),
+    ("bin", bin_), ("binfull", bin_full), ("explorer", explorer),
+    ("taskman", taskman), ("find", find_icon),
+]
+
+CURSORS = [
+    ("dragmove", lambda: drag_cursor(False)), ("dragcopy", lambda: drag_cursor(True)),
+    ("nodrop", nodrop_cursor), ("split", split_cursor),
 ]
 
 
@@ -333,6 +519,8 @@ def main():
     for i, (_, fn) in enumerate(SMALL):
         strip.paste(fn(16), (16 * i, 0))
     write_bmp(os.path.join(out, "small.bmp"), strip)
+    for name, fn in CURSORS:
+        write_cur(os.path.join(out, name + ".cur"), fn())
 
 
 if __name__ == "__main__":

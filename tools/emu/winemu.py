@@ -16,6 +16,9 @@ Script actions (space separated):
     key:KEYS        xdotool key names, e.g. ctrl+Escape, Return, alt+F4
     type:TEXT       type text (use _ for spaces)
     move:DX,DY      relative mouse motion (needs the mouse to be captured)
+    goto:X,Y        move the pointer to screen position X,Y (Windows pixels;
+                    requires MouseSpeed=0 in WIN.INI for a 1:1 mapping)
+    down:N, up:N    press / release mouse button N (for dragging)
     click:N         mouse button N (1 left, 3 right); dclick:N double-click
 
 Requires: dosbox-x, xdotool, ImageMagick (import), and Xvfb when no
@@ -39,6 +42,9 @@ def prepare_drive(windir, work, exe, shell):
         shutil.copytree(windir, dst_win)
     os.makedirs(os.path.join(cdrive, "NEWSHELL"), exist_ok=True)
     shutil.copy(exe, os.path.join(cdrive, "NEWSHELL", "NEWSHELL.EXE"))
+    dll = os.path.join(os.path.dirname(exe), "nshook.dll")
+    if os.path.exists(dll):
+        shutil.copy(dll, os.path.join(cdrive, "NEWSHELL", "NSHOOK.DLL"))
 
     # SYSTEM.INI: choose the shell
     sysini = None
@@ -154,6 +160,22 @@ def run_script(script, display, out, win):
             xdo("key", "--window", win, "--delay", "80", *arg.split(","))
         elif kind == "type":
             xdo("type", "--window", win, "--delay", "60", arg.replace("_", " "))
+        elif kind == "goto":
+            # pin the pointer to the top-left corner, then move in small
+            # steps (large relative jumps get clipped by the X server)
+            x, y = (int(v) for v in arg.split(","))
+            for _ in range(8):
+                xdo("mousemove_relative", "--", "-150", "-150")
+                time.sleep(0.1)
+            while x > 0 or y > 0:
+                dx, dy = min(x, 100), min(y, 100)
+                xdo("mousemove_relative", "--", str(dx), str(dy))
+                x, y = x - dx, y - dy
+                time.sleep(0.1)
+        elif kind == "down":
+            xdo("mousedown", arg)
+        elif kind == "up":
+            xdo("mouseup", arg)
         elif kind == "move":
             dx, dy = arg.split(",")
             xdo("mousemove_relative", "--", dx, dy)

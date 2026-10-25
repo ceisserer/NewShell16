@@ -3,7 +3,7 @@
 #
 # NewShell16 - Open Watcom makefile (wmake)
 #
-#   wmake               build build/newshell.exe
+#   wmake               build build/newshell.exe and build/nshook.dll
 #   wmake clean         remove build output
 #
 # Requires the WATCOM environment variable to point at an Open Watcom 1.9 or
@@ -23,9 +23,17 @@ OBJS    = $(OBJDIR)/main.obj     &
           $(OBJDIR)/startmnu.obj &
           $(OBJDIR)/desktop.obj  &
           $(OBJDIR)/folder.obj   &
+          $(OBJDIR)/fview.obj    &
+          $(OBJDIR)/explorer.obj &
+          $(OBJDIR)/fileops.obj  &
+          $(OBJDIR)/bin.obj      &
+          $(OBJDIR)/props.obj    &
+          $(OBJDIR)/taskman.obj  &
+          $(OBJDIR)/find.obj     &
           $(OBJDIR)/dialogs.obj
 
-RESFILES = $(RESDIR)/newshell.rc $(SRCDIR)/resource.h $(RESDIR)/*.ico $(RESDIR)/small.bmp
+RESFILES = $(RESDIR)/newshell.rc $(SRCDIR)/resource.h $(RESDIR)/*.ico &
+           $(RESDIR)/*.cur $(RESDIR)/small.bmp
 
 CC      = wcc
 RC      = wrc
@@ -38,9 +46,15 @@ LD      = wlink
 CFLAGS  = -q -bt=windows -ml -zWs -2 -s -os -w4 -we -zq &
           -i="$(%WATCOM)/h" -i="$(%WATCOM)/h/win" -i=$(SRCDIR)
 
+# the hook DLL: DS != SS (-zu)
+DLLFLAGS = -q -bt=windows -ml -zu -zW -2 -s -os -w4 -we -zq &
+          -i="$(%WATCOM)/h" -i="$(%WATCOM)/h/win" -i=$(SRCDIR)
+
 RCFLAGS = -q -r -bt=windows -31 -i="$(%WATCOM)/h" -i="$(%WATCOM)/h/win" -i=$(SRCDIR) -i=$(RESDIR)
 
 .c: $(SRCDIR)
+
+all : $(OBJDIR) $(OBJDIR)/$(NAME).exe $(OBJDIR)/nshook.dll .SYMBOLIC
 
 $(OBJDIR)/$(NAME).exe : $(OBJDIR) $(OBJS) $(OBJDIR)/$(NAME).res $(OBJDIR)/$(NAME).lnk
     $(LD) @$(OBJDIR)/$(NAME).lnk
@@ -56,8 +70,23 @@ $(OBJDIR)/$(NAME).lnk : makefile
     @%append $@ option quiet, map=$(OBJDIR)/$(NAME).map
     @%append $@ option stack=12k, heapsize=8k
     @%append $@ option description 'NewShell16'
-    @%append $@ library commdlg.lib, shell.lib
+    @%append $@ library commdlg.lib, shell.lib, toolhelp.lib
     @for %i in ($(OBJS)) do @%append $@ file %i
+
+$(OBJDIR)/nshook.dll : $(OBJDIR)/nshook.obj makefile
+    %create $(OBJDIR)/nshook.lnk
+    @%append $(OBJDIR)/nshook.lnk system windows_dll
+    @%append $(OBJDIR)/nshook.lnk name $(OBJDIR)/nshook.dll
+    @%append $(OBJDIR)/nshook.lnk option quiet, map=$(OBJDIR)/nshook.map
+    @%append $(OBJDIR)/nshook.lnk option description 'NewShell16 hooks'
+    @%append $(OBJDIR)/nshook.lnk segment type code fixed
+    @%append $(OBJDIR)/nshook.lnk import FileCdr KERNEL.130
+    @%append $(OBJDIR)/nshook.lnk file $(OBJDIR)/nshook.obj
+    $(LD) @$(OBJDIR)/nshook.lnk
+    $(RC) -q -bt=windows -31 $(OBJDIR)/nshook.dll
+
+$(OBJDIR)/nshook.obj : $(SRCDIR)/nshook.c $(SRCDIR)/nshook.h
+    $(CC) $(DLLFLAGS) -fo=$@ $(SRCDIR)/nshook.c
 
 $(OBJDIR)/$(NAME).res : $(RESFILES)
     $(RC) $(RCFLAGS) $(RESDIR)/$(NAME).rc -fo=$@
@@ -74,7 +103,15 @@ $(OBJDIR)/taskbar.obj  : $(SRCDIR)/taskbar.c
 $(OBJDIR)/startmnu.obj : $(SRCDIR)/startmnu.c
 $(OBJDIR)/desktop.obj  : $(SRCDIR)/desktop.c
 $(OBJDIR)/folder.obj   : $(SRCDIR)/folder.c
+$(OBJDIR)/fview.obj    : $(SRCDIR)/fview.c
+$(OBJDIR)/explorer.obj : $(SRCDIR)/explorer.c
+$(OBJDIR)/fileops.obj  : $(SRCDIR)/fileops.c
+$(OBJDIR)/bin.obj      : $(SRCDIR)/bin.c
+$(OBJDIR)/props.obj    : $(SRCDIR)/props.c
+$(OBJDIR)/taskman.obj  : $(SRCDIR)/taskman.c
+$(OBJDIR)/find.obj     : $(SRCDIR)/find.c
 $(OBJDIR)/dialogs.obj  : $(SRCDIR)/dialogs.c
 
 clean : .SYMBOLIC
-    -rm -f $(OBJDIR)/*.obj $(OBJDIR)/*.res $(OBJDIR)/*.exe $(OBJDIR)/*.map $(OBJDIR)/*.lnk $(OBJDIR)/*.err
+    -rm -f $(OBJDIR)/*.obj $(OBJDIR)/*.res $(OBJDIR)/*.exe $(OBJDIR)/*.dll &
+           $(OBJDIR)/*.map $(OBJDIR)/*.lnk $(OBJDIR)/*.err

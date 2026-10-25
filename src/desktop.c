@@ -21,10 +21,14 @@
  * Each desktop icon is a small popup window kept at the bottom of the
  * Z-order, painted with the desktop wallpaper behind it. Icons can be
  * dragged; positions are saved in NEWSHELL.INI. Besides the built-in
- * Computer icon, shortcuts can be configured:
+ * Computer and Bin icons, shortcuts can be configured (commands may be
+ * Start menu macros such as "$Folder C:\DOCS"):
  *
  *   [Desktop]
  *   Shortcut1=Notepad|NOTEPAD.EXE
+ *
+ * Dropping files on the Bin deletes them; dropping them on a shortcut to
+ * a folder copies or moves them there.
  */
 #include <stdlib.h>
 #include <string.h>
@@ -100,10 +104,36 @@ static void PaintIcon(HWND hwnd, HDC hdc, DESKICON *p)
 
 static void OpenDeskIcon(DESKICON *p)
 {
-    if (p->szCmd[0] == '\0')
-        FolderOpen("");
+    if (p->szCmd[0] == '$')
+        ExecMacro(p->hwnd, p->szCmd);
     else
         LaunchCommand(p->hwnd, p->szCmd, NULL, SW_SHOWNORMAL);
+}
+
+/* The folder a shortcut points to, if any */
+static BOOL ShortcutFolder(DESKICON *p, LPSTR lpDir)
+{
+    LPCSTR lp = p->szCmd;
+
+    if (_fstrnicmp(lp, "$Folder ", 8) == 0)
+        lp += 8;
+    else if (lp[0] == '$')
+        return FALSE;
+    lstrcpyn(lpDir, lp, MAXPATHLEN);
+    return PathIsDirectory(lpDir);
+}
+
+int DesktopDropTarget(HWND hwnd, LPSTR lpDir)
+{
+    DESKICON *p = FindIcon(hwnd);
+
+    if (!p)
+        return DT_NONE;
+    if (lstrcmpi(p->szCmd, "$Bin") == 0)
+        return DT_BIN;
+    if (ShortcutFolder(p, lpDir))
+        return DT_FOLDER;
+    return DT_NONE;
 }
 
 static void SavePosition(DESKICON *p)
@@ -138,6 +168,10 @@ LRESULT CALLBACK NSEXPORT DeskIconWndProc(HWND hwnd, UINT msg, WPARAM wParam,
 
     case WM_MOUSEACTIVATE:
         return MA_NOACTIVATE;
+
+    case WM_CLOSE:
+        PostMessage(g_hwndMain, WM_CLOSE, 0, 0L);
+        return 0;
 
     case WM_WINDOWPOSCHANGING:
         /* stay below every other window */
@@ -193,6 +227,11 @@ LRESULT CALLBACK NSEXPORT DeskIconWndProc(HWND hwnd, UINT msg, WPARAM wParam,
             HMENU hMenu = CreatePopupMenu();
 
             AppendMenu(hMenu, MF_STRING, 1, "&Open");
+            if (lstrcmpi(p->szCmd, "$Bin") == 0)
+                AppendMenu(hMenu, MF_STRING | (BinIsEmpty() ? MF_GRAYED : 0), 2,
+                           "&Empty Bin");
+            else if (lstrcmpi(p->szCmd, "$System") == 0)
+                AppendMenu(hMenu, MF_STRING, 3, "&Explore");
             pt.x = LOWORD(lParam);
             pt.y = HIWORD(lParam);
             ClientToScreen(hwnd, &pt);
@@ -205,6 +244,11 @@ LRESULT CALLBACK NSEXPORT DeskIconWndProc(HWND hwnd, UINT msg, WPARAM wParam,
     case WM_COMMAND:
         if (wParam == 1 && p)
             OpenDeskIcon(p);
+        else if (wParam == 2) {
+            BinOpen();
+            PostMessage(FindWindow(CLS_BIN, NULL), WM_COMMAND, CMD_BIN_EMPTY, 0L);
+        } else if (wParam == 3)
+            ExplorerOpen(NULL);
         return 0;
     }
     return DefWindowProc(hwnd, msg, wParam, lParam);
@@ -266,6 +310,10 @@ static HICON ShortcutIcon(LPCSTR lpCmd)
     OFSTRUCT of;
     int i;
 
+    if (_fstrnicmp(lpCmd, "$Folder", 7) == 0)
+        return IconStock(IDI_FOLDER);
+    if (lpCmd[0] == '$')
+        return IconStock(IDI_APP);
     for (i = 0; lpCmd[i] && lpCmd[i] != ' ' && i < sizeof(szFile) - 1; i++)
         szFile[i] = lpCmd[i];
     szFile[i] = '\0';
@@ -289,7 +337,8 @@ BOOL DesktopCreate(void)
     s_lpfnPaintDesktop = (PAINTDESKTOPPROC)GetProcAddress(
         GetModuleHandle("USER"), "PaintDesktop");
 
-    AddIcon("Computer", "Computer", "", IconStock(IDI_COMPUTER));
+    AddIcon("Computer", "Computer", "$System", IconStock(IDI_COMPUTER));
+    AddIcon("Bin", "Bin", "$Bin", IconStock(BinIsEmpty() ? IDI_BIN : IDI_BINFULL));
 
     for (i = 1; i <= MAX_DESKICONS; i++) {
         wsprintf(szKey, "Shortcut%d", i);
@@ -314,4 +363,53 @@ void DesktopDestroy(void)
         if (s_icons[i].hwnd)
             DestroyWindow(s_icons[i].hwnd);
     s_nIcons = 0;
+}
+
+/* Lines the icons up in a column on the left of the screen */
+void DesktopArrange(void)
+{
+    int i, x = 8, y = 8;
+    int cyMax = GetSystemMetrics(SM_CYSCREEN) - TaskbarHeight() - DI_CY;
+
+    for (i = 0; i < s_nIcons; i++) {
+        if (y > cyMax) {
+            y = 8;
+            x += DI_CX + 8;
+        }
+        SetWindowPos(s_icons[i].hwnd, NULL, x, y, 0, 0,
+                     SWP_NOSIZE | SWP_NOACTIVATE);
+        SavePosition(&s_icons[i]);
+        y += DI_CY + 8;
+    }
+}
+
+void DesktopBinChanged(void)
+{
+    HICON hIcon = IconStock(BinIsEmpty() ? IDI_BIN : IDI_BINFULL);
+    int i;
+
+    for (i = 0; i < s_nIcons; i++)
+        if (lstrcmpi(s_icons[i].szCmd, "$Bin") == 0 && s_icons[i].hIcon != hIcon) {
+            s_icons[i].hIcon = hIcon;
+            InvalidateRect(s_icons[i].hwnd, NULL, TRUE);
+        }
+}
+
+/* Context menu for a right click on the desktop background */
+void DesktopMenu(int x, int y)
+{
+    HMENU hMenu = CreatePopupMenu();
+
+    AppendMenu(hMenu, MF_STRING, CMD_ARRANGEICONS, "&Arrange Icons");
+    AppendMenu(hMenu, MF_SEPARATOR, 0, NULL);
+    AppendMenu(hMenu, MF_STRING, CMD_CASCADE, "&Cascade Windows");
+    AppendMenu(hMenu, MF_STRING, CMD_TILE, "Tile &Horizontally");
+    AppendMenu(hMenu, MF_STRING, CMD_TILEVERT, "Tile &Vertically");
+    AppendMenu(hMenu, MF_STRING, CMD_MINIMIZEALL, "&Minimize All Windows");
+    AppendMenu(hMenu, MF_SEPARATOR, 0, NULL);
+    AppendMenu(hMenu, MF_STRING, CMD_TASKMAN, "&Task Manager...");
+    AppendMenu(hMenu, MF_STRING, CMD_DESKTOPPROPS, "&Desktop Settings...");
+    AppendMenu(hMenu, MF_STRING, CMD_OPTIONS, "NewShell &Options...");
+    TrackPopupMenu(hMenu, 0, x, y, 0, g_hwndMain, NULL);
+    DestroyMenu(hMenu);
 }

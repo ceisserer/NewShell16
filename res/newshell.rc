@@ -32,26 +32,110 @@ IDI_HDD         ICON    "hdd.ico"
 IDI_CDROM       ICON    "cdrom.ico"
 IDI_NETDRV      ICON    "netdrv.ico"
 IDI_BIN         ICON    "bin.ico"
+IDI_BINFULL     ICON    "binfull.ico"
+IDI_EXPLORER    ICON    "explorer.ico"
+IDI_TASKMAN     ICON    "taskman.ico"
+IDI_FIND        ICON    "find.ico"
 
 IDB_SMALL       BITMAP  "small.bmp"
+
+IDC_DRAGMOVE    CURSOR  "dragmove.cur"
+IDC_DRAGCOPY    CURSOR  "dragcopy.cur"
+IDC_NODROP      CURSOR  "nodrop.cur"
+IDC_SPLIT       CURSOR  "split.cur"
 
 IDM_FOLDER MENU
 BEGIN
     POPUP "&File"
     BEGIN
-        MENUITEM "&Open\tEnter",            CMD_F_OPEN
-        MENUITEM "&Up One Level\tBackspace", CMD_F_UP
-        MENUITEM "&Computer",               CMD_F_COMPUTER
+        MENUITEM "&Open\tEnter",                CMD_F_OPEN
+        MENUITEM "&Explore",                    CMD_F_EXPLORE
         MENUITEM SEPARATOR
-        MENUITEM "&Close",                  CMD_F_CLOSE
+        MENUITEM "New &Folder",                 CMD_F_NEWFOLDER
+        MENUITEM "&Delete\tDel",                CMD_F_DELETE
+        MENUITEM "Rena&me\tF2",                 CMD_F_RENAME
+        MENUITEM "P&roperties\tAlt+Enter",      CMD_F_PROPERTIES
+        MENUITEM SEPARATOR
+        MENUITEM "&Close",                      CMD_F_CLOSE
+    END
+    POPUP "&Edit"
+    BEGIN
+        MENUITEM "Cu&t\tCtrl+X",                CMD_F_CUT
+        MENUITEM "&Copy\tCtrl+C",               CMD_F_COPY
+        MENUITEM "&Paste\tCtrl+V",              CMD_F_PASTE
+        MENUITEM SEPARATOR
+        MENUITEM "Select &All\tCtrl+A",         CMD_F_SELALL
+        MENUITEM "&Invert Selection",           CMD_F_INVERTSEL
     END
     POPUP "&View"
     BEGIN
-        MENUITEM "&Refresh\tF5",            CMD_F_REFRESH
+        MENUITEM "Lar&ge Icons",                CMD_F_LARGEICONS
+        MENUITEM "S&mall Icons",                CMD_F_SMALLICONS
+        MENUITEM "&Details",                    CMD_F_DETAILS
+        MENUITEM SEPARATOR
+        MENUITEM "by &Name",                    CMD_F_SORTNAME
+        MENUITEM "by &Type",                    CMD_F_SORTTYPE
+        MENUITEM "by Si&ze",                    CMD_F_SORTSIZE
+        MENUITEM "by D&ate",                    CMD_F_SORTDATE
+        MENUITEM SEPARATOR
+        MENUITEM "&Up One Level\tBackspace",    CMD_F_UP
+        MENUITEM "&Refresh\tF5",                CMD_F_REFRESH
+    END
+    POPUP "&Tools"
+    BEGIN
+        MENUITEM "&Find...",                    CMD_FIND
+        MENUITEM "&Run...",                     CMD_RUN
+        MENUITEM "&Computer",                   CMD_F_COMPUTER
+        MENUITEM "&Bin",                        CMD_BIN
+        MENUITEM "&Task Manager",               CMD_TASKMAN
+        MENUITEM SEPARATOR
+        MENUITEM "&Options...",                 CMD_OPTIONS
     END
     POPUP "&Help"
     BEGIN
-        MENUITEM "&About NewShell...",      CMD_ABOUT
+        MENUITEM "&About NewShell...",          CMD_ABOUT
+    END
+END
+
+IDM_BIN MENU
+BEGIN
+    POPUP "&File"
+    BEGIN
+        MENUITEM "&Restore",                    CMD_BIN_RESTORE
+        MENUITEM "&Delete",                     CMD_BIN_DELETE
+        MENUITEM SEPARATOR
+        MENUITEM "&Empty Bin",                  CMD_BIN_EMPTY
+        MENUITEM SEPARATOR
+        MENUITEM "&Close",                      CMD_F_CLOSE
+    END
+    POPUP "&View"
+    BEGIN
+        MENUITEM "&Refresh",                    CMD_F_REFRESH
+    END
+END
+
+IDM_TASKMAN MENU
+BEGIN
+    POPUP "&Task"
+    BEGIN
+        MENUITEM "&Switch To",                  CMD_TM_SWITCH
+        MENUITEM "&Hide",                       CMD_TM_HIDE
+        MENUITEM "&Minimize",                   CMD_TM_MINIMIZE
+        MENUITEM SEPARATOR
+        MENUITEM "&End Task",                   CMD_TM_ENDTASK
+        MENUITEM "&Terminate...",               CMD_TM_TERMINATE
+        MENUITEM SEPARATOR
+        MENUITEM "&New Task...",                CMD_RUN
+        MENUITEM "&Refresh",                    CMD_F_REFRESH
+        MENUITEM SEPARATOR
+        MENUITEM "&Close",                      CMD_F_CLOSE
+    END
+    POPUP "&Windows"
+    BEGIN
+        MENUITEM "&Cascade",                    CMD_CASCADE
+        MENUITEM "Tile &Horizontally",          CMD_TILE
+        MENUITEM "Tile &Vertically",            CMD_TILEVERT
+        MENUITEM "&Minimize All",               CMD_MINIMIZEALL
     END
 END
 
@@ -91,7 +175,7 @@ BEGIN
     PUSHBUTTON      "Cancel", IDCANCEL, 138, 72, 50, 14
 END
 
-IDD_ABOUT DIALOG 40, 40, 180, 90
+IDD_ABOUT DIALOG 40, 40, 180, 98
 STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "About NewShell"
 FONT 8, "MS Sans Serif"
@@ -99,13 +183,112 @@ BEGIN
     ICON            IDI_NEWSHELL, -1, 8, 8, 18, 20
     LTEXT           "NewShell16", -1, 36, 8, 136, 8
     LTEXT           "A Calmira-style shell for Windows 3.1", -1, 36, 18, 136, 8
-    LTEXT           "", IDC_VERSION, 36, 32, 136, 34
-    DEFPUSHBUTTON   "OK", IDOK, 65, 70, 50, 14
+    LTEXT           "Free software under the GNU GPL v3 or later.", -1, 36, 28, 136, 8
+    LTEXT           "", IDC_VERSION, 36, 42, 136, 34
+    DEFPUSHBUTTON   "OK", IDOK, 65, 78, 50, 14
+END
+
+IDD_PROGRESS DIALOG 60, 60, 220, 70
+STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION
+CAPTION "Copying"
+FONT 8, "MS Sans Serif"
+BEGIN
+    LTEXT           "", IDC_PROGTEXT1, 8, 8, 204, 8, SS_NOPREFIX
+    LTEXT           "", IDC_PROGTEXT2, 8, 18, 204, 8, SS_NOPREFIX
+    CONTROL         "", IDC_PROGBAR, "NSProgress", WS_CHILD | WS_VISIBLE, 8, 32, 204, 10
+    PUSHBUTTON      "Cancel", IDCANCEL, 85, 50, 50, 14
+END
+
+IDD_REPLACE DIALOG 50, 50, 230, 80
+STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Confirm File Replace"
+FONT 8, "MS Sans Serif"
+BEGIN
+    ICON            IDI_DOCUMENT, -1, 8, 8, 18, 20
+    LTEXT           "", IDC_REPLACETEXT, 36, 8, 186, 40, SS_NOPREFIX
+    DEFPUSHBUTTON   "&Yes", IDYES, 8, 58, 50, 14
+    PUSHBUTTON      "Yes to &All", IDC_YESALL, 63, 58, 50, 14
+    PUSHBUTTON      "&No", IDNO, 118, 58, 50, 14
+    PUSHBUTTON      "Cancel", IDCANCEL, 173, 58, 50, 14
+END
+
+IDD_PROPERTIES DIALOG 40, 30, 210, 150
+STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Properties"
+FONT 8, "MS Sans Serif"
+BEGIN
+    ICON            IDI_DOCUMENT, IDC_PROPICON, 8, 8, 18, 20
+    LTEXT           "", IDC_PROPNAME, 36, 14, 166, 8, SS_NOPREFIX
+    CONTROL         "", -1, "Static", SS_BLACKRECT, 8, 32, 194, 1
+    LTEXT           "", IDC_PROPL1,     8, 40, 50, 8
+    LTEXT           "", IDC_PROPV1,    60, 40, 142, 8, SS_NOPREFIX
+    LTEXT           "", IDC_PROPL1+1,   8, 52, 50, 8
+    LTEXT           "", IDC_PROPV1+1,  60, 52, 142, 8, SS_NOPREFIX
+    LTEXT           "", IDC_PROPL1+2,   8, 64, 50, 8
+    LTEXT           "", IDC_PROPV1+2,  60, 64, 142, 8, SS_NOPREFIX
+    LTEXT           "", IDC_PROPL1+3,   8, 76, 50, 8
+    LTEXT           "", IDC_PROPV1+3,  60, 76, 142, 8, SS_NOPREFIX
+    LTEXT           "", IDC_PROPL1+4,   8, 88, 50, 8
+    LTEXT           "", IDC_PROPV1+4,  60, 88, 142, 8, SS_NOPREFIX
+    GROUPBOX        "Attributes", -1, 8, 100, 194, 26
+    CONTROL         "&Read-only", IDC_ATTR_R, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 14, 111, 46, 10
+    CONTROL         "&Hidden", IDC_ATTR_H, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 62, 111, 40, 10
+    CONTROL         "&System", IDC_ATTR_S, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 104, 111, 40, 10
+    CONTROL         "&Archive", IDC_ATTR_A, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 148, 111, 46, 10
+    DEFPUSHBUTTON   "OK", IDOK, 96, 132, 50, 14
+    PUSHBUTTON      "Cancel", IDCANCEL, 152, 132, 50, 14
+END
+
+IDD_FIND DIALOG 30, 20, 260, 170
+STYLE WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX
+CAPTION "Find: Files and Folders"
+FONT 8, "MS Sans Serif"
+BEGIN
+    ICON            IDI_FIND, IDC_FINDICON, 8, 8, 18, 20
+    LTEXT           "&Named:", -1, 36, 10, 40, 8
+    EDITTEXT        IDC_FINDNAME, 80, 8, 116, 12, ES_AUTOHSCROLL
+    LTEXT           "&Look in:", -1, 36, 26, 40, 8
+    EDITTEXT        IDC_FINDDIR, 80, 24, 116, 12, ES_AUTOHSCROLL
+    CONTROL         "Include &subfolders", IDC_FINDSUB, "Button",
+                    BS_AUTOCHECKBOX | WS_TABSTOP, 80, 40, 116, 10
+    DEFPUSHBUTTON   "Find &Now", IDOK, 204, 8, 50, 14
+    PUSHBUTTON      "S&top", IDC_FINDSTOP, 204, 26, 50, 14
+    LISTBOX         IDC_FINDLIST, 8, 56, 246, 82,
+                    LBS_OWNERDRAWFIXED | LBS_NOTIFY | LBS_NOINTEGRALHEIGHT | WS_VSCROLL | WS_TABSTOP
+    PUSHBUTTON      "&Open", IDC_FINDOPEN, 8, 142, 50, 14
+    PUSHBUTTON      "Open &Folder", IDC_FINDOPENDIR, 62, 142, 56, 14
+    PUSHBUTTON      "Close", IDCANCEL, 204, 142, 50, 14
+    LTEXT           "", IDC_FINDSTATUS, 8, 160, 246, 8, SS_NOPREFIX
+END
+
+IDD_OPTIONS DIALOG 30, 20, 240, 196
+STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "NewShell Options"
+FONT 8, "MS Sans Serif"
+BEGIN
+    GROUPBOX        "Taskbar", -1, 6, 4, 228, 64
+    CONTROL         "Show &clock", IDC_OPT_CLOCK, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 12, 16, 100, 10
+    CONTROL         "&Hide minimized windows", IDC_OPT_HIDEMIN, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 120, 16, 110, 10
+    CONTROL         "Keep &maximized windows above the taskbar", IDC_OPT_MAXCLAMP, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 12, 28, 210, 10
+    CONTROL         "Ctrl+&Esc opens the Start menu (not the Task Manager)", IDC_OPT_CTRLESC, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 12, 40, 216, 10
+    CONTROL         "&Windows key opens the Start menu", IDC_OPT_WINKEY, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 12, 52, 210, 10
+    GROUPBOX        "Desktop", -1, 6, 72, 228, 28
+    CONTROL         "Show desktop &icons", IDC_OPT_DESKICONS, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 12, 84, 100, 10
+    CONTROL         "Desktop right-click &menu", IDC_OPT_DESKMENU, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 120, 84, 110, 10
+    GROUPBOX        "Folders and files", -1, 6, 104, 228, 52
+    CONTROL         "Open folders in &new windows", IDC_OPT_NEWWINDOW, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 12, 116, 110, 10
+    CONTROL         "Show hi&dden files", IDC_OPT_SHOWHIDDEN, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 130, 116, 100, 10
+    CONTROL         "Delete to the &Bin", IDC_OPT_TOBIN, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 12, 128, 110, 10
+    CONTROL         "Con&firm deleting", IDC_OPT_CONFIRMDEL, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 130, 128, 100, 10
+    CONTROL         "&Refresh folders on file changes", IDC_OPT_FILEMON, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 12, 140, 210, 10
+    CONTROL         "Run &StartUp programs (when NewShell is the shell)", IDC_OPT_STARTUP, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 6, 160, 228, 10
+    DEFPUSHBUTTON   "OK", IDOK, 128, 176, 50, 14
+    PUSHBUTTON      "Cancel", IDCANCEL, 184, 176, 50, 14
 END
 
 VS_VERSION_INFO VERSIONINFO
-FILEVERSION     0, 1, 0, 0
-PRODUCTVERSION  0, 1, 0, 0
+FILEVERSION     0, 2, 0, 0
+PRODUCTVERSION  0, 2, 0, 0
 FILEFLAGSMASK   0x3F
 FILEFLAGS       0
 FILEOS          VOS_DOS_WINDOWS16
@@ -117,11 +300,12 @@ BEGIN
         BLOCK "040904E4"
         BEGIN
             VALUE "FileDescription", "NewShell16 Windows shell\0"
-            VALUE "FileVersion",     "0.1\0"
+            VALUE "FileVersion",     "0.2\0"
             VALUE "InternalName",    "NEWSHELL\0"
+            VALUE "LegalCopyright",  "GNU General Public License v3 or later\0"
             VALUE "OriginalFilename","NEWSHELL.EXE\0"
             VALUE "ProductName",     "NewShell16\0"
-            VALUE "ProductVersion",  "0.1\0"
+            VALUE "ProductVersion",  "0.2\0"
         END
     END
     BLOCK "VarFileInfo"

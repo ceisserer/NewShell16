@@ -22,12 +22,20 @@
  * SYSTEM.INI. It can also be started from Program Manager for testing.
  *
  * Running NEWSHELL.EXE again while it is active forwards the request to
- * the running copy: without arguments the Start menu opens (so it can be
- * used as "taskman.exe=" for Ctrl+Esc), with a path that folder or file is
- * opened.
+ * the running copy:
+ *   NEWSHELL                 Task Manager (or Start menu, see CtrlEscStart),
+ *                            so it can be used as "taskman.exe=" for Ctrl+Esc
+ *   NEWSHELL /E [path]       Explorer
+ *   NEWSHELL /S              Start menu
+ *   NEWSHELL path            open a folder, document or program
  */
 #include <string.h>
 #include "newshell.h"
+#include "nshook.h"
+
+#define TIMER_FILECHANGE    1
+#define FILECHANGE_DELAY    600
+#define MAX_CHANGED_DIRS    16
 
 HINSTANCE g_hInst;
 HWND      g_hwndMain;
@@ -36,6 +44,13 @@ BOOL      g_bIsShell;
 char      g_szWinDir[MAXPATHLEN];
 HFONT     g_hfontUI;
 HFONT     g_hfontBold;
+
+static HINSTANCE           s_hHookDll;
+static NSHOOKSTART         s_lpfnHookStart;
+static NSHOOKSTOP          s_lpfnHookStop;
+static NSHOOKGETFILECHANGE s_lpfnHookGetChange;
+static char s_szChanged[MAX_CHANGED_DIRS][MAXPATHLEN];
+static int  s_nChanged;
 
 static BOOL DetectShell(void)
 {
@@ -53,16 +68,120 @@ static BOOL DetectShell(void)
     return lstrcmpi(lpShellName, lpSelfName) == 0;
 }
 
+/* -------------------------------------------------------------------- */
+/* Hook DLL                                                             */
+/* -------------------------------------------------------------------- */
+
+static void LoadHookDll(void)
+{
+    char szPath[MAXPATHLEN];
+    UINT uOldMode;
+
+    GetModuleFileName(g_hInst, szPath, sizeof(szPath));
+    *PathFileName(szPath) = '\0';
+    lstrcat(szPath, "NSHOOK.DLL");
+    uOldMode = SetErrorMode(0x8000);    /* SEM_NOOPENFILEERRORBOX */
+    s_hHookDll = LoadLibrary(szPath);
+    SetErrorMode(uOldMode);
+    if ((UINT)s_hHookDll < 32) {
+        s_hHookDll = NULL;
+        return;
+    }
+    s_lpfnHookStart = (NSHOOKSTART)GetProcAddress(s_hHookDll, "NSHOOKSTART");
+    s_lpfnHookStop = (NSHOOKSTOP)GetProcAddress(s_hHookDll, "NSHOOKSTOP");
+    s_lpfnHookGetChange = (NSHOOKGETFILECHANGE)GetProcAddress(s_hHookDll,
+                                                              "NSHOOKGETFILECHANGE");
+    if (!s_lpfnHookStart || !s_lpfnHookStop || !s_lpfnHookGetChange) {
+        FreeLibrary(s_hHookDll);
+        s_hHookDll = NULL;
+    }
+}
+
+/* (Re)installs the hooks according to the settings */
+void HookApplySettings(void)
+{
+    UINT uFlags = NSH_SHELL;
+
+    if (!s_hHookDll)
+        return;
+    if (g_cfg.bMaxClamp)
+        uFlags |= NSH_MAXIMIZE;
+    if (g_cfg.bDesktopMenu)
+        uFlags |= NSH_DESKTOP;
+    if (g_cfg.bWinKey)
+        uFlags |= NSH_WINKEY;
+    if (g_cfg.bFileMonitor)
+        uFlags |= NSH_FILES;
+    s_lpfnHookStart(g_hwndMain,
+                    GetSystemMetrics(SM_CYSCREEN) - TaskbarHeight(), uFlags);
+}
+
+static void UnloadHookDll(void)
+{
+    if (!s_hHookDll)
+        return;
+    s_lpfnHookStop();
+    FreeLibrary(s_hHookDll);
+    s_hHookDll = NULL;
+}
+
+/* Collects changed folders from the hook; refreshed after a short delay */
+static void OnFileChange(HWND hwnd)
+{
+    char szPath[MAXPATHLEN];
+    int i;
+
+    while (s_lpfnHookGetChange && s_lpfnHookGetChange(szPath, sizeof(szPath)) >= 0) {
+        OemToAnsi(szPath, szPath);
+        if (!PathParent(szPath))
+            continue;
+        for (i = 0; i < s_nChanged; i++)
+            if (lstrcmpi(s_szChanged[i], szPath) == 0)
+                break;
+        if (i == s_nChanged && s_nChanged < MAX_CHANGED_DIRS)
+            lstrcpy(s_szChanged[s_nChanged++], szPath);
+    }
+    if (s_nChanged > 0)
+        SetTimer(hwnd, TIMER_FILECHANGE, FILECHANGE_DELAY, NULL);
+}
+
+static void RefreshChanged(void)
+{
+    int i;
+
+    for (i = 0; i < s_nChanged; i++) {
+        FViewRefreshPath(s_szChanged[i]);
+        ExplorerRefreshPath(s_szChanged[i]);
+    }
+    s_nChanged = 0;
+}
+
+/* -------------------------------------------------------------------- */
+/* Commands                                                             */
+/* -------------------------------------------------------------------- */
+
 static void OpenFromCommandLine(LPCSTR lpCmdLine)
 {
     while (*lpCmdLine == ' ')
         lpCmdLine++;
-    if (*lpCmdLine)
+    if (lpCmdLine[0] == '/' && (lpCmdLine[1] | 0x20) == 'e') {
+        lpCmdLine += 2;
+        while (*lpCmdLine == ' ')
+            lpCmdLine++;
+        ExplorerOpen(lpCmdLine);
+    } else if (lpCmdLine[0] == '/' && (lpCmdLine[1] | 0x20) == 's') {
+        if (g_hwndTaskbar)
+            PostMessage(g_hwndTaskbar, WM_COMMAND, CMD_STARTMENU, 0L);
+    } else if (*lpCmdLine)
         LaunchCommand(g_hwndMain, lpCmdLine, NULL, SW_SHOWNORMAL);
 }
 
 void CloseShell(void)
 {
+    FindClose();
+    TaskManClose();
+    BinClose();
+    ExplorerCloseAll();
     FolderCloseAll();
     DesktopDestroy();
     if (g_hwndTaskbar)
@@ -91,6 +210,17 @@ void DoShutdownDialog(void)
     }
 }
 
+static void ArrangeTasks(UINT id)
+{
+    HWND hwnds[48];
+    int n = TasksGetList(hwnds, 48);
+
+    if (id == CMD_CASCADE)
+        CascadeList(hwnds, n);
+    else
+        TileList(hwnds, n, id == CMD_TILEVERT);
+}
+
 LRESULT CALLBACK NSEXPORT MainWndProc(HWND hwnd, UINT msg, WPARAM wParam,
                                       LPARAM lParam)
 {
@@ -98,11 +228,25 @@ LRESULT CALLBACK NSEXPORT MainWndProc(HWND hwnd, UINT msg, WPARAM wParam,
 
     switch (msg) {
     case WM_COMMAND:
-        if (wParam == CMD_STARTMENU) {
+        switch (wParam) {
+        case CMD_STARTMENU:
             if (g_hwndTaskbar)
                 PostMessage(g_hwndTaskbar, WM_COMMAND, CMD_STARTMENU, 0L);
-        } else
+            break;
+        case CMD_CASCADE:
+        case CMD_TILE:
+        case CMD_TILEVERT:
+            ArrangeTasks(wParam);
+            break;
+        case CMD_MINIMIZEALL:
+            TasksMinimizeAll();
+            break;
+        case CMD_ARRANGEICONS:
+            DesktopArrange();
+            break;
+        default:
             StartMenuCommand(hwnd, wParam);
+        }
         return 0;
 
     case WM_NS_OPENPATH:
@@ -111,17 +255,43 @@ LRESULT CALLBACK NSEXPORT MainWndProc(HWND hwnd, UINT msg, WPARAM wParam,
         GlobalDeleteAtom((ATOM)wParam);
         return 0;
 
+    case WM_NS_SHELLHOOK:
+        TaskbarRefresh();
+        return 0;
+
+    case WM_NS_DESKMENU:
+        DesktopMenu((int)LOWORD(lParam), (int)HIWORD(lParam));
+        return 0;
+
+    case WM_NS_WINKEY:
+        if (g_hwndTaskbar)
+            PostMessage(g_hwndTaskbar, WM_COMMAND, CMD_STARTMENU, 0L);
+        return 0;
+
+    case WM_NS_FILECHANGE:
+        OnFileChange(hwnd);
+        return 0;
+
+    case WM_TIMER:
+        KillTimer(hwnd, wParam);
+        if (wParam == TIMER_FILECHANGE)
+            RefreshChanged();
+        return 0;
+
     case WM_QUERYENDSESSION:
         return TRUE;
 
+    case WM_ENDSESSION:
+        if (wParam)
+            UnloadHookDll();
+        return 0;
+
     case WM_CLOSE:
-        if (g_bIsShell)
-            DoShutdownDialog();
-        else
-            CloseShell();
+        DoShutdownDialog();
         return 0;
 
     case WM_DESTROY:
+        UnloadHookDll();
         g_hwndMain = NULL;
         PostQuitMessage(0);
         return 0;
@@ -153,7 +323,8 @@ static BOOL RegisterClasses(void)
     if (!RegisterClass(&wc))
         return FALSE;
 
-    return FolderRegister();
+    return FolderRegister() && FViewRegister() && ExplorerRegister()
+        && TaskManRegister() && BinRegister() && FileOpRegister();
 }
 
 /*
@@ -179,7 +350,9 @@ static void ForwardToRunningCopy(LPSTR lpCmdLine)
     while (*lpCmdLine == ' ')
         lpCmdLine++;
     if (IsTaskmanCommandLine(lpCmdLine)) {
-        PostMessage(hwnd, WM_COMMAND, CMD_STARTMENU, 0L);
+        PostMessage(hwnd, WM_COMMAND,
+                    CfgGetInt("Taskbar", "CtrlEscStart", 0) ? CMD_STARTMENU : CMD_TASKMAN,
+                    0L);
     } else {
         atom = GlobalAddAtom(lpCmdLine);
         if (atom)
@@ -220,6 +393,8 @@ int PASCAL WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
         return 1;
     }
     DesktopCreate();
+    LoadHookDll();
+    HookApplySettings();
 
     if (g_bIsShell && g_cfg.bRunStartup && !IsShiftDown()) {
         RunWinIniLoadRun();
@@ -228,6 +403,8 @@ int PASCAL WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     OpenFromCommandLine(lpCmdLine);
 
     while (GetMessage(&msg, NULL, 0, 0)) {
+        if (FindIsDialogMessage(&msg) || TaskManIsDialogMessage(&msg))
+            continue;
         TranslateMessage(&msg);
         DispatchMessage(&msg);
     }

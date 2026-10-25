@@ -99,15 +99,27 @@ static HWND ActiveTaskWindow(void)
     return hwnd;
 }
 
+/*
+ * Moves a minimised window's icon (and its title) below the screen. As in
+ * Calmira, the window is hidden first and re-shown minimised through
+ * SetWindowPlacement so the desktop underneath is repainted.
+ */
 static void HideIconicWindow(HWND hwnd)
 {
-    RECT rc;
+    WINDOWPLACEMENT wp;
     int cyScreen = GetSystemMetrics(SM_CYSCREEN);
 
-    GetWindowRect(hwnd, &rc);
-    if (rc.top < cyScreen)
-        SetWindowPos(hwnd, NULL, rc.left, cyScreen + 64, 0, 0,
-                     SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+    wp.length = sizeof(wp);
+    if (!GetWindowPlacement(hwnd, &wp))
+        return;
+    if (wp.ptMinPosition.x == 0 && wp.ptMinPosition.y == cyScreen)
+        return;
+    wp.ptMinPosition.x = 0;
+    wp.ptMinPosition.y = cyScreen;
+    wp.flags |= WPF_SETMINPOSITION;
+    wp.showCmd = SW_SHOWMINNOACTIVE;
+    ShowWindow(hwnd, SW_HIDE);
+    SetWindowPlacement(hwnd, &wp);
 }
 
 /* Rebuilds the task list; returns TRUE if anything visible changed */
@@ -384,21 +396,24 @@ static void TaskbarContextMenu(HWND hwnd, POINT pt)
 {
     HMENU hMenu = CreatePopupMenu();
 
-    AppendMenu(hMenu, MF_STRING, CMD_TASKMAN, "&Task List...");
+    AppendMenu(hMenu, MF_STRING, CMD_CASCADE, "&Cascade Windows");
+    AppendMenu(hMenu, MF_STRING, CMD_TILE, "Tile &Horizontally");
+    AppendMenu(hMenu, MF_STRING, CMD_TILEVERT, "Tile &Vertically");
     AppendMenu(hMenu, MF_STRING, CMD_MINIMIZEALL, "&Minimize All Windows");
     AppendMenu(hMenu, MF_SEPARATOR, 0, NULL);
-    AppendMenu(hMenu, MF_STRING, CMD_RUN, "&Run...");
+    AppendMenu(hMenu, MF_STRING, CMD_TASKMAN, "&Task Manager...");
+    AppendMenu(hMenu, MF_STRING, CMD_OPTIONS, "&Options...");
     AppendMenu(hMenu, MF_STRING, CMD_ABOUT, "&About NewShell...");
     if (!g_bIsShell) {
         AppendMenu(hMenu, MF_SEPARATOR, 0, NULL);
-        AppendMenu(hMenu, MF_STRING, CMD_CLOSESHELL, "&Close NewShell");
+        AppendMenu(hMenu, MF_STRING, CMD_CLOSESHELL, "C&lose NewShell");
     }
     ClientToScreen(hwnd, &pt);
     TrackPopupMenu(hMenu, 0, pt.x, pt.y, 0, hwnd, NULL);
     DestroyMenu(hMenu);
 }
 
-static void MinimizeAll(void)
+void TasksMinimizeAll(void)
 {
     int i;
 
@@ -406,6 +421,17 @@ static void MinimizeAll(void)
     for (i = 0; i < s_nTasks; i++)
         if (!IsIconic(s_tasks[i].hwnd))
             ShowWindow(s_tasks[i].hwnd, SW_MINIMIZE);
+}
+
+/* Copies the windows on the taskbar into lpOut; returns their number */
+int TasksGetList(HWND FAR *lpOut, int nMax)
+{
+    int i;
+
+    UpdateTasks();
+    for (i = 0; i < s_nTasks && i < nMax; i++)
+        lpOut[i] = s_tasks[i].hwnd;
+    return i;
 }
 
 static int HitTask(POINT pt)
@@ -451,6 +477,11 @@ LRESULT CALLBACK NSEXPORT TaskbarWndProc(HWND hwnd, UINT msg, WPARAM wParam,
     case WM_MOUSEACTIVATE:
         return MA_NOACTIVATE;
 
+    case WM_CLOSE:
+        /* Alt+F4 while the taskbar happens to be active: like Windows 95 */
+        PostMessage(g_hwndMain, WM_CLOSE, 0, 0L);
+        return 0;
+
     case WM_LBUTTONDOWN:
         pt.x = LOWORD(lParam);
         pt.y = HIWORD(lParam);
@@ -474,6 +505,9 @@ LRESULT CALLBACK NSEXPORT TaskbarWndProc(HWND hwnd, UINT msg, WPARAM wParam,
         StartMenuSelect(hwnd, wParam, LOWORD(lParam));
         return 0;
 
+    case WM_MENUCHAR:
+        return StartMenuChar(wParam, (HMENU)HIWORD(lParam));
+
     case WM_MEASUREITEM:
         if (StartMenuMeasureItem((MEASUREITEMSTRUCT FAR *)lParam))
             return TRUE;
@@ -492,8 +526,6 @@ LRESULT CALLBACK NSEXPORT TaskbarWndProc(HWND hwnd, UINT msg, WPARAM wParam,
             s_hwndSysMenuTarget = NULL;
         } else if (wParam == CMD_STARTMENU) {
             ShowStartMenu(hwnd);
-        } else if (wParam == CMD_MINIMIZEALL) {
-            MinimizeAll();
         } else {
             PostMessage(g_hwndMain, WM_COMMAND, wParam, 0L);
         }

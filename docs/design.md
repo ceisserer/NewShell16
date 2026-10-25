@@ -8,54 +8,118 @@ executable, `NEWSHELL.EXE`.
 
 | File | Purpose |
 |------|---------|
-| `main.c` | `WinMain`, hidden main window, shell detection, start-up programs, second-instance forwarding |
+| `main.c` | `WinMain`, hidden main window, shell detection, hook DLL loading, start-up programs, second-instance forwarding |
 | `taskbar.c` | Taskbar window: Start button, task buttons, clock, task system menus |
-| `startmnu.c` | Owner-drawn Start menu, Programs submenu built from Program Manager groups |
+| `startmnu.c` | Owner-drawn Start menu from `NSSTART.INI`, `$` macros |
 | `progman.c` | `PROGMAN.INI` / `*.GRP` reader, `load=`/`run=`, StartUp group |
-| `desktop.c` | Desktop icons (Computer, configurable shortcuts) |
-| `folder.c` | Folder windows and the Computer (drives) window |
+| `desktop.c` | Desktop icons (Computer, Bin, shortcuts), desktop menu |
+| `fview.c` | Folder view control: views, selection, rename, clipboard, drag and drop |
+| `folder.c` | Folder windows and the Computer window (frames around a folder view) |
+| `explorer.c` | Explorer: folder tree plus folder view |
+| `fileops.c` | Copy, move, delete, rename, new folder; progress and replace dialogs |
+| `bin.c` | The Bin and its window |
+| `props.c` | Properties dialog for files, folders, drives and selections |
+| `taskman.c` | Task Manager, cascade and tile |
+| `find.c` | Find dialog |
 | `icons.c` | File icon lookup and caching |
-| `dialogs.c` | Run, Shut Down, About |
+| `dialogs.c` | Run, Shut Down, About, Options |
 | `settings.c` | `NEWSHELL.INI` |
 | `util.c` | 3D drawing, small images, path helpers, launching |
+| `nshook.c` | `NSHOOK.DLL`: system hooks (see below) |
 
 ## Windows 3.1 specifics
 
-- **No shell hooks.** The task list is refreshed from a 500 ms timer by
-  enumerating top-level windows (visible, unowned, with a caption).
+- **Hooks.** System-wide hooks must live in a DLL, so like Calmira's
+  `WNDHOOKS.DLL` there is `NSHOOK.DLL`. It provides a shell hook (window
+  created/destroyed, for an immediate taskbar update), a `WH_CALLWNDPROC`
+  hook that shrinks the maximised size in `WM_GETMINMAXINFO` so windows
+  stop above the taskbar, a subclass of the desktop window for the
+  right-click menu, a keyboard hook for the Windows key, and the
+  undocumented `KERNEL.FileCdr` callback for file system changes. Without
+  the DLL NewShell still works; the taskbar then relies on its timer.
+- **Task list.** The taskbar also polls the top-level windows (visible,
+  unowned, with a caption) from a 500 ms timer to catch title changes.
 - **Minimised windows** would normally show as icons on the desktop; with
-  `HideMinApps=1` they are moved below the bottom of the screen and are
-  reached through the taskbar instead (as Calmira did).
+  `HideMinApps=1` their icon position is moved below the screen with
+  `SetWindowPlacement` (as Calmira does) and they are reached through the
+  taskbar instead.
 - **Desktop icons** are small popup windows forced to the bottom of the
   Z-order; their background is drawn with `USER.PaintDesktop` so the
-  wallpaper shows through.
-- **Icons are 32x32 only** in Windows 3.1. Small versions for task buttons
-  and menus are made by drawing into a memory DC and `StretchBlt`-ing.
+  wallpaper shows through. Alt+F4 on them (or on the taskbar) opens Shut
+  Down.
+- **Icons are 32x32 only** in Windows 3.1. Small versions for task buttons,
+  menus and lists are made by drawing into a memory DC and `StretchBlt`-ing.
 - **Ctrl+Esc** starts `taskman.exe=` from `SYSTEM.INI`. If that points at
   `NEWSHELL.EXE`, the second instance forwards the request to the running
-  copy, which opens the Start menu.
+  copy, which opens the Task Manager (or the Start menu).
+- **The Bin** uses a hidden `NSBIN` folder on the root of each fixed
+  drive, so sending something to the Bin is a rename. `NSBIN\NSBIN.INI`
+  records where each item came from.
 - As the shell, NewShell performs Program Manager's start-up duties: the
   `WIN.INI` `load=`/`run=` lines and the StartUp group (skipped while Shift
   is held).
 
+## Command line
+
+| | |
+|---|---|
+| `NEWSHELL` | (when running) Task Manager, or Start menu with `CtrlEscStart=1` |
+| `NEWSHELL /S` | Start menu |
+| `NEWSHELL /E [path]` | Explorer |
+| `NEWSHELL path` | open a folder, document or program |
+
+## NSSTART.INI
+
+The Start menu uses Calmira's `START.INI` format, so existing Calmira menus
+can be copied over:
+
+```ini
+[Start]
+&Programs*=;;0;<programs>;0       ; '*' = submenu, items in [Start\&Programs]
+&Run...=$Run;;0;<run>;0
+-1=;;0;;0                         ; separator
+Sh&ut Down...=$ShutDown;;0;<shutdown>;0
+
+[Start\&Programs\Accessories]
+Notepad=notepad.exe;;0;;0         ; command;directory;show;iconfile;iconindex
+```
+
+`show` is 0 (normal), 1 (minimised) or 2 (maximised). `iconfile` can be an
+executable or icon file, or a built-in image: `<programs>`, `<documents>`,
+`<settings>`, `<find>`, `<run>`, `<shutdown>`, `<system>`, `<folder>`,
+`<help>`, `<printer>`, `<control>`, `<explorer>`, `<bin>`, `<taskman>`...
+
+Built-in commands: `$Run`, `$ShutDown`, `$Find`, `$Explore [path]`,
+`$System` (Computer), `$Bin`, `$TaskManager`, `$Folder path`,
+`$MinimizePrograms`, `$ArrangeIcons`, `$TaskbarProp` (Options), `$Help`.
+They can also be used for desktop shortcuts.
+
 ## NEWSHELL.INI
+
+Most options are set in the Options dialog (Start → Settings → Taskbar).
 
 ```ini
 [Taskbar]
 Clock=1            ; show the clock
 HideMinApps=1      ; move minimised windows off screen
+MaxClamp=1         ; keep maximised windows above the taskbar
+CtrlEscStart=0     ; Ctrl+Esc: 0 = Task Manager, 1 = Start menu
+WinKey=1           ; Windows key opens the Start menu
 
 [Desktop]
 Icons=1
+Menu=1             ; right-click menu on the desktop
 Shortcut1=Notepad|NOTEPAD.EXE
-
-[Start Menu]       ; replaces the default File Manager / MS-DOS Prompt entries
-Item1=File Manager|WINFILE.EXE
-Item2=Write|WRITE.EXE
+Shortcut2=Documents|$Folder C:\DOCS
 
 [Folders]
 NewWindow=1        ; open sub-folders in new windows
 ShowHidden=0
+DeleteToBin=1
+ConfirmDelete=1
+FileMonitor=1      ; refresh folders when files change
+View=0             ; 0 large icons, 1 small icons, 2 details
+Sort=0             ; 0 name, 1 type, 2 size, 3 date
 
 [Startup]
 Run=1              ; run load=/run= and the StartUp group when the shell
@@ -63,12 +127,11 @@ Run=1              ; run load=/run= and the StartUp group when the shell
 
 ## Roadmap
 
-Not yet implemented (Calmira features still to come):
+Calmira features still to come:
 
-- File operations: copy/move/delete, drag and drop between folder windows
-- Bin (recycle bin)
-- Shortcuts as files (drag to desktop), properties dialogs
-- Find dialog, Documents menu
-- Small icon / list / details views in folder windows
-- Options dialogs (taskbar, desktop, start menu editor)
-- Keeping maximised windows clear of the taskbar
+- Shortcuts (aliases) as files, dragging items onto the desktop
+- Documents menu, editing the Start menu from a dialog
+- Rubber-band selection, dragging with the right mouse button
+- Disk tools (format, label), network drive connections
+- Folder window toolbar, file filters, Open With
+- Screen saver / "show desktop" helpers, tips of the day

@@ -23,9 +23,22 @@ tools/emu/winemu.py --windir ~/win31/Win/WINDOWS --work /tmp/nsemu --out shots \
   directory before booting; an empty value removes the key. Changes persist
   in the `--work` directory.
 - Script actions: `sleep:N`, `shot:FILE`, `key:KEYS` (xdotool names,
-  comma separated), `type:TEXT` (`_` for spaces), `move:DX,DY`, `click:N`,
-  `dclick:N`.
+  comma separated), `type:TEXT` (`_` for spaces), `move:DX,DY`,
+  `goto:X,Y`, `click:N`, `dclick:N`, `down:N`, `up:N`.
 
-Setting `taskman.exe=` to NewShell makes Ctrl+Esc open the Start menu,
-which allows driving most of the shell from the keyboard. Mouse input is
-relative under DOSBox and therefore not reliable for scripted tests.
+Setting `taskman.exe=` to NewShell makes Ctrl+Esc open NewShell's Task
+Manager (or, with `--set 'NEWSHELL.INI:Taskbar:CtrlEscStart=1'`, the Start
+menu), which allows driving most of the shell from the keyboard.
+
+Mouse input is relative under DOSBox. With `MouseSpeed=0` in WIN.INI
+(`--set 'WIN.INI:windows:MouseSpeed=0'`) one host pixel moves the Windows
+pointer one pixel, and `goto:X,Y` first pins the pointer to the top-left
+corner, so clicks and drags can be scripted at screen coordinates. Start
+the script with `click:1` so DOSBox captures the mouse. Screenshots include
+the DOSBox-X menu bar, so Windows' y = image y - 17.
+
+Example: drag a file onto the Bin icon
+
+```sh
+--script "sleep:20 click:1 goto:75,149 click:1 down:1 move:-10,0 move:-20,-60 up:1"
+```

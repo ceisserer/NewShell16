@@ -30,6 +30,7 @@
 
 typedef struct {
     char  szPath[80];
+    int   nIndex;
     HICON hIcon;
 } EXEICON;
 
@@ -43,13 +44,13 @@ static int     s_nExe;
 static EXTICON s_ext[MAX_EXT_ICONS];
 static int     s_nExt;
 
-static HICON   s_hStock[IDI_BIN + 1];
+static HICON   s_hStock[IDI_LAST + 1];
 
 void IconsInit(void)
 {
     int i;
 
-    for (i = IDI_NEWSHELL; i <= IDI_BIN; i++)
+    for (i = IDI_NEWSHELL; i <= IDI_LAST; i++)
         s_hStock[i] = LoadIcon(g_hInst, MAKEINTRESOURCE(i));
 }
 
@@ -66,30 +67,42 @@ void IconsFree(void)
 
 HICON IconStock(int idi)
 {
-    if (idi < IDI_NEWSHELL || idi > IDI_BIN)
+    if (idi < IDI_NEWSHELL || idi > IDI_LAST)
         idi = IDI_DOCUMENT;
     return s_hStock[idi];
 }
 
-/* Returns the first icon of a Windows executable, or NULL if it has none */
-static HICON ExeIcon(LPCSTR lpExe)
+/* Returns icon nIndex of a Windows executable or icon file, or NULL */
+HICON IconFromFile(LPCSTR lpFile, int nIndex)
 {
+    char szFile[MAXPATHLEN];
+    OFSTRUCT of;
     HICON hIcon;
     int i;
 
     for (i = 0; i < s_nExe; i++)
-        if (lstrcmpi(s_exe[i].szPath, lpExe) == 0)
+        if (s_exe[i].nIndex == nIndex && lstrcmpi(s_exe[i].szPath, lpFile) == 0)
             return s_exe[i].hIcon;
     if (s_nExe >= MAX_EXE_ICONS)
         return NULL;
 
-    hIcon = ExtractIcon(g_hInst, lpExe, 0);
+    /* ExtractIcon needs a full path: search the PATH like WinExec does */
+    lstrcpyn(szFile, lpFile, sizeof(szFile));
+    if (!_fstrchr(szFile, '\\') && OpenFile(szFile, &of, OF_EXIST) != HFILE_ERROR)
+        OemToAnsi(of.szPathName, szFile);
+    hIcon = ExtractIcon(g_hInst, szFile, nIndex);
     if ((UINT)hIcon <= 1)       /* 1 = not a Windows executable */
         hIcon = NULL;
-    lstrcpyn(s_exe[s_nExe].szPath, lpExe, sizeof(s_exe[0].szPath));
+    lstrcpyn(s_exe[s_nExe].szPath, lpFile, sizeof(s_exe[0].szPath));
+    s_exe[s_nExe].nIndex = nIndex;
     s_exe[s_nExe].hIcon = hIcon;
     s_nExe++;
     return hIcon;
+}
+
+static HICON ExeIcon(LPCSTR lpExe)
+{
+    return IconFromFile(lpExe, 0);
 }
 
 static BOOL IsProgramExt(LPCSTR lpExt)
