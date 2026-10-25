@@ -175,7 +175,7 @@ BEGIN
     PUSHBUTTON      "Cancel", IDCANCEL, 138, 72, 50, 14
 END
 
-IDD_ABOUT DIALOG 40, 40, 180, 98
+IDD_ABOUT DIALOG 40, 40, 180, 106
 STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "About NewShell"
 FONT 8, "MS Sans Serif"
@@ -183,9 +183,9 @@ BEGIN
     ICON            IDI_NEWSHELL, -1, 8, 8, 18, 20
     LTEXT           "NewShell16", -1, 36, 8, 136, 8
     LTEXT           "A Calmira-style shell for Windows 3.1", -1, 36, 18, 136, 8
-    LTEXT           "Free software under the GNU GPL v3 or later.", -1, 36, 28, 136, 8
-    LTEXT           "", IDC_VERSION, 36, 42, 136, 34
-    DEFPUSHBUTTON   "OK", IDOK, 65, 78, 50, 14
+    LTEXT           "Free software under the GNU GPL v3 or later.", -1, 36, 28, 136, 16
+    LTEXT           "", IDC_VERSION, 36, 50, 136, 34
+    DEFPUSHBUTTON   "OK", IDOK, 65, 86, 50, 14
 END
 
 IDD_PROGRESS DIALOG 60, 60, 220, 70
