@@ -39,6 +39,8 @@ executable, `NEWSHELL.EXE`.
   the DLL NewShell still works; the taskbar then relies on its timer.
 - **Task list.** The taskbar also polls the top-level windows (visible,
   unowned, with a caption) from a 500 ms timer to catch title changes.
+  The Retheme16 engine's window (class `Retheme16`), which only exists so
+  the engine can be closed, gets no task button; Task Manager lists it.
 - **Minimised windows** would normally show as icons on the desktop; with
   `HideMinApps=1` their icon position is moved below the screen with
   `SetWindowPlacement` (as Calmira does) and they are reached through the
