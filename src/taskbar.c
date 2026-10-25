@@ -373,19 +373,68 @@ static void PaintTaskbar(HWND hwnd, HDC hdcWin)
     DeleteDC(hdc);
 }
 
+/*
+ * Windows 3.1 closes a popup menu opened on a button press when the button
+ * is released outside the menu, i.e. on the Start button. While the menu
+ * is open, a message filter hook swallows that first release when it is
+ * still over the Start button, so the menu stays open as in Windows 95;
+ * dragging onto an item and releasing there still chooses it. A press on
+ * the Start button closes the menu and is then passed on to the taskbar,
+ * which must not open the menu again for it.
+ */
+static HHOOK   s_hhkStart;
+static RECT    s_rcStartScreen;
+static BOOL    s_bStartRelease;    /* the release of the opening press is due */
+static DWORD   s_dwCloseTime;      /* time of the press that closed the menu */
+
+LRESULT CALLBACK NSEXPORT StartMenuFilterProc(int code, WPARAM wParam,
+                                              LPARAM lParam)
+{
+    MSG FAR *lpmsg = (MSG FAR *)lParam;
+
+    if (code == MSGF_MENU && s_bStartRelease) {
+        if (lpmsg->message == WM_LBUTTONUP) {
+            s_bStartRelease = FALSE;
+            if (PtInRect(&s_rcStartScreen, lpmsg->pt))
+                return 1;
+        } else if (lpmsg->message == WM_LBUTTONDOWN) {
+            s_bStartRelease = FALSE;
+        }
+    }
+    if (code == MSGF_MENU && lpmsg->message == WM_LBUTTONDOWN
+        && PtInRect(&s_rcStartScreen, lpmsg->pt))
+        s_dwCloseTime = lpmsg->time;
+    return CallNextHookEx(s_hhkStart, code, wParam, lParam);
+}
+
 static void ShowStartMenu(HWND hwnd)
 {
+    static FARPROC lpfnFilter;
     POINT pt;
 
     s_bStartDown = TRUE;
     InvalidateRect(hwnd, &s_rcStart, FALSE);
     UpdateWindow(hwnd);
 
+    s_rcStartScreen = s_rcStart;
+    ClientToScreen(hwnd, (POINT FAR *)&s_rcStartScreen.left);
+    ClientToScreen(hwnd, (POINT FAR *)&s_rcStartScreen.right);
+    s_bStartRelease = GetKeyState(VK_LBUTTON) < 0;
+    if (!lpfnFilter)
+        lpfnFilter = MakeProcInstance((FARPROC)StartMenuFilterProc, g_hInst);
+    s_hhkStart = SetWindowsHookEx(WH_MSGFILTER, (HOOKPROC)lpfnFilter, g_hInst,
+                                  GetCurrentTask());
+
     pt.x = s_rcStart.left;
     pt.y = 0;
     ClientToScreen(hwnd, &pt);
     StartMenuShow(hwnd, pt.x, pt.y);
 
+    if (s_hhkStart) {
+        UnhookWindowsHookEx(s_hhkStart);
+        s_hhkStart = NULL;
+    }
+    s_bStartRelease = FALSE;
     s_bStartDown = FALSE;
     InvalidateRect(hwnd, &s_rcStart, FALSE);
 }
@@ -559,7 +608,8 @@ LRESULT CALLBACK NSEXPORT TaskbarWndProc(HWND hwnd, UINT msg, WPARAM wParam,
         pt.x = LOWORD(lParam);
         pt.y = HIWORD(lParam);
         if (PtInRect(&s_rcStart, pt)) {
-            ShowStartMenu(hwnd);
+            if (GetMessageTime() != (LONG)s_dwCloseTime)
+                ShowStartMenu(hwnd);
         } else if ((i = HitTask(pt)) >= 0) {
             ActivateTask(s_tasks[i].hwnd);
         }
