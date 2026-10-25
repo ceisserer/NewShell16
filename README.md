@@ -92,6 +92,9 @@ floppy:
 ```sh
 mkdir -p ~/win31 && unzip -q Win_31.zip -d ~/win31/zip
 mkdir -p ~/win31/c && cp -r ~/win31/zip/Win/WINDOWS ~/win31/c/
+# WIN.INI in Win_31.zip ends in NUL bytes, which hide every section added
+# to it later (settings of all programs, Setup's update across a restart)
+sed -i 's/\x0//g' ~/win31/c/WINDOWS/*.INI
 
 dosbox-x -c "mount c $HOME/win31/c" -c "imgmount a $PWD/newshell-$V-disk.img -t floppy" \
          -c "c:" -c "cd \\windows" -c "win a:\\setup.exe"
