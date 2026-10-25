@@ -181,6 +181,7 @@
 #define CMD_F_NEWFOLDER     719
 #define CMD_F_PROPERTIES    720
 #define CMD_F_INVERTSEL     721
+#define CMD_F_LIST          722
 
 /* Bin and Task Manager commands */
 #define CMD_BIN_RESTORE     750

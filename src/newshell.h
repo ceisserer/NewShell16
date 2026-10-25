@@ -182,6 +182,7 @@ LRESULT CALLBACK NSEXPORT DeskIconWndProc(HWND, UINT, WPARAM, LPARAM);
 #define FV_LARGE        0
 #define FV_SMALL        1
 #define FV_DETAILS      2
+#define FV_LIST         3
 
 #define FS_NAME         0
 #define FS_TYPE         1
