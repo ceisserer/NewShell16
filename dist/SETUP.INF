@@ -3,21 +3,21 @@
 ; packer adds [Files].
 
 [Setup]
-Product=NewShell
+Product=NewShell16
 Version=@VERSION@
 DefaultDir=C:\NEWSHELL
 Tagline=A Calmira-style shell for Windows 3.1 - version %VERSION%
-Welcome=NewShell %VERSION% gives Windows 3.1 a taskbar, a Start menu, an Explorer, a Bin and a Task Manager.\n\nSetup copies the files into the directory below.
-WelcomeInstalled=NewShell %VERSION% is installed in %DIR%.\n\nChange the options below and click Install, or click Remove to remove NewShell.
+Welcome=NewShell16 %VERSION% gives Windows 3.1 a taskbar, a Start menu, a File System window, a Bin and a Task Manager.\n\nSetup copies the files into the directory below.
+WelcomeInstalled=NewShell16 %VERSION% is installed in %DIR%.\n\nChange the options below and click Install, or click Remove to remove NewShell16.
 
 [Options]
 1=Shell
 2=Theme
 
 ; SYSTEM.INI shell= and taskman.exe= (Ctrl+Esc); the old values come back
-; when the option is turned off or NewShell is removed
+; when the option is turned off or NewShell16 is removed
 [Option.Shell]
-Label=Use NewShell as the Windows &shell
+Label=Use NewShell16 as the Windows &shell
 Switch=SHELL
 Default=1
 Restart=1
@@ -44,16 +44,16 @@ Preview=RETHEME\THEMES\%ITEM%\PREVIEW.BMP
 @THEMES@
 
 [Group]
-Name=NewShell
-1=%DIR%\NEWSHELL.EXE,NewShell
-2=%DIR%\SETUP.EXE,NewShell Setup
+Name=NewShell16
+1=%DIR%\NEWSHELL.EXE,NewShell16
+2=%DIR%\SETUP.EXE,NewShell16 Setup
 3=NOTEPAD.EXE %DIR%\README.TXT,Read Me,NOTEPAD.EXE
 4=%DIR%\RETHEME\GALLERY.EXE,Theme Gallery
 
-; NewShell started as an ordinary program must be closed by the user; as
+; NewShell16 started as an ordinary program must be closed by the user; as
 ; the shell, Setup restarts Windows to replace it (shell handover)
 [Running]
-1=NEWSHELL,NewShell
+1=NEWSHELL,NewShell16
 2=GALLERY,the Theme Gallery
 
 [Uninstall]

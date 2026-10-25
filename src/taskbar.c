@@ -500,10 +500,10 @@ static void TaskbarContextMenu(HWND hwnd, POINT pt)
     AppendMenu(hMenu, MF_SEPARATOR, 0, NULL);
     AppendMenu(hMenu, MF_STRING, CMD_TASKMAN, "&Task Manager...");
     AppendMenu(hMenu, MF_STRING, CMD_OPTIONS, "&Options...");
-    AppendMenu(hMenu, MF_STRING, CMD_ABOUT, "&About NewShell...");
+    AppendMenu(hMenu, MF_STRING, CMD_ABOUT, "&About NewShell16...");
     if (!g_bIsShell) {
         AppendMenu(hMenu, MF_SEPARATOR, 0, NULL);
-        AppendMenu(hMenu, MF_STRING, CMD_CLOSESHELL, "C&lose NewShell");
+        AppendMenu(hMenu, MF_STRING, CMD_CLOSESHELL, "C&lose NewShell16");
     }
     ClientToScreen(hwnd, &pt);
     s_bLiftMenu = TRUE;

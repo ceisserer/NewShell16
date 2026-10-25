@@ -24,7 +24,7 @@ Usable as the Windows 3.1 shell. Implemented so far:
   rename, new folder, cut/copy/paste, delete (to the Bin), properties,
   drag and drop between windows, onto folders and onto the Bin, and drops
   from File Manager.
-- **Explorer**: folder tree beside a folder view.
+- **File System**: folder tree beside a folder view.
 - **Bin**: deleted items can be restored or deleted for good.
 - **Task Manager** (Ctrl+Esc): switch to, hide, minimise, end or terminate
   tasks, start new ones, cascade and tile.
@@ -56,9 +56,9 @@ Details in [docs/building.md](docs/building.md).
 
 Unzip a release (or `wmake release`, see
 [docs/building.md](docs/building.md)) and run `SETUP.EXE` from Windows. Setup
-can make NewShell the Windows shell and optionally installs the Retheme16
+can make NewShell16 the Windows shell and optionally installs the Retheme16
 Windows 95 look with a theme of your choice; both can be changed later by
-running Setup again from the NewShell group. `SETUP /?` lists the switches
+running Setup again from the NewShell16 group. `SETUP /?` lists the switches
 for silent installation.
 
 By hand:
@@ -68,10 +68,10 @@ By hand:
 2. In `SYSTEM.INI`, `[boot]` section, set
    `shell=C:\NEWSHELL\NEWSHELL.EXE`.
 3. Optionally also set `taskman.exe=C:\NEWSHELL\NEWSHELL.EXE` so Ctrl+Esc
-   opens NewShell's Task Manager (or the Start menu, see Options).
+   opens NewShell16's Task Manager (or the Start menu, see Options).
 
 NewShell16 can also be started from Program Manager to try it out; then
-*Shut Down → Close NewShell only* closes it again.
+*Shut Down → Close NewShell16 only* closes it again.
 
 ### Trying it in an emulator
 
@@ -100,14 +100,14 @@ dosbox-x -c "mount c $HOME/win31/c" -c "imgmount a $PWD/newshell-$V-disk.img -t 
          -c "c:" -c "cd \\windows" -c "win a:\\setup.exe"
 ```
 
-Setup installs to `C:\NEWSHELL` and restarts Windows with NewShell as the
+Setup installs to `C:\NEWSHELL` and restarts Windows with NewShell16 as the
 shell. Later sessions need only
 `dosbox-x -c "mount c $HOME/win31/c" -c "c:" -c "cd \\windows" -c "win"`.
 The installation lives in `~/win31/c`; delete it to start over.
 
 **QEMU** needs a bootable hard disk image with DOS and Windows 3.1 (for
 example installed from the Windows 3.1 and MS-DOS floppies). Attach the
-NewShell floppy, boot, and run `win a:\setup.exe` at the DOS prompt:
+NewShell16 floppy, boot, and run `win a:\setup.exe` at the DOS prompt:
 
 ```sh
 qemu-system-i386 -m 16 -hda win31.img -fda newshell-$V-disk.img

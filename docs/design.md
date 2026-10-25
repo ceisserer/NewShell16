@@ -15,7 +15,7 @@ executable, `NEWSHELL.EXE`.
 | `desktop.c` | Desktop icons (Computer, Bin, shortcuts), desktop menu |
 | `fview.c` | Folder view control: views, selection, rename, clipboard, drag and drop |
 | `folder.c` | Folder windows and the Computer window (frames around a folder view) |
-| `explorer.c` | Explorer: folder tree plus folder view |
+| `explorer.c` | File System window: folder tree plus folder view |
 | `fileops.c` | Copy, move, delete, rename, new folder; progress and replace dialogs |
 | `bin.c` | The Bin and its window |
 | `props.c` | Properties dialog for files, folders, drives and selections |
@@ -36,7 +36,7 @@ executable, `NEWSHELL.EXE`.
   stop above the taskbar, a subclass of the desktop window for the
   right-click menu, a keyboard hook for the Windows key, and the
   undocumented `KERNEL.FileCdr` callback for file system changes. Without
-  the DLL NewShell still works; the taskbar then relies on its timer.
+  the DLL NewShell16 still works; the taskbar then relies on its timer.
 - **Task list.** The taskbar also polls the top-level windows (visible,
   unowned, with a caption) from a 500 ms timer to catch title changes.
   The Retheme16 engine's window (class `Retheme16`), which only exists so
@@ -45,6 +45,9 @@ executable, `NEWSHELL.EXE`.
   `HideMinApps=1` their icon position is moved below the screen with
   `SetWindowPlacement` (as Calmira does) and they are reached through the
   taskbar instead.
+- **Desktop colour.** As the shell, NewShell16 sets the desktop to the
+  Windows 95 teal for the session while `WIN.INI` has no `[colors]`
+  `Background=` (no colour chosen in Control Panel); nothing is written.
 - **Desktop icons** are small popup windows forced to the bottom of the
   Z-order; their background is drawn with `USER.PaintDesktop` so the
   wallpaper shows through. Alt+F4 on them (or on the taskbar) opens Shut
@@ -57,7 +60,7 @@ executable, `NEWSHELL.EXE`.
 - **The Bin** uses a hidden `NSBIN` folder on the root of each fixed
   drive, so sending something to the Bin is a rename. `NSBIN\NSBIN.INI`
   records where each item came from.
-- As the shell, NewShell performs Program Manager's start-up duties: the
+- As the shell, NewShell16 performs Program Manager's start-up duties: the
   `WIN.INI` `load=`/`run=` lines and the StartUp group (skipped while Shift
   is held).
 
@@ -82,8 +85,8 @@ restyles those system parts:
   restyles menus of top-level windows), so they match the menu bars.
 - **Controls** are only placed in dialogs (the engine themes controls in
   dialogs only): the Task Manager is a dialog, like Run, Find, Properties,
-  Options and Shut Down. Lists in ordinary windows (Explorer tree, Bin)
-  are borderless and sit in a sunken Win95 pane edge drawn by NewShell,
+  Options and Shut Down. Lists in ordinary windows (File System tree, Bin)
+  are borderless and sit in a sunken Win95 pane edge drawn by NewShell16,
   instead of the black 3.1 border.
 - **Taskbar menus** are moved above the taskbar once they are on screen
   (Windows 3.1 has no `TPM_BOTTOMALIGN`).
@@ -98,7 +101,7 @@ restyles those system parts:
 |---|---|
 | `NEWSHELL` | (when running) Task Manager, or Start menu with `CtrlEscStart=1` |
 | `NEWSHELL /S` | Start menu |
-| `NEWSHELL /E [path]` | Explorer |
+| `NEWSHELL /E [path]` | File System window |
 | `NEWSHELL path` | open a folder, document or program |
 
 ## NSSTART.INI

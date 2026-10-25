@@ -30,7 +30,7 @@
 #include "resource.h"
 
 #define NS_VERSION      "0.2"
-#define NS_APPNAME      "NewShell"
+#define NS_APPNAME      "NewShell16"
 #define NS_INIFILE      "NEWSHELL.INI"
 
 /* Window procedures and callbacks must be exported in Win16 */
@@ -168,6 +168,7 @@ BOOL ExecMacro(HWND hwnd, LPCSTR lpCmd);
 void StartMenuFree(void);
 
 /* ---- desktop.c ------------------------------------------------------- */
+void DesktopDefaultColor(void);
 BOOL DesktopCreate(void);
 void DesktopDestroy(void);
 void DesktopArrange(void);
