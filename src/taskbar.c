@@ -27,6 +27,7 @@
 
 #define MAX_TASKS       40
 #define TIMER_REFRESH   1
+#define TIMER_LIFTMENU  2
 #define REFRESH_MS      500
 #define BTN_MAXWIDTH    160
 #define BTN_MINWIDTH    40
@@ -34,8 +35,9 @@
 #define GAP             3
 
 typedef struct tagTASKBTN {
-    HWND hwnd;
-    char szTitle[80];
+    HWND  hwnd;
+    HICON hIcon;
+    char  szTitle[80];
 } TASKBTN;
 
 static TASKBTN s_tasks[MAX_TASKS];
@@ -48,6 +50,7 @@ static char    s_szClock[16];
 static BOOL    s_bStartDown;
 static int     s_cyBar;
 static HWND    s_hwndSysMenuTarget;
+static BOOL    s_bLiftMenu;        /* move the next popup above the taskbar */
 static HBRUSH  s_hbrChecker;
 
 /* collected by EnumTaskProc */
@@ -122,6 +125,20 @@ static void HideIconicWindow(HWND hwnd)
     SetWindowPlacement(hwnd, &wp);
 }
 
+/*
+ * The icon for a task button: the class icon, or for windows without one
+ * (dialogs) the icon the window gives for WM_QUERYDRAGICON, like Windows
+ * 95 does.
+ */
+static HICON TaskIcon(HWND hwnd)
+{
+    HICON hIcon = (HICON)GetClassWord(hwnd, GCW_HICON);
+
+    if (!hIcon)
+        hIcon = (HICON)LOWORD(SendMessage(hwnd, WM_QUERYDRAGICON, 0, 0L));
+    return hIcon ? hIcon : IconStock(IDI_APP);
+}
+
 /* Rebuilds the task list; returns TRUE if anything visible changed */
 static BOOL UpdateTasks(void)
 {
@@ -140,14 +157,17 @@ static BOOL UpdateTasks(void)
     for (i = 0; i < s_nTasks; i++)
         for (j = 0; j < s_nFound; j++)
             if (s_hwndFound[j] == s_tasks[i].hwnd) {
-                newTasks[nNew++].hwnd = s_tasks[i].hwnd;
+                newTasks[nNew].hwnd = s_tasks[i].hwnd;
+                newTasks[nNew++].hIcon = s_tasks[i].hIcon;
                 s_hwndFound[j] = NULL;
                 break;
             }
     /* append new windows; EnumWindows lists them top of Z-order first */
     for (j = s_nFound - 1; j >= 0; j--)
-        if (s_hwndFound[j] && nNew < MAX_TASKS)
-            newTasks[nNew++].hwnd = s_hwndFound[j];
+        if (s_hwndFound[j] && nNew < MAX_TASKS) {
+            newTasks[nNew].hwnd = s_hwndFound[j];
+            newTasks[nNew++].hIcon = TaskIcon(s_hwndFound[j]);
+        }
 
     for (i = 0; i < nNew; i++) {
         GetWindowText(newTasks[i].hwnd, newTasks[i].szTitle,
@@ -302,9 +322,7 @@ static void PaintTaskbar(HWND hwnd, HDC hdcWin)
         DrawButton(hdc, &rcB, bActive, bActive);
         off = bActive ? 1 : 0;
 
-        hIcon = (HICON)GetClassWord(s_tasks[i].hwnd, GCW_HICON);
-        if (!hIcon)
-            hIcon = IconStock(IDI_APP);
+        hIcon = s_tasks[i].hIcon;
         xText = rcB.left + 6 + off;
         if (rcB.right - rcB.left >= 48) {
             DrawIconSmall(hdc, rcB.left + 5 + off,
@@ -389,7 +407,11 @@ static void TaskSystemMenu(HWND hwnd, HWND hwndTask, POINT pt)
 
     s_hwndSysMenuTarget = hwndTask;
     ClientToScreen(hwnd, &pt);
+    s_bLiftMenu = TRUE;
+    SetTimer(hwnd, TIMER_LIFTMENU, 20, NULL);
     TrackPopupMenu(hMenu, 0, pt.x, pt.y, 0, hwnd, NULL);
+    KillTimer(hwnd, TIMER_LIFTMENU);
+    s_bLiftMenu = FALSE;
 }
 
 static void TaskbarContextMenu(HWND hwnd, POINT pt)
@@ -409,8 +431,34 @@ static void TaskbarContextMenu(HWND hwnd, POINT pt)
         AppendMenu(hMenu, MF_STRING, CMD_CLOSESHELL, "C&lose NewShell");
     }
     ClientToScreen(hwnd, &pt);
+    s_bLiftMenu = TRUE;
+    SetTimer(hwnd, TIMER_LIFTMENU, 20, NULL);
     TrackPopupMenu(hMenu, 0, pt.x, pt.y, 0, hwnd, NULL);
+    KillTimer(hwnd, TIMER_LIFTMENU);
+    s_bLiftMenu = FALSE;
     DestroyMenu(hMenu);
+}
+
+/*
+ * Windows 3.1 has no TPM_BOTTOMALIGN: a menu opened from the taskbar is
+ * pushed up only as far as the screen edge and covers the taskbar. Once
+ * it is on screen (a timer runs inside the menu loop) the popup window
+ * (class "#32768") is moved up above the taskbar.
+ */
+static void LiftMenu(void)
+{
+    HWND hwndMenu = FindWindow("#32768", NULL);
+    RECT rc, rcBar;
+
+    if (!hwndMenu || !IsWindowVisible(hwndMenu))
+        return;
+    s_bLiftMenu = FALSE;
+    KillTimer(g_hwndTaskbar, TIMER_LIFTMENU);
+    GetWindowRect(hwndMenu, &rc);
+    GetWindowRect(g_hwndTaskbar, &rcBar);
+    if (rc.bottom > rcBar.top)
+        SetWindowPos(hwndMenu, NULL, rc.left, rcBar.top - (rc.bottom - rc.top),
+                     0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
 }
 
 void TasksMinimizeAll(void)
@@ -459,6 +507,11 @@ LRESULT CALLBACK NSEXPORT TaskbarWndProc(HWND hwnd, UINT msg, WPARAM wParam,
         return 0;
 
     case WM_TIMER:
+        if (wParam == TIMER_LIFTMENU) {
+            if (s_bLiftMenu)
+                LiftMenu();
+            return 0;
+        }
         i = UpdateTasks();
         i |= UpdateClock();
         if (i)

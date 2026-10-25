@@ -42,3 +42,21 @@ Example: drag a file onto the Bin icon
 ```sh
 --script "sleep:20 click:1 goto:75,149 click:1 down:1 move:-10,0 move:-20,-60 up:1"
 ```
+
+## Testing with the Retheme16 theme engine
+
+Build [Retheme16](https://github.com/ceisserer/win31_theme_engine)
+(`make -f win16.mk O=/tmp/rt` builds `RETHEME.EXE` and `RETHEME.DLL`), then
+install it on the test drive and start it through `load=`:
+
+```sh
+tools/emu/winemu.py --windir ~/win31/Win/WINDOWS --work /tmp/nsemu-rt --out shots \
+    --install /tmp/rt/RETHEME.EXE=RETHEME/RETHEME.EXE \
+    --install /tmp/rt/RETHEME.DLL=RETHEME/RETHEME.DLL \
+    --install ~/win31_theme_engine/themes=RETHEME/THEMES \
+    --set 'WIN.INI:windows:load=C:\RETHEME\RETHEME.EXE' --script "..."
+```
+
+`--install SRC=DEST` copies a file or directory to `DEST` on drive C:.
+Run the same script with and without the engine and compare the
+screenshots side by side.

@@ -198,12 +198,22 @@ def main():
     ap.add_argument("--script", default="sleep:25 shot:screen.png")
     ap.add_argument("--set", action="append", default=[], metavar="FILE:SECTION:KEY=VALUE",
                     help="set an INI value in the Windows directory before booting")
+    ap.add_argument("--install", action="append", default=[], metavar="SRC=DEST",
+                    help="copy a file or directory to DEST (relative to drive C:)")
     ap.add_argument("--out", default=".", help="directory for screenshots")
     args = ap.parse_args()
 
     os.makedirs(args.work, exist_ok=True)
     os.makedirs(args.out, exist_ok=True)
     cdrive = prepare_drive(args.windir, args.work, args.exe, not args.progman)
+    for spec in args.install:
+        src, _, dest = spec.partition("=")
+        target = os.path.join(cdrive, dest.replace("\\", "/").lstrip("/"))
+        if os.path.isdir(src):
+            shutil.copytree(src, target, dirs_exist_ok=True)
+        else:
+            os.makedirs(os.path.dirname(target), exist_ok=True)
+            shutil.copy(src, target)
     for spec in args.set:
         ini_set(os.path.join(cdrive, "WINDOWS"), spec)
     conf = write_conf(args.work, cdrive)

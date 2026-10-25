@@ -352,14 +352,16 @@ static void PaintFrame(HWND hwnd, HDC hdc)
     char szText[64], szSize[24];
     DWORD dwTotal = 0;
     HFONT hfOld = SelectObject(hdc, g_hfontUI);
-    int i, x = 0, cx;
+    int i, x = CLIENT_EDGE, cx;
 
     GetClientRect(hwnd, &rcClient);
+    DrawPaneEdge(hdc, 0, 0, rcClient.right, rcClient.bottom - s_cyStatus);
     SetBkMode(hdc, TRANSPARENT);
     SetTextColor(hdc, GetSysColor(COLOR_BTNTEXT));
     for (i = 0; i < 3; i++) {
-        cx = i == 0 ? COL_NAME_CX : i == 1 ? COL_FROM_CX : rcClient.right - x;
-        SetRect(&rc, x, 0, x + cx, s_cyHeader);
+        cx = i == 0 ? COL_NAME_CX : i == 1 ? COL_FROM_CX
+                    : rcClient.right - CLIENT_EDGE - x;
+        SetRect(&rc, x, CLIENT_EDGE, x + cx, CLIENT_EDGE + s_cyHeader);
         FillSolid(hdc, &rc, GetSysColor(COLOR_BTNFACE));
         Draw3DEdge(hdc, &rc, FALSE, FALSE);
         InflateRect(&rc, -4, 0);
@@ -407,8 +409,10 @@ LRESULT CALLBACK NSEXPORT BinWndProc(HWND hwnd, UINT msg, WPARAM wParam,
         return 0;
 
     case WM_SIZE:
-        MoveWindow(s_hwndList, 0, s_cyHeader, LOWORD(lParam),
-                   HIWORD(lParam) - s_cyHeader - s_cyStatus, TRUE);
+        /* the header and the list share one sunken pane */
+        MoveWindow(s_hwndList, CLIENT_EDGE, CLIENT_EDGE + s_cyHeader,
+                   LOWORD(lParam) - 2 * CLIENT_EDGE,
+                   HIWORD(lParam) - s_cyStatus - s_cyHeader - 2 * CLIENT_EDGE, TRUE);
         InvalidateRect(hwnd, NULL, TRUE);
         return 0;
 

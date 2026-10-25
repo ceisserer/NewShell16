@@ -82,6 +82,7 @@
 #define IDD_PROPERTIES      305
 #define IDD_FIND            306
 #define IDD_OPTIONS         307
+#define IDD_TASKMAN         308
 
 /* Dialog controls */
 #define IDC_RUNCMD          400
@@ -129,6 +130,13 @@
 #define IDC_OPT_FILEMON     501
 #define IDC_OPT_STARTUP     502
 #define IDC_OPT_LAST        502
+#define IDC_TMLIST          510
+#define IDC_TMSWITCH        511
+#define IDC_TMENDTASK       512
+#define IDC_TMNEWTASK       513
+#define IDC_TMSTATUS        514
+#define IDC_TMHDR1          515
+#define IDC_TMHDR2          516
 
 /* Commands (WM_COMMAND ids) */
 #define CMD_RUN             600

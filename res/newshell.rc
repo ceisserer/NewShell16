@@ -219,7 +219,8 @@ FONT 8, "MS Sans Serif"
 BEGIN
     ICON            IDI_DOCUMENT, IDC_PROPICON, 8, 8, 18, 20
     LTEXT           "", IDC_PROPNAME, 36, 14, 166, 8, SS_NOPREFIX
-    CONTROL         "", -1, "Static", SS_BLACKRECT, 8, 32, 194, 1
+    CONTROL         "", -1, "Static", SS_GRAYRECT, 8, 32, 194, 1
+    CONTROL         "", -1, "Static", SS_WHITERECT, 8, 33, 194, 1
     LTEXT           "", IDC_PROPL1,     8, 40, 50, 8
     LTEXT           "", IDC_PROPV1,    60, 40, 142, 8, SS_NOPREFIX
     LTEXT           "", IDC_PROPL1+1,   8, 52, 50, 8
@@ -284,6 +285,23 @@ BEGIN
     CONTROL         "Run &StartUp programs (when NewShell is the shell)", IDC_OPT_STARTUP, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 6, 160, 228, 10
     DEFPUSHBUTTON   "OK", IDOK, 128, 176, 50, 14
     PUSHBUTTON      "Cancel", IDCANCEL, 184, 176, 50, 14
+END
+
+IDD_TASKMAN DIALOG 60, 30, 220, 150
+STYLE WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME | WS_MINIMIZEBOX | WS_MAXIMIZEBOX
+CAPTION "Task Manager"
+MENU IDM_TASKMAN
+FONT 8, "MS Sans Serif"
+BEGIN
+    LTEXT           "Task", IDC_TMHDR1, 4, 3, 100, 8
+    LTEXT           "Module", IDC_TMHDR2, 120, 3, 60, 8
+    LISTBOX         IDC_TMLIST, 4, 12, 212, 96,
+                    LBS_OWNERDRAWFIXED | LBS_EXTENDEDSEL | LBS_NOTIFY | LBS_NOINTEGRALHEIGHT
+                    | WS_VSCROLL | WS_BORDER | WS_TABSTOP
+    DEFPUSHBUTTON   "&Switch To", IDC_TMSWITCH, 46, 114, 54, 14, WS_TABSTOP
+    PUSHBUTTON      "&End Task", IDC_TMENDTASK, 104, 114, 54, 14, WS_TABSTOP
+    PUSHBUTTON      "&New Task...", IDC_TMNEWTASK, 162, 114, 54, 14, WS_TABSTOP
+    LTEXT           "", IDC_TMSTATUS, 4, 136, 212, 8, SS_NOPREFIX
 END
 
 VS_VERSION_INFO VERSIONINFO

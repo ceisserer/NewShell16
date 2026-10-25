@@ -30,15 +30,13 @@
 
 #define MAX_TM_TASKS    48
 #define MAX_HIDDEN      16
-#define ID_LIST         101
-#define ID_SWITCH       102
-#define ID_ENDTASK      103
-#define ID_NEWTASK      104
+#define ID_LIST         IDC_TMLIST
+#define ID_SWITCH       IDC_TMSWITCH
+#define ID_ENDTASK      IDC_TMENDTASK
+#define ID_NEWTASK      IDC_TMNEWTASK
 #define TIMER_REFRESH   1
 #define ITEM_CY         20
 #define COL_TASK_CX     230
-#define BTN_CX          76
-#define BTN_CY          24
 
 typedef struct tagTMTASK {
     HWND  hwnd;
@@ -53,7 +51,6 @@ static TMTASK s_tasks[MAX_TM_TASKS];
 static int    s_nTasks;
 static HWND   s_hwndHidden[MAX_HIDDEN];     /* windows hidden by us */
 static int    s_nHidden;
-static int    s_cyHeader;
 static HWND   s_hwndPrevActive;         /* active before we opened */
 
 /* collected by EnumProc */
@@ -192,12 +189,14 @@ static HWND SelectedWnd(void)
 
 static void UpdateStatus(void)
 {
-    if (s_hwndTM) {
-        RECT rc;
-        GetClientRect(s_hwndTM, &rc);
-        rc.top = rc.bottom - StatusBarHeight();
-        InvalidateRect(s_hwndTM, &rc, FALSE);
-    }
+    char szText[80];
+
+    if (!s_hwndTM)
+        return;
+    wsprintf(szText, "%d task(s)    %luKB free memory    %u%% resources",
+             s_nTasks, GetFreeSpace(0) / 1024L,
+             GetFreeSystemResources(GFSR_SYSTEMRESOURCES));
+    SetDlgItemText(s_hwndTM, IDC_TMSTATUS, szText);
 }
 
 static void FillTasks(void)
@@ -348,6 +347,8 @@ static void DrawTask(DRAWITEMSTRUCT FAR *lpdis)
         return;
     t = &s_tasks[lpdis->itemID];
     hIcon = IsWindow(t->hwnd) ? (HICON)GetClassWord(t->hwnd, GCW_HICON) : (HICON)0;
+    if (!hIcon && IsWindow(t->hwnd))
+        hIcon = (HICON)LOWORD(SendMessage(t->hwnd, WM_QUERYDRAGICON, 0, 0L));
     if (!hIcon)
         hIcon = IconStock(IDI_APP);
     DrawIconSmall(hdc, rc.left + 2, rc.top + 2, hIcon, GetSysColor(COLOR_WINDOW));
@@ -373,113 +374,63 @@ static void DrawTask(DRAWITEMSTRUCT FAR *lpdis)
     SelectObject(hdc, hfOld);
 }
 
-static void PaintTM(HWND hwnd, HDC hdc)
-{
-    RECT rcClient, rc;
-    char szText[64];
-    HFONT hfOld = SelectObject(hdc, g_hfontUI);
-
-    GetClientRect(hwnd, &rcClient);
-    SetBkMode(hdc, TRANSPARENT);
-    SetTextColor(hdc, GetSysColor(COLOR_BTNTEXT));
-    SetRect(&rc, 4, 4, 4 + COL_TASK_CX + 2, 4 + s_cyHeader);
-    FillSolid(hdc, &rc, GetSysColor(COLOR_BTNFACE));
-    Draw3DEdge(hdc, &rc, FALSE, FALSE);
-    InflateRect(&rc, -4, 0);
-    DrawText(hdc, "Task", -1, &rc, DT_LEFT | DT_SINGLELINE | DT_VCENTER);
-    SetRect(&rc, 4 + COL_TASK_CX + 2, 4, rcClient.right - 4, 4 + s_cyHeader);
-    FillSolid(hdc, &rc, GetSysColor(COLOR_BTNFACE));
-    Draw3DEdge(hdc, &rc, FALSE, FALSE);
-    InflateRect(&rc, -4, 0);
-    DrawText(hdc, "Module", -1, &rc, DT_LEFT | DT_SINGLELINE | DT_VCENTER);
-    SelectObject(hdc, hfOld);
-
-    wsprintf(szText, "%d task(s)    %luKB free memory    %u%% resources",
-             s_nTasks, GetFreeSpace(0) / 1024L,
-             GetFreeSystemResources(GFSR_SYSTEMRESOURCES));
-    PaintStatusBar(hwnd, hdc, StatusBarHeight(), szText);
-}
-
+/* Lays the dialog's controls out for its current size (dialog units are
+   only used for the initial size from the template) */
 static void LayoutTM(HWND hwnd)
 {
-    RECT rc;
-    int yBtn, x;
+    RECT rc, rcBtn;
+    int cyText, cyBtn, cxBtn, yBtn, x, i;
+    static const int s_ids[] = { ID_SWITCH, ID_ENDTASK, ID_NEWTASK };
 
     GetClientRect(hwnd, &rc);
-    yBtn = rc.bottom - StatusBarHeight() - BTN_CY - 6;
-    MoveWindow(s_hwndList, 4, 4 + s_cyHeader, rc.right - 8,
-               yBtn - 6 - 4 - s_cyHeader, TRUE);
-    x = rc.right - 4 - 3 * BTN_CX - 2 * 6;
-    MoveWindow(GetDlgItem(hwnd, ID_SWITCH), x, yBtn, BTN_CX, BTN_CY, TRUE);
-    MoveWindow(GetDlgItem(hwnd, ID_ENDTASK), x + BTN_CX + 6, yBtn, BTN_CX, BTN_CY, TRUE);
-    MoveWindow(GetDlgItem(hwnd, ID_NEWTASK), x + 2 * (BTN_CX + 6), yBtn, BTN_CX, BTN_CY, TRUE);
+    GetWindowRect(GetDlgItem(hwnd, ID_SWITCH), &rcBtn);
+    cxBtn = rcBtn.right - rcBtn.left;
+    cyBtn = rcBtn.bottom - rcBtn.top;
+    GetWindowRect(GetDlgItem(hwnd, IDC_TMSTATUS), &rcBtn);
+    cyText = rcBtn.bottom - rcBtn.top;
+
+    MoveWindow(GetDlgItem(hwnd, IDC_TMHDR1), 8, 6, COL_TASK_CX, cyText, TRUE);
+    MoveWindow(GetDlgItem(hwnd, IDC_TMHDR2), 8 + COL_TASK_CX + 4, 6,
+               rc.right - COL_TASK_CX - 20, cyText, TRUE);
+    yBtn = rc.bottom - 8 - cyText - 6 - cyBtn;
+    MoveWindow(s_hwndList, 6, 8 + cyText, rc.right - 12, yBtn - 14 - cyText, TRUE);
+    x = rc.right - 6 - 3 * cxBtn - 2 * 6;
+    for (i = 0; i < 3; i++, x += cxBtn + 6)
+        MoveWindow(GetDlgItem(hwnd, s_ids[i]), x, yBtn, cxBtn, cyBtn, TRUE);
+    MoveWindow(GetDlgItem(hwnd, IDC_TMSTATUS), 8, rc.bottom - 6 - cyText,
+               rc.right - 16, cyText, TRUE);
     InvalidateRect(hwnd, NULL, TRUE);
 }
 
-static HWND MakeButton(HWND hwnd, LPCSTR lpText, int id, BOOL bDefault)
-{
-    HWND hwndBtn = CreateWindow("BUTTON", lpText,
-                                WS_CHILD | WS_VISIBLE | WS_TABSTOP
-                                | (bDefault ? BS_DEFPUSHBUTTON : BS_PUSHBUTTON),
-                                0, 0, 0, 0, hwnd, (HMENU)id, g_hInst, NULL);
-    SendMessage(hwndBtn, WM_SETFONT, (WPARAM)g_hfontUI, 0L);
-    return hwndBtn;
-}
-
-LRESULT CALLBACK NSEXPORT TaskManWndProc(HWND hwnd, UINT msg, WPARAM wParam,
-                                         LPARAM lParam)
+BOOL CALLBACK NSEXPORT TaskManDlgProc(HWND hwnd, UINT msg, WPARAM wParam,
+                                      LPARAM lParam)
 {
     HWND hwnds[MAX_TM_TASKS];
-    PAINTSTRUCT ps;
-    TEXTMETRIC tm;
-    HDC hdc;
-    HFONT hfOld;
     int n;
 
     switch (msg) {
-    case WM_CREATE:
-        hdc = GetDC(hwnd);
-        hfOld = SelectObject(hdc, g_hfontUI);
-        GetTextMetrics(hdc, &tm);
-        SelectObject(hdc, hfOld);
-        ReleaseDC(hwnd, hdc);
-        s_cyHeader = tm.tmHeight + 6;
-        s_hwndList = CreateWindow("LISTBOX", "",
-                                  WS_CHILD | WS_VISIBLE | WS_VSCROLL | WS_BORDER | WS_TABSTOP
-                                  | LBS_OWNERDRAWFIXED | LBS_EXTENDEDSEL | LBS_NOTIFY
-                                  | LBS_NOINTEGRALHEIGHT,
-                                  0, 0, 0, 0, hwnd, (HMENU)ID_LIST, g_hInst, NULL);
-        MakeButton(hwnd, "&Switch To", ID_SWITCH, TRUE);
-        MakeButton(hwnd, "&End Task", ID_ENDTASK, FALSE);
-        MakeButton(hwnd, "&New Task...", ID_NEWTASK, FALSE);
-        return 0;
+    case WM_INITDIALOG:
+        s_hwndList = GetDlgItem(hwnd, ID_LIST);
+        LayoutTM(hwnd);
+        return TRUE;
 
     case WM_SIZE:
         if (wParam != SIZE_MINIMIZED)
             LayoutTM(hwnd);
-        return 0;
+        return TRUE;
 
     case WM_GETMINMAXINFO:
-        ((MINMAXINFO FAR *)lParam)->ptMinTrackSize.x = 3 * BTN_CX + 40;
+        ((MINMAXINFO FAR *)lParam)->ptMinTrackSize.x = 320;
         ((MINMAXINFO FAR *)lParam)->ptMinTrackSize.y = 200;
-        return 0;
+        return TRUE;
 
-    case WM_PAINT:
-        BeginPaint(hwnd, &ps);
-        PaintTM(hwnd, ps.hdc);
-        EndPaint(hwnd, &ps);
-        return 0;
+    case WM_QUERYDRAGICON:
+        return (BOOL)(UINT)IconStock(IDI_TASKMAN);
 
     case WM_ACTIVATE:
-        if (wParam != WA_INACTIVE) {
+        if (wParam != WA_INACTIVE)
             FillTasks();
-            SetFocus(s_hwndList);
-        }
-        return 0;
-
-    case WM_SETFOCUS:
-        SetFocus(s_hwndList);
-        return 0;
+        return FALSE;           /* the dialog manager restores the focus */
 
     case WM_MEASUREITEM:
         ((MEASUREITEMSTRUCT FAR *)lParam)->itemHeight = ITEM_CY;
@@ -493,7 +444,7 @@ LRESULT CALLBACK NSEXPORT TaskManWndProc(HWND hwnd, UINT msg, WPARAM wParam,
         KillTimer(hwnd, TIMER_REFRESH);
         FillTasks();
         TaskbarRefresh();
-        return 0;
+        return TRUE;
 
     case WM_INITMENUPOPUP:
         {
@@ -510,79 +461,67 @@ LRESULT CALLBACK NSEXPORT TaskManWndProc(HWND hwnd, UINT msg, WPARAM wParam,
                        CMD_TM_HIDE, (bSel && !IsWindowVisible(hwndSel))
                                     ? "Un&hide" : "&Hide");
         }
-        return 0;
+        return TRUE;
 
     case WM_COMMAND:
         switch (wParam) {
         case ID_LIST:
             if (HIWORD(lParam) == LBN_DBLCLK)
                 SwitchTo();
-            else if (HIWORD(lParam) == LBN_SELCHANGE)
-                UpdateStatus();
-            return 0;
-        case IDOK:
+            return TRUE;
         case ID_SWITCH:
-        case CMD_TM_SWITCH:     SwitchTo(); return 0;
+        case CMD_TM_SWITCH:     SwitchTo(); return TRUE;
         case ID_ENDTASK:
-        case CMD_TM_ENDTASK:    EndTask(); return 0;
+        case CMD_TM_ENDTASK:    EndTask(); return TRUE;
         case ID_NEWTASK:
-        case CMD_RUN:           RunDialog(hwnd); return 0;
-        case CMD_TM_HIDE:       HideUnhide(); return 0;
-        case CMD_TM_TERMINATE:  Terminate(); return 0;
+        case CMD_RUN:           RunDialog(hwnd); return TRUE;
+        case CMD_TM_HIDE:       HideUnhide(); return TRUE;
+        case CMD_TM_TERMINATE:  Terminate(); return TRUE;
         case CMD_TM_MINIMIZE:
             n = SelectedList(hwnds);
             while (n-- > 0)
                 ShowWindow(hwnds[n], SW_MINIMIZE);
-            return 0;
+            return TRUE;
         case CMD_CASCADE:
             n = SelectedList(hwnds);
             CascadeList(hwnds, n);
-            return 0;
+            return TRUE;
         case CMD_TILE:
         case CMD_TILEVERT:
             n = SelectedList(hwnds);
             TileList(hwnds, n, wParam == CMD_TILEVERT);
-            return 0;
+            return TRUE;
         case CMD_MINIMIZEALL:
             TasksMinimizeAll();
-            return 0;
-        case CMD_F_REFRESH:     FillTasks(); return 0;
+            return TRUE;
+        case CMD_F_REFRESH:     FillTasks(); return TRUE;
         case IDCANCEL:
-        case CMD_F_CLOSE:       ShowWindow(hwnd, SW_HIDE); return 0;
+        case CMD_F_CLOSE:       ShowWindow(hwnd, SW_HIDE); return TRUE;
         }
         break;
 
     case WM_CLOSE:
         ShowWindow(hwnd, SW_HIDE);
-        return 0;
+        return TRUE;
 
     case WM_DESTROY:
         s_hwndTM = NULL;
         s_hwndList = NULL;
-        return 0;
+        return TRUE;
     }
-    return DefWindowProc(hwnd, msg, wParam, lParam);
+    return FALSE;
 }
 
 BOOL TaskManRegister(void)
 {
-    WNDCLASS wc;
-
-    _fmemset(&wc, 0, sizeof(wc));
-    wc.lpfnWndProc = TaskManWndProc;
-    wc.hInstance = g_hInst;
-    wc.hIcon = LoadIcon(g_hInst, MAKEINTRESOURCE(IDI_TASKMAN));
-    wc.hCursor = LoadCursor(NULL, IDC_ARROW);
-    wc.hbrBackground = (HBRUSH)(COLOR_BTNFACE + 1);
-    wc.lpszMenuName = MAKEINTRESOURCE(IDM_TASKMAN);
-    wc.lpszClassName = CLS_TASKMAN;
-    return RegisterClass(&wc);
+    return TRUE;
 }
 
 void TaskManOpen(void)
 {
-    int cx = 420, cy = 300;
+    static FARPROC lpfnDlg;
     HWND hwndOwner;
+    RECT rc;
 
     s_hwndPrevActive = GetActiveWindow();
     while (s_hwndPrevActive
@@ -591,13 +530,18 @@ void TaskManOpen(void)
     s_nTasks = 0;
 
     if (!s_hwndTM) {
-        s_hwndTM = CreateWindow(CLS_TASKMAN, "Task Manager",
-                                WS_OVERLAPPEDWINDOW,
-                                (GetSystemMetrics(SM_CXSCREEN) - cx) / 2,
-                                (GetSystemMetrics(SM_CYSCREEN) - cy) / 3,
-                                cx, cy, NULL, NULL, g_hInst, NULL);
+        if (!lpfnDlg)
+            lpfnDlg = MakeProcInstance((FARPROC)TaskManDlgProc, g_hInst);
+        s_hwndTM = CreateDialog(g_hInst, MAKEINTRESOURCE(IDD_TASKMAN), NULL,
+                                (DLGPROC)lpfnDlg);
         if (!s_hwndTM)
             return;
+        GetWindowRect(s_hwndTM, &rc);
+        SetWindowPos(s_hwndTM, NULL,
+                     (GetSystemMetrics(SM_CXSCREEN) - (rc.right - rc.left)) / 2,
+                     (GetSystemMetrics(SM_CYSCREEN) - TaskbarHeight()
+                      - (rc.bottom - rc.top)) / 2, 0, 0,
+                     SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
     }
     if (IsIconic(s_hwndTM))
         ShowWindow(s_hwndTM, SW_RESTORE);
@@ -605,6 +549,7 @@ void TaskManOpen(void)
     BringWindowToTop(s_hwndTM);
     SetActiveWindow(s_hwndTM);
     FillTasks();
+    SetFocus(s_hwndList);
 }
 
 void TaskManClose(void)

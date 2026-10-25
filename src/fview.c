@@ -83,6 +83,7 @@ typedef struct tagFVIEW {
 } FVIEW, FAR *LPFVIEW;
 
 static HWND    s_hwndViews[MAX_VIEWS];
+static BOOL    s_bContextMenu;      /* our context menu is being tracked */
 static int     s_nViews;
 static FARPROC s_lpfnEditProc;
 static WNDPROC s_lpfnOldEdit;
@@ -1031,6 +1032,16 @@ static void AppendViewMenu(HMENU hMenu, LPFVIEW v)
     AppendMenu(hMenu, MF_POPUP, (UINT)hSort, "Arrange &Icons");
 }
 
+static HWND TopLevelOf(HWND hwnd)
+{
+    HWND hwndParent;
+
+    while ((GetWindowLong(hwnd, GWL_STYLE) & WS_CHILD)
+           && (hwndParent = GetParent(hwnd)) != NULL)
+        hwnd = hwndParent;
+    return hwnd;
+}
+
 static void ContextMenu(HWND hwnd, LPFVIEW v, POINT pt, BOOL bOnItem)
 {
     HMENU hMenu = CreatePopupMenu();
@@ -1068,7 +1079,11 @@ static void ContextMenu(HWND hwnd, LPFVIEW v, POINT pt, BOOL bOnItem)
             AppendMenu(hMenu, MF_STRING, CMD_F_PROPERTIES, "P&roperties");
     }
     ClientToScreen(hwnd, &pt);
-    TrackPopupMenu(hMenu, 0, pt.x, pt.y, 0, hwnd, NULL);
+    /* owned by the frame: theme engines only restyle menus of top-level
+       windows, and the frame passes the commands back to us */
+    s_bContextMenu = TRUE;
+    TrackPopupMenu(hMenu, 0, pt.x, pt.y, 0, TopLevelOf(hwnd), NULL);
+    s_bContextMenu = FALSE;
     DestroyMenu(hMenu);
 }
 
@@ -1127,7 +1142,8 @@ void FViewInitMenu(HWND hwnd, HMENU hMenu)
     int nSel = FViewSelCount(hwnd);
     BOOL bFolder;
 
-    if (!v)
+    /* context menus are built with the right states already */
+    if (!v || s_bContextMenu)
         return;
     bFolder = v->szPath[0] != '\0';
     CheckMenuItem(hMenu, CMD_F_LARGEICONS, v->nMode == FV_LARGE ? MF_CHECKED : MF_UNCHECKED);

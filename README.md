@@ -33,6 +33,10 @@ Usable as the Windows 3.1 shell. Implemented so far:
 - Folder windows refresh by themselves when files change.
 - As the shell it runs `load=`/`run=` and the StartUp group.
 
+It looks consistent both on a plain Windows 3.1 and with the
+[Retheme16](https://github.com/ceisserer/win31_theme_engine) Windows 95
+theme engine.
+
 See [docs/design.md](docs/design.md) for internals, configuration and the
 roadmap.
 

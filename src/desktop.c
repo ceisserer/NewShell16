@@ -49,6 +49,7 @@ typedef struct tagDESKICON {
 
 static DESKICON s_icons[MAX_DESKICONS];
 static int      s_nIcons;
+static HFONT    s_hfTitle;      /* Windows' icon title font */
 
 /* drag state */
 static BOOL  s_bDragging, s_bPressed;
@@ -93,7 +94,7 @@ static void PaintIcon(HWND hwnd, HDC hdc, DESKICON *p)
     GetClientRect(hwnd, &rc);
     DrawIcon(hdc, (rc.right - 32) / 2, 2, p->hIcon);
 
-    hfOld = SelectObject(hdc, g_hfontUI);
+    hfOld = SelectObject(hdc, s_hfTitle ? s_hfTitle : g_hfontUI);
     SetBkMode(hdc, TRANSPARENT);
     SetTextColor(hdc, nLum < 128 ? RGB(255, 255, 255) : RGB(0, 0, 0));
     rc.top = 37;
@@ -334,6 +335,8 @@ BOOL DesktopCreate(void)
     if (!g_cfg.bDesktopIcons)
         return TRUE;
 
+    if (!s_hfTitle)
+        s_hfTitle = CreateIconTitleFont();
     s_lpfnPaintDesktop = (PAINTDESKTOPPROC)GetProcAddress(
         GetModuleHandle("USER"), "PaintDesktop");
 
@@ -363,6 +366,10 @@ void DesktopDestroy(void)
         if (s_icons[i].hwnd)
             DestroyWindow(s_icons[i].hwnd);
     s_nIcons = 0;
+    if (s_hfTitle) {
+        DeleteObject(s_hfTitle);
+        s_hfTitle = NULL;
+    }
 }
 
 /* Lines the icons up in a column on the left of the screen */

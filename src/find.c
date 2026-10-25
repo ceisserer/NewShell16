@@ -246,6 +246,9 @@ BOOL CALLBACK NSEXPORT FindDlgProc(HWND hDlg, UINT msg, WPARAM wParam,
                            (WPARAM)IconStock(IDI_FIND), 0L);
         return TRUE;
 
+    case WM_QUERYDRAGICON:
+        return (BOOL)(UINT)IconStock(IDI_FIND);
+
     case WM_MEASUREITEM:
         ((MEASUREITEMSTRUCT FAR *)lParam)->itemHeight = ITEM_CY;
         return TRUE;

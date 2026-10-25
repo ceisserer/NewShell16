@@ -100,11 +100,17 @@ void CfgSetStr(LPCSTR lpSection, LPCSTR lpKey, LPCSTR lpValue);
 /* ---- util.c ---------------------------------------------------------- */
 void FillSolid(HDC hdc, const RECT FAR *lprc, COLORREF clr);
 void Draw3DEdge(HDC hdc, const RECT FAR *lprc, BOOL bSunken, BOOL bThick);
+#define CLIENT_EDGE     2
+void MovePane(HWND hwndPane, int x, int y, int cx, int cy);
+void DrawPaneEdge(HDC hdc, int x, int y, int cx, int cy);
 void DrawSmallImage(HDC hdc, int x, int y, int nIndex);
 void DrawIconSmall(HDC hdc, int x, int y, HICON hIcon, COLORREF clrBk);
 HFONT CreateUIFont(int nPoints, BOOL bBold);
 int  TextWidth(HDC hdc, LPCSTR lpsz);
 void FitText(HDC hdc, LPCSTR lpSrc, LPSTR lpDst, int cbDst, int cxMax);
+BOOL ThemeEngineActive(void);
+HFONT GetMenuFont(void);
+HFONT CreateIconTitleFont(void);
 
 LPSTR PathFileName(LPSTR lpPath);
 LPSTR PathExtension(LPSTR lpPath);

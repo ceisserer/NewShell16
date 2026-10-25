@@ -42,8 +42,8 @@
 #define SM_MAXKEYS      4096
 #define SM_GROUPMAX     64
 
-#define TOP_H           24
-#define SUB_H           20
+#define TOP_MIN_H       24      /* item heights: at least this, or font + gap */
+#define SUB_MIN_H       20
 #define SEP_H           8
 #define BANNER_W        22
 
@@ -72,6 +72,9 @@ typedef struct tagSMITEM {
 static LPSMITEM s_lpItems;
 static int      s_nItems;
 static int      s_cyMenu;
+static int      s_cyTop, s_cySub;   /* item heights for the current font */
+static HFONT    s_hfMenu;           /* GetMenuFont() when the menu opened */
+static BOOL     s_bThemed;          /* the theme engine draws the menus */
 static HFONT    s_hfBanner;
 
 static const char *s_szImageNames[] = {
@@ -284,7 +287,7 @@ static void LayoutTop(void)
     for (i = 0; i < s_nItems; i++)
         if (s_lpItems[i].bFlags & SF_TOP) {
             s_lpItems[i].yTop = y;
-            y += (s_lpItems[i].bFlags & SF_SEP) ? SEP_H : TOP_H;
+            y += (s_lpItems[i].bFlags & SF_SEP) ? SEP_H : s_cyTop;
         }
     s_cyMenu = y;
 }
@@ -305,6 +308,19 @@ void StartMenuShow(HWND hwndOwner, int x, int y)
 
     s_nItems = 0;
     CreateBannerFont();
+    s_hfMenu = GetMenuFont();
+    s_bThemed = ThemeEngineActive();
+    {
+        TEXTMETRIC tm;
+        HDC hdc = GetDC(NULL);
+        HFONT hfOld = SelectObject(hdc, s_hfMenu);
+
+        GetTextMetrics(hdc, &tm);
+        SelectObject(hdc, hfOld);
+        ReleaseDC(NULL, hdc);
+        s_cyTop = tm.tmHeight + 10 > TOP_MIN_H ? tm.tmHeight + 10 : TOP_MIN_H;
+        s_cySub = tm.tmHeight + 4 > SUB_MIN_H ? tm.tmHeight + 4 : SUB_MIN_H;
+    }
     hMenu = BuildMenu("Start", TRUE);
     LayoutTop();
 
@@ -372,7 +388,7 @@ BOOL StartMenuMeasureItem(MEASUREITEMSTRUCT FAR *lpmis)
     if (lpmis->CtlType != ODT_MENU || !(p = ItemFromData(lpmis->itemData)))
         return FALSE;
     hdc = GetDC(NULL);
-    hfOld = SelectObject(hdc, g_hfontUI);
+    hfOld = SelectObject(hdc, s_hfMenu);
     cx = LOWORD(GetTextExtent(hdc, p->szText, lstrlen(p->szText)));
     SelectObject(hdc, hfOld);
     ReleaseDC(NULL, hdc);
@@ -380,7 +396,7 @@ BOOL StartMenuMeasureItem(MEASUREITEMSTRUCT FAR *lpmis)
     if (p->bFlags & SF_SEP)
         lpmis->itemHeight = SEP_H;
     else
-        lpmis->itemHeight = (p->bFlags & SF_TOP) ? TOP_H : SUB_H;
+        lpmis->itemHeight = (p->bFlags & SF_TOP) ? s_cyTop : s_cySub;
     lpmis->itemWidth = ((p->bFlags & SF_TOP) ? BANNER_W : 0) + 6 + 16 + 8 + cx + 20;
     return TRUE;
 }
@@ -406,19 +422,12 @@ static void DrawBanner(HDC hdc, const RECT FAR *lprcItem, LPSMITEM p)
     }
 }
 
-BOOL StartMenuDrawItem(DRAWITEMSTRUCT FAR *lpdis)
+/* Paints one item into hdc (rc in hdc coordinates) */
+static void PaintItem(HDC hdc, RECT rc, LPSMITEM p, BOOL bSel)
 {
-    HDC hdc = lpdis->hDC;
-    RECT rc = lpdis->rcItem, rcText;
-    LPSMITEM p;
+    RECT rcText;
     int cy;
-    BOOL bSel;
-    COLORREF clrBk;
-
-    if (lpdis->CtlType != ODT_MENU || !(p = ItemFromData(lpdis->itemData)))
-        return FALSE;
-    bSel = (lpdis->itemState & ODS_SELECTED) && !(p->bFlags & (SF_SEP | SF_EMPTY));
-    clrBk = GetSysColor(bSel ? COLOR_HIGHLIGHT : COLOR_MENU);
+    COLORREF clrBk = GetSysColor(bSel ? COLOR_HIGHLIGHT : COLOR_MENU);
 
     if (p->bFlags & SF_TOP) {
         DrawBanner(hdc, &rc, p);
@@ -427,9 +436,16 @@ BOOL StartMenuDrawItem(DRAWITEMSTRUCT FAR *lpdis)
     if (p->bFlags & SF_SEP) {
         FillSolid(hdc, &rc, GetSysColor(COLOR_MENU));
         cy = rc.top + (rc.bottom - rc.top) / 2 - 1;
-        SetRect(&rcText, rc.left + 2, cy, rc.right - 2, cy + 2);
-        Draw3DEdge(hdc, &rcText, TRUE, FALSE);
-        return TRUE;
+        if (s_bThemed) {
+            /* etched, like the engine's separators */
+            SetRect(&rcText, rc.left + 2, cy, rc.right - 2, cy + 2);
+            Draw3DEdge(hdc, &rcText, TRUE, FALSE);
+        } else {
+            /* a plain line, like Windows 3.1 */
+            SetRect(&rcText, rc.left, cy, rc.right, cy + 1);
+            FillSolid(hdc, &rcText, GetSysColor(COLOR_MENUTEXT));
+        }
+        return;
     }
 
     FillSolid(hdc, &rc, clrBk);
@@ -442,7 +458,7 @@ BOOL StartMenuDrawItem(DRAWITEMSTRUCT FAR *lpdis)
         DrawIconSmall(hdc, rc.left + 4, cy, p->hIcon, clrBk);
 
     {
-        HFONT hfOld = SelectObject(hdc, g_hfontUI);
+        HFONT hfOld = SelectObject(hdc, s_hfMenu);
         int nOldMode = SetBkMode(hdc, TRANSPARENT);
         COLORREF clrOld = SetTextColor(hdc,
             GetSysColor(bSel ? COLOR_HIGHLIGHTTEXT
@@ -454,6 +470,42 @@ BOOL StartMenuDrawItem(DRAWITEMSTRUCT FAR *lpdis)
         SetBkMode(hdc, nOldMode);
         SelectObject(hdc, hfOld);
     }
+}
+
+/*
+ * Items are painted into a memory bitmap and copied to the menu in one
+ * blit: this avoids flicker, and keeps a theme engine that redraws the
+ * text and fills of system menus from reinterpreting our drawing.
+ */
+BOOL StartMenuDrawItem(DRAWITEMSTRUCT FAR *lpdis)
+{
+    RECT rc = lpdis->rcItem;
+    LPSMITEM p;
+    BOOL bSel;
+    HDC hdcMem;
+    HBITMAP hbm, hbmOld;
+    int cx = rc.right - rc.left, cy = rc.bottom - rc.top;
+
+    if (lpdis->CtlType != ODT_MENU || !(p = ItemFromData(lpdis->itemData)))
+        return FALSE;
+    bSel = (lpdis->itemState & ODS_SELECTED) && !(p->bFlags & (SF_SEP | SF_EMPTY));
+
+    hdcMem = CreateCompatibleDC(lpdis->hDC);
+    hbm = CreateCompatibleBitmap(lpdis->hDC, cx, cy);
+    if (!hdcMem || !hbm) {
+        if (hdcMem)
+            DeleteDC(hdcMem);
+        PaintItem(lpdis->hDC, rc, p, bSel);
+        return TRUE;
+    }
+    hbmOld = SelectObject(hdcMem, hbm);
+    SetWindowOrg(hdcMem, rc.left, rc.top);
+    PaintItem(hdcMem, rc, p, bSel);
+    SetWindowOrg(hdcMem, 0, 0);
+    BitBlt(lpdis->hDC, rc.left, rc.top, cx, cy, hdcMem, 0, 0, SRCCOPY);
+    SelectObject(hdcMem, hbmOld);
+    DeleteObject(hbm);
+    DeleteDC(hdcMem);
     return TRUE;
 }
 

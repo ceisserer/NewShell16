@@ -59,6 +59,37 @@ executable, `NEWSHELL.EXE`.
   `WIN.INI` `load=`/`run=` lines and the StartUp group (skipped while Shift
   is held).
 
+## Look and feel, with and without a theme engine
+
+NewShell16 draws its own parts (taskbar, Start menu, folder views, status
+bars, pane edges) in the Windows 95 style, and leaves menus, captions and
+dialog controls to Windows. It is meant to look consistent both on a
+plain Windows 3.1 and with the
+[Retheme16](https://github.com/ceisserer/win31_theme_engine) engine, which
+restyles those system parts:
+
+- **Menus.** The owner-drawn Start menu uses the font the system menus
+  use: the theme's `Menu` font while the engine runs (`RETHEME.DLL`
+  loaded; the font is read from the theme's `THEME.INI`, following
+  `Base=`), otherwise the bold System font of Windows 3.1. Separators are
+  etched with the engine and plain lines without it. Items are painted
+  into a memory bitmap and blitted, so the engine, which redraws text and
+  fills on menu DCs, cannot reinterpret them. Item heights follow the
+  font.
+- **Context menus** are owned by top-level windows (the engine only
+  restyles menus of top-level windows), so they match the menu bars.
+- **Controls** are only placed in dialogs (the engine themes controls in
+  dialogs only): the Task Manager is a dialog, like Run, Find, Properties,
+  Options and Shut Down. Lists in ordinary windows (Explorer tree, Bin)
+  are borderless and sit in a sunken Win95 pane edge drawn by NewShell,
+  instead of the black 3.1 border.
+- **Taskbar menus** are moved above the taskbar once they are on screen
+  (Windows 3.1 has no `TPM_BOTTOMALIGN`).
+- **Icons** of windows without a class icon (dialogs) come from
+  `WM_QUERYDRAGICON`.
+- **Desktop icon labels** use the icon title font from the Control Panel
+  (`SPI_GETICONTITLELOGFONT`).
+
 ## Command line
 
 | | |

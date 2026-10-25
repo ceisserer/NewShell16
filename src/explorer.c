@@ -357,9 +357,9 @@ static void Layout(HWND hwnd, LPEXPLORER e)
         e->xSplit = rc.right - 60;
     if (e->xSplit < 60)
         e->xSplit = 60;
-    MoveWindow(e->hwndTree, 0, 0, e->xSplit, cy, TRUE);
-    MoveWindow(e->hwndView, e->xSplit + SPLIT_CX, 0,
-               rc.right - e->xSplit - SPLIT_CX, cy, TRUE);
+    MovePane(e->hwndTree, 0, 0, e->xSplit, cy);
+    MovePane(e->hwndView, e->xSplit + SPLIT_CX, 0,
+             rc.right - e->xSplit - SPLIT_CX, cy);
 }
 
 static void InvalidateStatus(HWND hwnd)
@@ -476,7 +476,7 @@ LRESULT CALLBACK NSEXPORT ExplorerWndProc(HWND hwnd, UINT msg, WPARAM wParam,
             SetWindowLong(hwnd, 0, (LONG)e);
             e->xSplit = CfgGetInt("Explorer", "Split", 170);
             e->hwndTree = CreateWindow("LISTBOX", "",
-                                       WS_CHILD | WS_VISIBLE | WS_VSCROLL | WS_BORDER
+                                       WS_CHILD | WS_VISIBLE | WS_VSCROLL
                                        | LBS_OWNERDRAWFIXED | LBS_NOTIFY
                                        | LBS_NOINTEGRALHEIGHT | LBS_WANTKEYBOARDINPUT,
                                        0, 0, 0, 0, hwnd, (HMENU)ID_TREE, g_hInst, NULL);
@@ -500,6 +500,9 @@ LRESULT CALLBACK NSEXPORT ExplorerWndProc(HWND hwnd, UINT msg, WPARAM wParam,
         BeginPaint(hwnd, &ps);
         if (e) {
             GetClientRect(hwnd, &rc);
+            DrawPaneEdge(ps.hdc, 0, 0, e->xSplit, rc.bottom - StatusBarHeight());
+            DrawPaneEdge(ps.hdc, e->xSplit + SPLIT_CX, 0,
+                         rc.right - e->xSplit - SPLIT_CX, rc.bottom - StatusBarHeight());
             rc.left = e->xSplit;
             rc.right = e->xSplit + SPLIT_CX;
             rc.bottom -= StatusBarHeight();

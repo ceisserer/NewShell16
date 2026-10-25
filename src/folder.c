@@ -138,13 +138,18 @@ LRESULT CALLBACK NSEXPORT FolderWndProc(HWND hwnd, UINT msg, WPARAM wParam,
         return 0;
 
     case WM_SIZE:
-        MoveWindow(ViewOf(hwnd), 0, 0, LOWORD(lParam),
-                   HIWORD(lParam) - StatusBarHeight(), TRUE);
-        InvalidateStatus(hwnd);
+        MovePane(ViewOf(hwnd), 0, 0, LOWORD(lParam),
+                 HIWORD(lParam) - StatusBarHeight());
+        InvalidateRect(hwnd, NULL, FALSE);
         return 0;
 
     case WM_PAINT:
         BeginPaint(hwnd, &ps);
+        {
+            RECT rc;
+            GetClientRect(hwnd, &rc);
+            DrawPaneEdge(ps.hdc, 0, 0, rc.right, rc.bottom - StatusBarHeight());
+        }
         FViewGetStatus(ViewOf(hwnd), szStatus, sizeof(szStatus));
         PaintStatusBar(hwnd, ps.hdc, StatusBarHeight(), szStatus);
         EndPaint(hwnd, &ps);

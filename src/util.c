@@ -81,6 +81,24 @@ void Draw3DEdge(HDC hdc, const RECT FAR *lprc, BOOL bSunken, BOOL bThick)
     }
 }
 
+/*
+ * Win95 "client edge": a 2-pixel sunken border around a pane. The pane
+ * window is placed inside it and the parent paints the edge.
+ */
+void MovePane(HWND hwndPane, int x, int y, int cx, int cy)
+{
+    MoveWindow(hwndPane, x + CLIENT_EDGE, y + CLIENT_EDGE,
+               cx - 2 * CLIENT_EDGE, cy - 2 * CLIENT_EDGE, TRUE);
+}
+
+void DrawPaneEdge(HDC hdc, int x, int y, int cx, int cy)
+{
+    RECT rc;
+
+    SetRect(&rc, x, y, x + cx, y + cy);
+    Draw3DEdge(hdc, &rc, TRUE, TRUE);
+}
+
 /* Small image strip with a magenta colour key, converted on first use */
 static HBITMAP s_hbmSmall;
 static HBITMAP s_hbmSmallMask;
@@ -376,4 +394,122 @@ BOOL OpenPath(HWND hwnd, LPCSTR lpPath)
         return FALSE;
     }
     return TRUE;
+}
+
+/* -------------------------------------------------------------------- */
+/* Retheme16 theme engine                                               */
+/* -------------------------------------------------------------------- */
+
+/*
+ * The Retheme16 engine (RETHEME.DLL, loaded by RETHEME.EXE while it runs)
+ * redraws system menus, captions and dialog controls in the Windows 95
+ * style with its own fonts. Our owner-drawn menus follow whatever the
+ * system menus currently look like.
+ */
+BOOL ThemeEngineActive(void)
+{
+    return GetModuleHandle("RETHEME") != NULL;
+}
+
+/* Reads "face,points,weight[,italic]" for lpName from a theme directory,
+   following its Base= chain */
+static BOOL ReadThemeFont(LPCSTR lpThemeDir, LPCSTR lpName, LOGFONT FAR *lplf,
+                          int nDepth)
+{
+    char szIni[MAXPATHLEN], szValue[64], szBase[16];
+    LPSTR p, q;
+    int nPoints = 8, nWeight = FW_NORMAL;
+    HDC hdc;
+
+    lstrcpyn(szIni, lpThemeDir, sizeof(szIni) - 12);
+    PathAppend(szIni, "THEME.INI");
+    if (GetPrivateProfileString("Fonts", lpName, "", szValue, sizeof(szValue),
+                                szIni) == 0) {
+        if (nDepth >= 4 || GetPrivateProfileString("Theme", "Base", "", szBase,
+                                                   sizeof(szBase), szIni) == 0)
+            return FALSE;
+        lstrcpyn(szIni, lpThemeDir, sizeof(szIni) - 16);
+        PathParent(szIni);
+        PathAppend(szIni, szBase);
+        return ReadThemeFont(szIni, lpName, lplf, nDepth + 1);
+    }
+    for (p = szValue; *p && *p != ','; p++)
+        ;
+    if (*p == ',') {
+        *p++ = '\0';
+        nPoints = 0;
+        for (q = p; *q >= '0' && *q <= '9'; q++)
+            nPoints = nPoints * 10 + (*q - '0');
+        if (*q == ',') {
+            nWeight = 0;
+            for (q++; *q >= '0' && *q <= '9'; q++)
+                nWeight = nWeight * 10 + (*q - '0');
+            if (*q == ',' && q[1] == '1')
+                lplf->lfItalic = TRUE;
+        }
+    }
+    hdc = GetDC(NULL);
+    lplf->lfHeight = -MulDiv(nPoints ? nPoints : 8, GetDeviceCaps(hdc, LOGPIXELSY), 72);
+    ReleaseDC(NULL, hdc);
+    lplf->lfWeight = nWeight;
+    lplf->lfCharSet = ANSI_CHARSET;
+    lplf->lfPitchAndFamily = VARIABLE_PITCH | FF_SWISS;
+    lstrcpyn(lplf->lfFaceName, szValue, sizeof(lplf->lfFaceName));
+    return TRUE;
+}
+
+/*
+ * The font menus are drawn with: the theme's Menu font while the engine
+ * runs, otherwise the System font Windows 3.1 uses for menus. The handle
+ * stays valid until the engine is started or stopped.
+ */
+HFONT GetMenuFont(void)
+{
+    static HFONT s_hfTheme;
+    static BOOL  s_bThemed;
+    char szHome[MAXPATHLEN], szIni[MAXPATHLEN], szTheme[MAXPATHLEN];
+    HMODULE hmod = GetModuleHandle("RETHEME");
+    LOGFONT lf;
+
+    if (!hmod) {
+        if (s_hfTheme) {
+            DeleteObject(s_hfTheme);
+            s_hfTheme = NULL;
+        }
+        s_bThemed = FALSE;
+        return (HFONT)GetStockObject(SYSTEM_FONT);
+    }
+    if (s_bThemed && s_hfTheme)
+        return s_hfTheme;
+
+    GetModuleFileName((HINSTANCE)hmod, szHome, sizeof(szHome));
+    *PathFileName(szHome) = '\0';
+    lstrcpy(szIni, szHome);
+    lstrcat(szIni, "RETHEME.INI");
+    lstrcpy(szTheme, szHome);
+    lstrcat(szTheme, "THEMES\\WIN95");
+    GetPrivateProfileString("Engine", "Theme", szTheme, szTheme, sizeof(szTheme), szIni);
+
+    _fmemset(&lf, 0, sizeof(lf));
+    if (!ReadThemeFont(szTheme, "Menu", &lf, 0)) {
+        _fmemset(&lf, 0, sizeof(lf));
+        lstrcpy(lf.lfFaceName, "MS Sans Serif");
+        lf.lfHeight = -MulDiv(8, 96, 72);
+        lf.lfWeight = FW_NORMAL;
+        lf.lfCharSet = ANSI_CHARSET;
+    }
+    s_hfTheme = CreateFontIndirect(&lf);
+    s_bThemed = TRUE;
+    return s_hfTheme ? s_hfTheme : g_hfontUI;
+}
+
+/* The font Windows uses for icon titles (Control Panel > Desktop) */
+HFONT CreateIconTitleFont(void)
+{
+    LOGFONT lf;
+
+    _fmemset(&lf, 0, sizeof(lf));
+    if (!SystemParametersInfo(SPI_GETICONTITLELOGFONT, sizeof(lf), &lf, 0))
+        return CreateUIFont(8, FALSE);
+    return CreateFontIndirect(&lf);
 }
