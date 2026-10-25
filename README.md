@@ -73,6 +73,43 @@ By hand:
 NewShell16 can also be started from Program Manager to try it out; then
 *Shut Down → Close NewShell only* closes it again.
 
+### Trying it in an emulator
+
+You need your own copy of Windows 3.1 (see
+[docs/reference-media.md](docs/reference-media.md)) and the floppy image of
+a [release](https://github.com/ceisserer/NewShell16/releases):
+
+```sh
+V=0.2.0
+curl -LO https://github.com/ceisserer/NewShell16/releases/download/v$V/newshell-$V-disk.img
+```
+
+**DOSBox-X** (or DOSBox Staging, with `dosbox` instead of `dosbox-x`) with
+the pre-installed `Win_31.zip`: unpack its `WINDOWS` directory into a
+directory that becomes drive C:, then start Windows with Setup from the
+floppy:
+
+```sh
+mkdir -p ~/win31 && unzip -q Win_31.zip -d ~/win31/zip
+mkdir -p ~/win31/c && cp -r ~/win31/zip/Win/WINDOWS ~/win31/c/
+
+dosbox-x -c "mount c $HOME/win31/c" -c "imgmount a $PWD/newshell-$V-disk.img -t floppy" \
+         -c "c:" -c "cd \\windows" -c "win a:\\setup.exe"
+```
+
+Setup installs to `C:\NEWSHELL` and restarts Windows with NewShell as the
+shell. Later sessions need only
+`dosbox-x -c "mount c $HOME/win31/c" -c "c:" -c "cd \\windows" -c "win"`.
+The installation lives in `~/win31/c`; delete it to start over.
+
+**QEMU** needs a bootable hard disk image with DOS and Windows 3.1 (for
+example installed from the Windows 3.1 and MS-DOS floppies). Attach the
+NewShell floppy, boot, and run `win a:\setup.exe` at the DOS prompt:
+
+```sh
+qemu-system-i386 -m 16 -hda win31.img -fda newshell-$V-disk.img
+```
+
 ## Testing
 
 [docs/testing.md](docs/testing.md) describes the DOSBox-X harness used to
