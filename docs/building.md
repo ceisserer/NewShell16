@@ -36,6 +36,7 @@ theme engine. Both are git submodules in `external/`:
 
 ```sh
 git submodule update --init
+git submodule update --remote external/retheme16   # Retheme16 follows main
 wmake release        # or: python3 tools/release/mkrelease.py
 ```
 
@@ -65,6 +66,22 @@ Setup can be run again from the NewShell group to change these options or
 the theme, or to remove NewShell. While NewShell is the running shell, an
 update or removal restarts Windows with Program Manager to finish (see
 Win16Setup's README, "Shell handover").
+
+## Continuous integration
+
+`.github/workflows/build.yml` builds the release on GitHub Actions with the
+current Open Watcom snapshot, Win16Setup at its submodule commit and
+Retheme16 at the head of `main`:
+
+- every push and pull request: the ZIP, the floppy image and the Win16
+  binaries are kept as workflow artifacts;
+- a push to the default branch also replaces the pre-release `snapshot`
+  (version `X.Y.Z-snapshot.<commit>`);
+- a pushed tag `vX.Y.Z` publishes the release `vX.Y.Z` (0.x as a
+  pre-release). The tag must match `VERSION`.
+
+No Microsoft software is needed to build; Windows 3.1 is only used by the
+emulator harness for testing ([testing.md](testing.md)).
 
 ## Icons
 

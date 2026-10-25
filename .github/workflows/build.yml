@@ -1,0 +1,183 @@
+# Builds NewShell16 and its installer (ZIP, 1.44 MB floppy image) with the
+# current Open Watcom snapshot. No licensed material is needed.
+#
+#   every push / pull request   build; the packages and the Win16 binaries
+#                               are kept as workflow artifacts
+#   push to the default branch  also replaces the rolling pre-release
+#                               "snapshot" (version X.Y.Z-snapshot.<commit>)
+#   push of a tag vX.Y.Z        publishes the release vX.Y.Z (0.x as
+#                               pre-release); the tag must match VERSION
+#
+# Win16Setup is built at its pinned submodule commit; Retheme16 always at
+# the head of its main branch (.gitmodules: branch = main).
+name: Build
+
+on:
+  push:
+    branches: ['**']
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      kind: ${{ steps.version.outputs.kind }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Update Retheme16 to main
+        run: |
+          git submodule update --init --remote external/retheme16
+          git submodule status
+
+      - name: Version
+        id: version
+        run: |
+          v=$(cat VERSION)
+          kind=snapshot
+          case "$GITHUB_REF" in
+          refs/tags/v*)
+            [ "$GITHUB_REF_NAME" = "v$v" ] || { echo "::error::tag $GITHUB_REF_NAME does not match VERSION $v"; exit 1; }
+            kind=release ;;
+          *)
+            v="$v-snapshot.$(git rev-parse --short=7 HEAD)" ;;
+          esac
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          echo "kind=$kind" >> "$GITHUB_OUTPUT"
+          echo "$kind $v"
+
+      - name: Install packages
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q mtools python3-pil
+
+      # Open Watcom only publishes the rolling "Current-build" snapshot; the
+      # cache key follows its upload time, so a new snapshot is picked up on
+      # the next run.
+      - name: Find the current Open Watcom snapshot
+        id: ow
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          stamp=$(gh api repos/open-watcom/open-watcom-v2/releases/tags/Current-build \
+                  --jq '.assets[] | select(.name == "ow-snapshot.tar.xz") | .updated_at')
+          [ -n "$stamp" ] || { echo "::error::no ow-snapshot.tar.xz in open-watcom-v2 Current-build"; exit 1; }
+          echo "stamp=$stamp" >> "$GITHUB_OUTPUT"
+          echo "Open Watcom snapshot of $stamp"
+
+      - name: Cache Open Watcom
+        id: owcache
+        uses: actions/cache@v4
+        with:
+          path: ~/ow-snapshot.tar.xz
+          key: ow-snapshot-${{ steps.ow.outputs.stamp }}
+
+      - name: Download Open Watcom
+        if: steps.owcache.outputs.cache-hit != 'true'
+        run: curl -fsSL -o ~/ow-snapshot.tar.xz https://github.com/open-watcom/open-watcom-v2/releases/download/Current-build/ow-snapshot.tar.xz
+
+      - name: Install Open Watcom
+        run: |
+          mkdir -p ~/watcom
+          tar xJf ~/ow-snapshot.tar.xz -C ~/watcom
+          echo "WATCOM=$HOME/watcom" >> "$GITHUB_ENV"
+          echo "$HOME/watcom/binl64" >> "$GITHUB_PATH"
+
+      - name: Build and package
+        run: python3 tools/release/mkrelease.py --version ${{ steps.version.outputs.version }}
+
+      - name: Release notes
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          OW_STAMP: ${{ steps.ow.outputs.stamp }}
+        run: |
+          {
+            echo "NewShell16 $VERSION, built from $GITHUB_SHA."
+            echo
+            echo "Unzip (or use the floppy image) and run \`SETUP.EXE\` from Windows 3.1."
+            echo
+            echo "- Win16Setup $(git -C external/win16setup rev-parse --short=7 HEAD)"
+            echo "- Retheme16 $(cat external/retheme16/VERSION) ($(git -C external/retheme16 rev-parse --short=7 HEAD), main)"
+            echo "- Open Watcom snapshot of $OW_STAMP"
+          } > build/release/RELEASE_NOTES.md
+          cat build/release/RELEASE_NOTES.md
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: newshell-${{ steps.version.outputs.version }}
+          path: |
+            build/release/*.zip
+            build/release/*.img
+            build/release/SHA256SUMS
+            build/release/RELEASE_NOTES.md
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: win16-binaries-${{ steps.version.outputs.version }}
+          path: |
+            build/newshell.exe
+            build/nshook.dll
+            build/*.map
+
+  snapshot:
+    needs: build
+    if: >-
+      needs.build.outputs.kind == 'snapshot' && github.event_name == 'push' &&
+      github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: snapshot
+      cancel-in-progress: true
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: newshell-${{ needs.build.outputs.version }}
+          path: release
+
+      - name: Replace the snapshot release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          {
+            echo "Automatic build of \`${GITHUB_REF_NAME}\`, replaced on every push. Not a release: for testing only."
+            echo
+            cat release/RELEASE_NOTES.md
+          } > notes.md
+          gh release delete snapshot --repo "$GITHUB_REPOSITORY" --cleanup-tag --yes || true
+          gh release create snapshot --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --prerelease --latest=false --title "Snapshot $VERSION" --notes-file notes.md \
+            release/*.zip release/*.img release/SHA256SUMS
+
+  release:
+    needs: build
+    if: needs.build.outputs.kind == 'release'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: newshell-${{ needs.build.outputs.version }}
+          path: release
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          pre=
+          case "$VERSION" in 0.*) pre=--prerelease ;; esac
+          gh release create "v$VERSION" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" $pre \
+            --title "NewShell16 $VERSION" --notes-file release/RELEASE_NOTES.md --generate-notes \
+            release/*.zip release/*.img release/SHA256SUMS
