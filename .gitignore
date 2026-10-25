@@ -1,0 +1,17 @@
+# Build output
+*.obj
+*.o
+*.exe
+*.res
+*.map
+*.lib
+*.err
+*.lnk
+*.sym
+build/
+
+# Editor / OS cruft
+*.swp
+*~
+.DS_Store
+Thumbs.db
