@@ -72,6 +72,19 @@ static BOOL IsOwnHelperWindow(HWND hwnd)
         || lstrcmpi(szClass, CLS_MAIN) == 0;
 }
 
+/*
+ * Background programs that keep a minimised window only so that they can be
+ * closed (the Retheme16 engine) get no task button; Task Manager still
+ * lists them.
+ */
+static BOOL IsBackgroundWindow(HWND hwnd)
+{
+    char szClass[32];
+
+    GetClassName(hwnd, szClass, sizeof(szClass));
+    return lstrcmpi(szClass, "Retheme16") == 0;
+}
+
 static BOOL IsTaskWindow(HWND hwnd)
 {
     if (!IsWindowVisible(hwnd))
@@ -152,6 +165,13 @@ static BOOL UpdateTasks(void)
         lpfnEnum = MakeProcInstance((FARPROC)EnumTaskProc, g_hInst);
     s_nFound = 0;
     EnumWindows((WNDENUMPROC)lpfnEnum, 0L);
+
+    for (j = 0; j < s_nFound; j++)
+        if (IsBackgroundWindow(s_hwndFound[j])) {
+            if (g_cfg.bHideMinApps && IsIconic(s_hwndFound[j]))
+                HideIconicWindow(s_hwndFound[j]);
+            s_hwndFound[j] = NULL;
+        }
 
     /* keep the existing order, drop windows that went away */
     for (i = 0; i < s_nTasks; i++)
