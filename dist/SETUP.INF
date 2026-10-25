@@ -1,6 +1,7 @@
 ; SETUP.INF of NewShell16 for Win16Setup (external/win16setup/README.md).
-; tools/release/mkrelease.py fills in the version and the theme list; the
-; packer adds [Files].
+; tools/release/mkrelease.py fills in the version, the theme list and the
+; theme switcher entries (THEMES.EXE, if Retheme16 has one); the packer adds
+; [Files].
 
 [Setup]
 Product=NewShell16
@@ -49,12 +50,14 @@ Name=NewShell16
 2=%DIR%\SETUP.EXE,NewShell16 Setup
 3=NOTEPAD.EXE %DIR%\README.TXT,Read Me,NOTEPAD.EXE
 4=%DIR%\RETHEME\GALLERY.EXE,Theme Gallery
+@SWITCHER_ITEM@
 
 ; NewShell16 started as an ordinary program must be closed by the user; as
 ; the shell, Setup restarts Windows to replace it (shell handover)
 [Running]
 1=NEWSHELL,NewShell16
 2=GALLERY,the Theme Gallery
+@SWITCHER_RUNNING@
 
 [Uninstall]
 1=RETHEME\RETHEME.INI

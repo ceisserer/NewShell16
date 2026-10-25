@@ -60,7 +60,9 @@ boxes in Setup:
 - *Use NewShell16 as the Windows shell* sets `shell=` and `taskman.exe=` in
   `SYSTEM.INI`; turning it off or removing NewShell16 restores the old values.
 - *Windows 95 look (Retheme16)* installs Retheme16 to `RETHEME\`, adds it to
-  `load=` and selects the theme chosen in Setup (with previews).
+  `load=` and selects the theme chosen in Setup (with previews). Retheme16's
+  `THEMES.EXE` ("Themes" in the NewShell16 group) switches it later without
+  a restart.
 
 Setup can be run again from the NewShell16 group to change these options or
 the theme, or to remove NewShell16. While NewShell16 is the running shell, an

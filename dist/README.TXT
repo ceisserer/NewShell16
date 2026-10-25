@@ -28,6 +28,9 @@ back as the shell. If NewShell16 is the shell while Setup has to replace
 or remove its files, Setup restarts Windows with Program Manager once,
 finishes there and restarts Windows again.
 
+"Themes" in the same group switches the theme of the Windows 95 look at
+once, without restarting Windows.
+
 Silent installation (for scripts and network installs):
 
   SETUP /S [/D=C:\NEWSHELL] [/SHELL | /NOSHELL] [/THEME | /NOTHEME]
@@ -48,7 +51,8 @@ FILES
 
   NEWSHELL.EXE   the shell
   NSHOOK.DLL     its system hooks
-  RETHEME\       Retheme16 (RETHEME.EXE, RETHEME.DLL, GALLERY.EXE, themes)
+  RETHEME\       Retheme16 (RETHEME.EXE, RETHEME.DLL, THEMES.EXE, GALLERY.EXE,
+                 themes)
 
 NewShell16 keeps its settings in NEWSHELL.INI and the Start menu in
 NSSTART.INI (Calmira's START.INI format), both in the Windows directory.
