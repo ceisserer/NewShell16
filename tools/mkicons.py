@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# NewShell16 - Copyright (C) 2026 NewShell16 contributors
+# SPDX-License-Identifier: GPL-3.0-or-later
 """Generate NewShell16's icons (.ico, 32x32x16) and small-image strip (.bmp).
 
 All artwork is drawn procedurally so it can be tweaked and regenerated:

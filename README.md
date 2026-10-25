@@ -61,3 +61,13 @@ res/        resource script, icons, bitmaps
 tools/      icon generator, emulator test harness
 docs/       documentation
 ```
+
+## License
+
+NewShell16 is free software, licensed under the
+[GNU General Public License, version 3 or later](COPYING).
+
+It is a re-implementation of Calmira (Copyright © Li-Hsin Huang and the
+Calmira contributors), which is licensed under the GNU GPL version 2 or (at
+your option) any later version. Calmira's sources were used as a reference
+for behaviour and file formats.

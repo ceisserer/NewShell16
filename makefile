@@ -1,3 +1,6 @@
+# NewShell16 - Copyright (C) 2026 NewShell16 contributors
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
 # NewShell16 - Open Watcom makefile (wmake)
 #
 #   wmake               build build/newshell.exe

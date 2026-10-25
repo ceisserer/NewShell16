@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# NewShell16 - Copyright (C) 2026 NewShell16 contributors
+# SPDX-License-Identifier: GPL-3.0-or-later
 """Run NewShell16 inside Windows 3.1 under DOSBox-X for testing.
 
 You need an installed Windows 3.1 directory (C:\\WINDOWS from an existing
