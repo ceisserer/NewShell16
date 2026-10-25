@@ -60,3 +60,19 @@ tools/emu/winemu.py --windir ~/win31/Win/WINDOWS --work /tmp/nsemu-rt --out shot
 `--install SRC=DEST` copies a file or directory to `DEST` on drive C:.
 Run the same script with and without the engine and compare the
 screenshots side by side.
+
+## Testing the installer
+
+`--no-install` leaves out NewShell (no copy, `shell=` unchanged), so the
+release can be installed with its own Setup from Program Manager:
+
+```sh
+wmake release
+tools/emu/winemu.py --windir ~/win31/Win/WINDOWS --work /tmp/nsemu-setup --out shots \
+    --progman --no-install --install build/release/newshell-0.2.0=SETUPSRC \
+    --set 'WIN.INI:windows:run=C:\SETUPSRC\SETUP.EXE' --script "sleep:20 shot:setup.png ..."
+```
+
+Keep the `--work` directory between runs to test updates, option changes
+and removal on an installed system; with NewShell as the shell these go
+through Win16Setup's shell handover (a restart with Program Manager).

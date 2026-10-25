@@ -112,6 +112,10 @@ $(OBJDIR)/taskman.obj  : $(SRCDIR)/taskman.c
 $(OBJDIR)/find.obj     : $(SRCDIR)/find.c
 $(OBJDIR)/dialogs.obj  : $(SRCDIR)/dialogs.c
 
+# the installer (needs the submodules: git submodule update --init)
+release : .SYMBOLIC
+    python3 tools/release/mkrelease.py
+
 clean : .SYMBOLIC
     -rm -f $(OBJDIR)/*.obj $(OBJDIR)/*.res $(OBJDIR)/*.exe $(OBJDIR)/*.dll &
            $(OBJDIR)/*.map $(OBJDIR)/*.lnk $(OBJDIR)/*.err

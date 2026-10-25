@@ -40,11 +40,22 @@ def prepare_drive(windir, work, exe, shell):
     dst_win = os.path.join(cdrive, "WINDOWS")
     if not os.path.isdir(dst_win):
         shutil.copytree(windir, dst_win)
-    os.makedirs(os.path.join(cdrive, "NEWSHELL"), exist_ok=True)
-    shutil.copy(exe, os.path.join(cdrive, "NEWSHELL", "NEWSHELL.EXE"))
-    dll = os.path.join(os.path.dirname(exe), "nshook.dll")
-    if os.path.exists(dll):
-        shutil.copy(dll, os.path.join(cdrive, "NEWSHELL", "NSHOOK.DLL"))
+        # some images have NUL padding after the last line of their INI
+        # files, which hides sections added later from Windows
+        for name in os.listdir(dst_win):
+            if name.upper().endswith(".INI"):
+                path = os.path.join(dst_win, name)
+                with open(path, "rb") as f:
+                    data = f.read()
+                if data.rstrip(b"\0") != data:
+                    with open(path, "wb") as f:
+                        f.write(data.rstrip(b"\0"))
+    if exe:
+        os.makedirs(os.path.join(cdrive, "NEWSHELL"), exist_ok=True)
+        shutil.copy(exe, os.path.join(cdrive, "NEWSHELL", "NEWSHELL.EXE"))
+        dll = os.path.join(os.path.dirname(exe), "nshook.dll")
+        if os.path.exists(dll):
+            shutil.copy(dll, os.path.join(cdrive, "NEWSHELL", "NSHOOK.DLL"))
 
     # SYSTEM.INI: choose the shell
     sysini = None
@@ -55,8 +66,9 @@ def prepare_drive(windir, work, exe, shell):
         sys.exit("SYSTEM.INI not found in " + dst_win)
     with open(sysini, "rb") as f:
         text = f.read().decode("latin-1")
-    shell_exe = "C:\\NEWSHELL\\NEWSHELL.EXE" if shell else "progman.exe"
-    text = re.sub(r"(?im)^shell\s*=.*$", lambda m: "shell=" + shell_exe, text, count=1)
+    if shell is not None:
+        shell_exe = "C:\\NEWSHELL\\NEWSHELL.EXE" if shell else "progman.exe"
+        text = re.sub(r"(?im)^shell\s*=.*$", lambda m: "shell=" + shell_exe, text, count=1)
     with open(sysini, "wb") as f:
         f.write(text.encode("latin-1"))
     return cdrive
@@ -195,6 +207,9 @@ def main():
     ap.add_argument("--exe", default=os.path.join(ROOT, "build", "newshell.exe"))
     ap.add_argument("--progman", action="store_true",
                     help="keep Program Manager as the shell")
+    ap.add_argument("--no-install", action="store_true",
+                    help="do not install NEWSHELL.EXE and leave shell= alone "
+                         "(for testing the installer)")
     ap.add_argument("--script", default="sleep:25 shot:screen.png")
     ap.add_argument("--set", action="append", default=[], metavar="FILE:SECTION:KEY=VALUE",
                     help="set an INI value in the Windows directory before booting")
@@ -205,7 +220,8 @@ def main():
 
     os.makedirs(args.work, exist_ok=True)
     os.makedirs(args.out, exist_ok=True)
-    cdrive = prepare_drive(args.windir, args.work, args.exe, not args.progman)
+    cdrive = prepare_drive(args.windir, args.work, None if args.no_install else args.exe,
+                           None if args.no_install else not args.progman)
     for spec in args.install:
         src, _, dest = spec.partition("=")
         target = os.path.join(cdrive, dest.replace("\\", "/").lstrip("/"))

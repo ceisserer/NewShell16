@@ -1,0 +1,6 @@
+[submodule "external/win16setup"]
+	path = external/win16setup
+	url = https://github.com/ceisserer/Win16Setup.git
+[submodule "external/retheme16"]
+	path = external/retheme16
+	url = https://github.com/ceisserer/win31_theme_engine.git

@@ -54,6 +54,15 @@ Details in [docs/building.md](docs/building.md).
 
 ## Installing
 
+Unzip a release (or `wmake release`, see
+[docs/building.md](docs/building.md)) and run `SETUP.EXE` from Windows. Setup
+can make NewShell the Windows shell and optionally installs the Retheme16
+Windows 95 look with a theme of your choice; both can be changed later by
+running Setup again from the NewShell group. `SETUP /?` lists the switches
+for silent installation.
+
+By hand:
+
 1. Copy `build/newshell.exe` and `build/nshook.dll` to a directory, e.g.
    `C:\NEWSHELL\`.
 2. In `SYSTEM.INI`, `[boot]` section, set
@@ -74,7 +83,9 @@ boot Windows 3.1 with NewShell16 and take screenshots.
 ```
 src/        C sources and headers
 res/        resource script, icons, bitmaps
-tools/      icon generator, emulator test harness
+tools/      icon generator, emulator test harness, release script
+dist/       installer description (SETUP.INF) and the user README
+external/   Win16Setup and Retheme16 (git submodules)
 docs/       documentation
 ```
 

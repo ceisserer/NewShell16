@@ -1,0 +1,61 @@
+; SETUP.INF of NewShell16 for Win16Setup (external/win16setup/README.md).
+; tools/release/mkrelease.py fills in the version and the theme list; the
+; packer adds [Files].
+
+[Setup]
+Product=NewShell
+Version=@VERSION@
+DefaultDir=C:\NEWSHELL
+Tagline=A Calmira-style shell for Windows 3.1 - version %VERSION%
+Welcome=NewShell %VERSION% gives Windows 3.1 a taskbar, a Start menu, an Explorer, a Bin and a Task Manager.\n\nSetup copies the files into the directory below.
+WelcomeInstalled=NewShell %VERSION% is installed in %DIR%.\n\nChange the options below and click Install, or click Remove to remove NewShell.
+
+[Options]
+1=Shell
+2=Theme
+
+; SYSTEM.INI shell= and taskman.exe= (Ctrl+Esc); the old values come back
+; when the option is turned off or NewShell is removed
+[Option.Shell]
+Label=Use NewShell as the Windows &shell
+Switch=SHELL
+Default=1
+Restart=1
+Ini1=%WINDIR%\SYSTEM.INI,boot,shell,%DIR%\NEWSHELL.EXE
+Ini2=%WINDIR%\SYSTEM.INI,boot,taskman.exe,%DIR%\NEWSHELL.EXE
+
+; the bundled Retheme16 engine, started through load=
+[Option.Theme]
+Label=Windows &95 look (Retheme16)
+Switch=THEME
+Default=1
+Ini1=%DIR%\RETHEME\RETHEME.INI,Engine,Theme,%DIR%\RETHEME\THEMES\%CHOICE%
+Load=RETHEME\RETHEME.EXE
+Run=RETHEME\RETHEME.EXE,minimized
+Window=Retheme16
+Wait=RETHEME,RTLOADER
+
+[Choice]
+Label=&Theme for the Windows 95 look:
+Switch=T
+Default=WIN95
+NameFrom=RETHEME\THEMES\%ITEM%\THEME.INI,Theme,Name
+Preview=RETHEME\THEMES\%ITEM%\PREVIEW.BMP
+@THEMES@
+
+[Group]
+Name=NewShell
+1=%DIR%\NEWSHELL.EXE,NewShell
+2=%DIR%\SETUP.EXE,NewShell Setup
+3=NOTEPAD.EXE %DIR%\README.TXT,Read Me,NOTEPAD.EXE
+4=%DIR%\RETHEME\GALLERY.EXE,Theme Gallery
+
+; NewShell started as an ordinary program must be closed by the user; as
+; the shell, Setup restarts Windows to replace it (shell handover)
+[Running]
+1=NEWSHELL,NewShell
+2=GALLERY,the Theme Gallery
+
+[Uninstall]
+1=RETHEME\RETHEME.INI
+2=RETHEME\RETHEME.LOG
