@@ -8,8 +8,8 @@
 #   push of a tag vX.Y.Z        publishes the release vX.Y.Z (0.x as
 #                               pre-release); the tag must match VERSION
 #
-# Win16Setup is built at its pinned submodule commit; Retheme16 always at
-# the head of its main branch (.gitmodules: branch = main).
+# Win16Setup and Retheme16 are built at the head of their main branches
+# (.gitmodules: branch = main), not at the submodule commits.
 name: Build
 
 on:
@@ -33,9 +33,9 @@ jobs:
         with:
           submodules: true
 
-      - name: Update Retheme16 to main
+      - name: Update Win16Setup and Retheme16 to main
         run: |
-          git submodule update --init --remote external/retheme16
+          git submodule update --init --remote external/win16setup external/retheme16
           git submodule status
 
       - name: Version
@@ -104,7 +104,7 @@ jobs:
             echo
             echo "Unzip (or use the floppy image) and run \`SETUP.EXE\` from Windows 3.1."
             echo
-            echo "- Win16Setup $(git -C external/win16setup rev-parse --short=7 HEAD)"
+            echo "- Win16Setup $(cat external/win16setup/VERSION) ($(git -C external/win16setup rev-parse --short=7 HEAD), main)"
             echo "- Retheme16 $(cat external/retheme16/VERSION) ($(git -C external/retheme16 rev-parse --short=7 HEAD), main)"
             echo "- Open Watcom snapshot of $OW_STAMP"
           } > build/release/RELEASE_NOTES.md

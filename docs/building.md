@@ -36,7 +36,7 @@ theme engine. Both are git submodules in `external/`:
 
 ```sh
 git submodule update --init
-git submodule update --remote external/retheme16   # Retheme16 follows main
+git submodule update --remote    # both follow their main branch
 wmake release        # or: python3 tools/release/mkrelease.py
 ```
 
@@ -70,8 +70,8 @@ Win16Setup's README, "Shell handover").
 ## Continuous integration
 
 `.github/workflows/build.yml` builds the release on GitHub Actions with the
-current Open Watcom snapshot, Win16Setup at its submodule commit and
-Retheme16 at the head of `main`:
+current Open Watcom snapshot and Win16Setup and Retheme16 at the head of
+their `main` branches:
 
 - every push and pull request: the ZIP, the floppy image and the Win16
   binaries are kept as workflow artifacts;
