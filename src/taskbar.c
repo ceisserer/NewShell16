@@ -74,8 +74,8 @@ static BOOL IsOwnHelperWindow(HWND hwnd)
 
 /*
  * Background programs that keep a minimised window only so that they can be
- * closed (the Retheme16 engine) get no task button; Task Manager still
- * lists them.
+ * closed (the Retheme16 engine) get no task button and are not left active;
+ * Task Manager still lists them.
  */
 static BOOL IsBackgroundWindow(HWND hwnd)
 {
@@ -209,6 +209,12 @@ static BOOL UpdateTasks(void)
         _fmemcpy(s_tasks, newTasks, nNew * sizeof(TASKBTN));
         s_nTasks = nNew;
     }
+
+    /* Windows activates the next window when a program closes, which can
+     * be the background window: Alt+F4 would then close it unseen */
+    hwndActive = GetActiveWindow();
+    if (hwndActive && IsBackgroundWindow(hwndActive))
+        SetActiveWindow(g_hwndMain);
 
     hwndActive = ActiveTaskWindow();
     if (hwndActive != s_hwndActive) {
