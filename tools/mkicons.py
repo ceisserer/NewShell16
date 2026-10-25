@@ -319,6 +319,169 @@ def explorer_small(n):
     return img
 
 
+# ---- toolbar glyphs (16x16, drawn smaller, on the button face) ----------
+
+def tb_folder(d, x, y):
+    """A 10x8 folder at x, y."""
+    box(d, x, y, x + 4, y + 2, fill=YELLOW)
+    box(d, x, y + 2, x + 10, y + 9, fill=YELLOW)
+    d.line([x + 1, y + 3, x + 9, y + 3], fill=WHITE)
+
+
+def tb_arrow_down(d, x, y, colour=BLACK):
+    """A 5-pixel wide arrow pointing down, top at x, y."""
+    d.line([x + 2, y, x + 2, y + 5], fill=colour)
+    d.line([x, y + 4, x + 4, y + 4], fill=colour)
+    d.line([x + 1, y + 5, x + 3, y + 5], fill=colour)
+    d.point([x + 2, y + 6], fill=colour)
+
+
+def tb_up(n):
+    img, d = canvas(16)
+    tb_folder(d, 1, 5)
+    # an arrow pointing up, right of the folder
+    d.line([13, 1, 13, 8], fill=BLACK)
+    d.line([12, 2, 14, 2], fill=BLACK)
+    d.line([11, 3, 15, 3], fill=BLACK)
+    return img
+
+
+def tb_newfolder(n):
+    img, d = canvas(16)
+    tb_folder(d, 1, 5)
+    for x, y in [(12, 0), (12, 1), (12, 3), (12, 4), (10, 2), (11, 2), (13, 2), (14, 2),
+                 (10, 0), (14, 0), (10, 4), (14, 4)]:
+        d.point([x, y], fill=YELLOW if (x, y) not in [(12, 2)] else BLACK)
+    d.point([12, 2], fill=WHITE)
+    return img
+
+
+def tb_cut(n):
+    img, d = canvas(16)
+    d.line([5, 1, 9, 9], fill=GRAY)
+    d.line([10, 1, 6, 9], fill=GRAY)
+    d.line([6, 1, 9, 8], fill=BLACK)
+    d.line([9, 1, 6, 8], fill=BLACK)
+    d.ellipse([2, 9, 6, 13], outline=NAVY)
+    d.ellipse([9, 9, 13, 13], outline=NAVY)
+    return img
+
+
+def tb_doc(d, x, y, w=7, h=9):
+    d.polygon([(x, y), (x + w - 2, y), (x + w, y + 2), (x + w, y + h), (x, y + h)],
+              fill=WHITE, outline=BLACK)
+    for yy in range(y + 3, y + h - 1, 2):
+        d.line([x + 2, yy, x + w - 2, yy], fill=GRAY)
+
+
+def tb_copy(n):
+    img, d = canvas(16)
+    tb_doc(d, 1, 1)
+    tb_doc(d, 7, 5)
+    return img
+
+
+def tb_paste(n):
+    img, d = canvas(16)
+    box(d, 1, 2, 11, 14, fill=OLIVE)
+    box(d, 4, 1, 8, 3, fill=SILVER)
+    tb_doc(d, 7, 5, 7, 9)
+    return img
+
+
+def tb_delete(n):
+    img, d = canvas(16)
+    for o in (0, 1):
+        d.line([3 + o, 3, 11 + o, 12], fill=RED)
+        d.line([11 + o, 3, 3 + o, 12], fill=RED)
+    return img
+
+
+def tb_props(n):
+    img, d = canvas(16)
+    box(d, 1, 1, 13, 13, fill=WHITE)
+    d.rectangle([2, 2, 12, 3], fill=NAVY)
+    for y in (6, 8, 10):
+        d.line([4, y, 10, y], fill=BLACK)
+    d.point([3, 6], fill=RED)
+    d.point([3, 8], fill=RED)
+    d.point([3, 10], fill=RED)
+    return img
+
+
+def tb_large(n):
+    img, d = canvas(16)
+    for x, y in [(1, 1), (8, 1), (1, 8), (8, 8)]:
+        box(d, x, y, x + 5, y + 5, fill=CYAN, outline=NAVY)
+    return img
+
+
+def tb_small(n):
+    img, d = canvas(16)
+    for y in (2, 7, 12):
+        for x in (1, 8):
+            box(d, x, y, x + 2, y + 2, fill=CYAN, outline=NAVY)
+            d.line([x + 4, y + 1, x + 5, y + 1], fill=BLACK)
+    return img
+
+
+def tb_list(n):
+    img, d = canvas(16)
+    for y in (1, 5, 9, 13):
+        box(d, 1, y, 3, y + 2, fill=CYAN, outline=NAVY)
+        d.line([5, y + 1, 13, y + 1], fill=BLACK)
+    return img
+
+
+def tb_details(n):
+    img, d = canvas(16)
+    box(d, 0, 1, 15, 14, fill=WHITE)
+    d.line([1, 2, 14, 2], fill=SILVER)
+    d.line([1, 3, 14, 3], fill=GRAY)
+    for y in (5, 8, 11):
+        d.point([2, y], fill=NAVY)
+        d.line([4, y, 8, y], fill=BLACK)
+        d.line([10, y, 13, y], fill=BLACK)
+    d.line([9, 2, 9, 13], fill=SILVER)
+    return img
+
+
+def tb_sort(fn):
+    def draw(n):
+        img, d = canvas(16)
+        fn(d)
+        tb_arrow_down(d, 10, 4, colour=RED)
+        return img
+    return draw
+
+
+def _sort_name(d):
+    # "a" over "z"
+    for x, y in [(2, 1), (3, 1), (4, 2), (2, 3), (3, 3), (4, 3), (1, 4), (4, 4), (2, 5), (3, 5), (4, 5)]:
+        d.point([x, y], fill=BLACK)
+    d.line([1, 9, 5, 9], fill=BLACK)
+    d.line([5, 10, 1, 13], fill=BLACK)
+    d.line([1, 13, 5, 13], fill=BLACK)
+
+
+def _sort_type(d):
+    box(d, 1, 1, 5, 5, fill=YELLOW, outline=OLIVE)
+    tb_doc(d, 1, 8, 5, 6)
+
+
+def _sort_size(d):
+    for i, y in enumerate((2, 6, 10)):
+        d.rectangle([1, y, 2 + 2 * i, y + 2], fill=NAVY)
+
+
+def _sort_date(d):
+    box(d, 1, 3, 8, 12, fill=WHITE)
+    d.rectangle([2, 4, 7, 5], fill=RED)
+    for y in (7, 9):
+        for x in (2, 4, 6):
+            d.point([x, y], fill=BLACK)
+
+
 def taskman_small(n):
     img, d = canvas(n)
     box(d, 0, 1, 15, 14, fill=SILVER)
@@ -493,6 +656,12 @@ SMALL = [
     ("folder", folder), ("help", help_), ("printer", printer), ("control", control),
     ("about", about), ("dos", dos), ("application", application), ("start", start_logo),
     ("explorer", explorer_small), ("bin", bin_small), ("taskman", taskman_small),
+    ("tb_up", tb_up), ("tb_newfolder", tb_newfolder), ("tb_cut", tb_cut), ("tb_copy", tb_copy),
+    ("tb_paste", tb_paste), ("tb_delete", tb_delete), ("tb_props", tb_props),
+    ("tb_large", tb_large), ("tb_small", tb_small), ("tb_list", tb_list),
+    ("tb_details", tb_details), ("tb_sortname", tb_sort(_sort_name)),
+    ("tb_sorttype", tb_sort(_sort_type)), ("tb_sortsize", tb_sort(_sort_size)),
+    ("tb_sortdate", tb_sort(_sort_date)),
 ]
 
 ICONS = [

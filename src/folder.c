@@ -41,24 +41,47 @@ static void SetTitle(HWND hwnd)
     SetWindowText(hwnd, *lpPath ? lpPath : "Computer");
 }
 
-/* Paints a one-field status bar at the bottom of a frame window */
-void PaintStatusBar(HWND hwnd, HDC hdc, int cyStatus, LPCSTR lpText)
+/*
+ * Paints the status bar at the bottom of a frame window. A tab in lpText
+ * splits it into two fields; the first is xPane wide (0: 40 % of the
+ * window).
+ */
+void PaintStatusBar(HWND hwnd, HDC hdc, int cyStatus, LPCSTR lpText, int xPane)
 {
-    RECT rc;
+    RECT rc, rcField;
     HFONT hfOld;
+    char szText[128];
+    LPSTR lpSecond;
 
+    lstrcpyn(szText, lpText, sizeof(szText));
+    lpSecond = _fstrchr(szText, '\t');
+    if (lpSecond)
+        *lpSecond++ = '\0';
     GetClientRect(hwnd, &rc);
     rc.top = rc.bottom - cyStatus;
     FillSolid(hdc, &rc, GetSysColor(COLOR_BTNFACE));
     InflateRect(&rc, -2, -2);
     rc.bottom++;
-    Draw3DEdge(hdc, &rc, TRUE, FALSE);
-    InflateRect(&rc, -4, 0);
+    if (xPane <= 0)
+        xPane = rc.right * 2 / 5 < 120 ? 120 : rc.right * 2 / 5;
     hfOld = SelectObject(hdc, g_hfontUI);
     SetBkMode(hdc, TRANSPARENT);
     SetTextColor(hdc, GetSysColor(COLOR_BTNTEXT));
-    DrawText(hdc, lpText, -1, &rc,
+    rcField = rc;
+    if (lpSecond && xPane < rc.right - 40)
+        rcField.right = xPane;
+    Draw3DEdge(hdc, &rcField, TRUE, FALSE);
+    InflateRect(&rcField, -4, 0);
+    DrawText(hdc, szText, -1, &rcField,
              DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+    if (lpSecond && xPane < rc.right - 40) {
+        rcField = rc;
+        rcField.left = xPane + 2;
+        Draw3DEdge(hdc, &rcField, TRUE, FALSE);
+        InflateRect(&rcField, -4, 0);
+        DrawText(hdc, lpSecond, -1, &rcField,
+                 DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+    }
     SelectObject(hdc, hfOld);
 }
 
@@ -151,7 +174,7 @@ LRESULT CALLBACK NSEXPORT FolderWndProc(HWND hwnd, UINT msg, WPARAM wParam,
             DrawPaneEdge(ps.hdc, 0, 0, rc.right, rc.bottom - StatusBarHeight());
         }
         FViewGetStatus(ViewOf(hwnd), szStatus, sizeof(szStatus));
-        PaintStatusBar(hwnd, ps.hdc, StatusBarHeight(), szStatus);
+        PaintStatusBar(hwnd, ps.hdc, StatusBarHeight(), szStatus, 0);
         EndPaint(hwnd, &ps);
         return 0;
 

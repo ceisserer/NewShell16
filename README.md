@@ -19,12 +19,15 @@ Usable as the Windows 3.1 shell. Implemented so far:
   from the Program Manager groups on first use, with icons at every level.
 - **Desktop** with Computer, Bin and configurable shortcut icons, and a
   right-click menu.
-- **Folder windows** and the **Computer** window: large icon, small icon
-  and details views, sorting, multiple selection, type-ahead, inline
+- **Folder windows** and the **Computer** window: large icon, small icon,
+  list and details views (a table with resizable columns, including the
+  descriptions of `DESCRIPT.ION`), sorting, multiple selection, type-ahead, inline
   rename, new folder, cut/copy/paste, delete (to the Bin), properties,
   drag and drop between windows, onto folders and onto the Bin, and drops
   from File Manager.
-- **File System**: folder tree beside a folder view.
+- **File System**: folder tree beside a folder view, with a toolbar (up,
+  new folder, cut/copy/paste, delete, properties, views, sort order) and a
+  two-part status bar.
 - **Bin**: deleted items can be restored or deleted for good.
 - **Task Manager** (Ctrl+Esc): switch to, hide, minimise, end or terminate
   tasks, start new ones, cascade and tile.

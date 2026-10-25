@@ -956,14 +956,16 @@ void FViewGetStatus(HWND hwnd, LPSTR lpBuf, int cbBuf)
             nSel++;
             dwSel += v->lpItems[i].dwSize;
         }
+    /* totals, a tab, the selection (two status bar fields) */
     if (v->szPath[0] == '\0') {
-        wsprintf(szText, "%d drive(s)", v->nItems);
-    } else if (nSel > 0) {
-        FormatBytes(dwSel, szSize);
-        wsprintf(szText, "%d object(s) selected  %s", nSel, (LPSTR)szSize);
+        wsprintf(szText, "%d drive(s)\tSelected %d item(s)", v->nItems, nSel);
     } else {
+        int n;
+
         FormatBytes(v->dwTotal, szSize);
-        wsprintf(szText, "%d object(s)  %s", v->nItems, (LPSTR)szSize);
+        n = wsprintf(szText, "%d object(s)  %s\t", v->nItems, (LPSTR)szSize);
+        FormatBytes(dwSel, szSize);
+        wsprintf(szText + n, "Selected %d item(s)  %s", nSel, (LPSTR)szSize);
     }
     lstrcpyn(lpBuf, szText, cbBuf);
 }

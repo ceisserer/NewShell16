@@ -60,7 +60,23 @@
 #define SMI_EXPLORER        15
 #define SMI_BIN             16
 #define SMI_TASKMAN         17
-#define SMI_COUNT           18
+/* toolbar glyphs */
+#define SMI_TB_UP           18
+#define SMI_TB_NEWFOLDER    19
+#define SMI_TB_CUT          20
+#define SMI_TB_COPY         21
+#define SMI_TB_PASTE        22
+#define SMI_TB_DELETE       23
+#define SMI_TB_PROPS        24
+#define SMI_TB_LARGE        25
+#define SMI_TB_SMALL        26
+#define SMI_TB_LIST         27
+#define SMI_TB_DETAILS      28
+#define SMI_TB_SORTNAME     29
+#define SMI_TB_SORTTYPE     30
+#define SMI_TB_SORTSIZE     31
+#define SMI_TB_SORTDATE     32
+#define SMI_COUNT           33
 
 /* Cursors */
 #define IDC_DRAGMOVE        150
@@ -182,6 +198,8 @@
 #define CMD_F_PROPERTIES    720
 #define CMD_F_INVERTSEL     721
 #define CMD_F_LIST          722
+#define CMD_F_TOOLBAR       723
+#define CMD_F_STATUSBAR     724
 
 /* Bin and Task Manager commands */
 #define CMD_BIN_RESTORE     750
