@@ -39,7 +39,7 @@ Silent installation (for scripts and network installs):
   /D=dir       installation directory
   /NOSHELL     keep Program Manager as the shell
   /NOTHEME     no Windows 95 look
-  /T=theme     theme directory name: WIN95, WIN98 or SLATE
+  /T=theme     theme directory name: WIN95, WIN98, WINME or SLATE
   /NOGROUP     no Program Manager group
   /NOSTART     do not start Retheme16 after installing
   /RESTART     restart Windows if needed
