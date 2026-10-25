@@ -7,7 +7,7 @@
 
 Builds NEWSHELL.EXE / NSHOOK.DLL (wmake), Win16Setup's SETUP.EXE
 (external/win16setup) and Retheme16 (external/retheme16: RETHEME.EXE,
-RETHEME.DLL, GALLERY.EXE and its host previewer for the theme previews),
+RETHEME.DLL, THEMES.EXE, GALLERY.EXE and its host previewer for the theme previews),
 stages the installation files and lets Win16Setup's packer write:
 
   newshell-X.Y.Z/             the installation files (with SETUP.EXE)
@@ -30,6 +30,14 @@ W16SETUP = os.path.join(ROOT, "external", "win16setup")
 RETHEME = os.path.join(ROOT, "external", "retheme16")
 PACK = os.path.join(W16SETUP, "tools", "w16pack.py")
 DEFAULT_THEME = "WIN95"
+
+
+def rt_programs():
+    """Retheme16's programs; THEMES.EXE (theme switcher) where it has one."""
+    progs = ["RETHEME.EXE", "RETHEME.DLL", "GALLERY.EXE"]
+    if os.path.isdir(os.path.join(RETHEME, "switcher")):
+        progs.append("THEMES.EXE")
+    return progs
 
 
 def run(cmd, cwd=None, env=None):
@@ -63,7 +71,7 @@ def build(build_dir):
 
     rt_dir = os.path.join(build_dir, "retheme16")
     run(["make", "-C", RETHEME, "-f", "win16.mk", "O=" + rt_dir] +
-        [os.path.join(rt_dir, f) for f in ("RETHEME.DLL", "RETHEME.EXE", "GALLERY.EXE")], env=env)
+        [os.path.join(rt_dir, f) for f in rt_programs()], env=env)
     host_dir = os.path.join(build_dir, "retheme16-host")
     run(["make", "-C", RETHEME, "B=" + host_dir, os.path.join(host_dir, "preview")])
     return setup_dir, rt_dir, host_dir
@@ -90,7 +98,7 @@ def stage(version, files, rt_dir, host_dir, preview_dir):
     os.makedirs(os.path.join(files, "RETHEME", "THEMES"))
     for f in ("NEWSHELL.EXE", "NSHOOK.DLL"):
         shutil.copy(os.path.join(ROOT, "build", f.lower()), os.path.join(files, f))
-    for f in ("RETHEME.EXE", "RETHEME.DLL", "GALLERY.EXE"):
+    for f in rt_programs():
         shutil.copy(os.path.join(rt_dir, f), os.path.join(files, "RETHEME", f))
 
     with open(os.path.join(ROOT, "dist", "README.TXT")) as f:
@@ -127,7 +135,10 @@ def setup_inf(version, theme_list, dest):
     with open(os.path.join(ROOT, "dist", "SETUP.INF"), encoding="latin-1") as f:
         text = f.read()
     items = "\n".join("%d=%s" % (i + 1, t) for i, t in enumerate(theme_list))
+    switcher = "THEMES.EXE" in rt_programs()
     text = text.replace("@THEMES@", items).replace("@VERSION@", version)
+    text = text.replace("@SWITCHER_ITEM@\n", "5=%DIR%\\RETHEME\\THEMES.EXE,Themes\n" if switcher else "")
+    text = text.replace("@SWITCHER_RUNNING@\n", "3=THEMES,Themes\n" if switcher else "")
     with open(dest, "w", encoding="latin-1") as f:
         f.write(text)
 
