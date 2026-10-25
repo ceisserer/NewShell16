@@ -326,6 +326,21 @@ static HICON ShortcutIcon(LPCSTR lpCmd)
     return IconForFile(szFile, FALSE);
 }
 
+/*
+ * The desktop colour of Windows 95 (teal) as the default: used while
+ * WIN.INI has no [colors] Background= of its own, i.e. none was chosen in
+ * Control Panel. Only for the session; nothing is written.
+ */
+void DesktopDefaultColor(void)
+{
+    char szValue[16];
+    int nIndex = COLOR_BACKGROUND;
+    COLORREF clr = RGB(0, 128, 128);
+
+    if (GetProfileString("colors", "Background", "", szValue, sizeof(szValue)) == 0)
+        SetSysColors(1, &nIndex, &clr);
+}
+
 BOOL DesktopCreate(void)
 {
     char szKey[16], szValue[200];
@@ -416,7 +431,7 @@ void DesktopMenu(int x, int y)
     AppendMenu(hMenu, MF_SEPARATOR, 0, NULL);
     AppendMenu(hMenu, MF_STRING, CMD_TASKMAN, "&Task Manager...");
     AppendMenu(hMenu, MF_STRING, CMD_DESKTOPPROPS, "&Desktop Settings...");
-    AppendMenu(hMenu, MF_STRING, CMD_OPTIONS, "NewShell &Options...");
+    AppendMenu(hMenu, MF_STRING, CMD_OPTIONS, "NewShell16 &Options...");
     TrackPopupMenu(hMenu, 0, x, y, 0, g_hwndMain, NULL);
     DestroyMenu(hMenu);
 }

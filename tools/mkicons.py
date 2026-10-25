@@ -137,7 +137,7 @@ def bin_(n):
 
 
 def appicon(n):
-    """NewShell's own icon: a desktop with a taskbar and start button."""
+    """NewShell16's own icon: a desktop with a taskbar and start button."""
     img, d = canvas(n)
     s = n / 32
     box(d, round(1 * s), round(3 * s), round(30 * s), round(28 * s), fill=TEAL)

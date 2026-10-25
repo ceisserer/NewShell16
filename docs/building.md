@@ -57,13 +57,13 @@ file dates are taken from the last git commit (`SOURCE_DATE_EPOCH`).
 `dist/SETUP.INF` describes the installation. Two options appear as check
 boxes in Setup:
 
-- *Use NewShell as the Windows shell* sets `shell=` and `taskman.exe=` in
-  `SYSTEM.INI`; turning it off or removing NewShell restores the old values.
+- *Use NewShell16 as the Windows shell* sets `shell=` and `taskman.exe=` in
+  `SYSTEM.INI`; turning it off or removing NewShell16 restores the old values.
 - *Windows 95 look (Retheme16)* installs Retheme16 to `RETHEME\`, adds it to
   `load=` and selects the theme chosen in Setup (with previews).
 
-Setup can be run again from the NewShell group to change these options or
-the theme, or to remove NewShell. While NewShell is the running shell, an
+Setup can be run again from the NewShell16 group to change these options or
+the theme, or to remove NewShell16. While NewShell16 is the running shell, an
 update or removal restarts Windows with Program Manager to finish (see
 Win16Setup's README, "Shell handover").
 

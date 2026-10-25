@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 /*
- * explorer.c - the Explorer: a folder tree beside a folder view
+ * explorer.c - the File System window: a folder tree beside a folder view
  *
  * The tree is an owner-drawn list box whose items mirror a flat array of
  * nodes in display order (drives at level 0, folders below). Expanding a
@@ -376,7 +376,7 @@ static void SetTitle(HWND hwnd, LPEXPLORER e)
     char szTitle[MAXPATHLEN + 16];
     LPCSTR lpPath = FViewGetPath(e->hwndView);
 
-    wsprintf(szTitle, "Explorer - %s", *lpPath ? lpPath : (LPCSTR)"Computer");
+    wsprintf(szTitle, "File System - %s", *lpPath ? lpPath : (LPCSTR)"Computer");
     SetWindowText(hwnd, szTitle);
 }
 
@@ -704,7 +704,7 @@ HWND ExplorerOpen(LPCSTR lpPath)
         szPath[3] = '\0';
     }
     PathNormalize(szPath);
-    hwnd = CreateWindow(CLS_EXPLORER, "Explorer", WS_OVERLAPPEDWINDOW,
+    hwnd = CreateWindow(CLS_EXPLORER, "File System", WS_OVERLAPPEDWINDOW,
                         CW_USEDEFAULT, 0, 560, 340, NULL, NULL, g_hInst,
                         (LPVOID)"");
     if (!hwnd)
@@ -718,7 +718,7 @@ HWND ExplorerOpen(LPCSTR lpPath)
     return hwnd;
 }
 
-/* Re-reads the sub-folders of lpDir in every Explorer tree */
+/* Re-reads the sub-folders of lpDir in every File System tree */
 void ExplorerRefreshPath(LPCSTR lpDir)
 {
     char szDir[MAXPATHLEN], szNode[MAXPATHLEN], szSel[MAXPATHLEN];
@@ -764,7 +764,7 @@ void ExplorerRefreshPath(LPCSTR lpDir)
     }
 }
 
-/* Drop target in an Explorer tree */
+/* Drop target in a File System tree */
 int ExplorerDropTarget(HWND hwnd, POINT pt, LPSTR lpDir)
 {
     HWND hwndParent = GetParent(hwnd);

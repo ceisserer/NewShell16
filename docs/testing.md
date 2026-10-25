@@ -17,7 +17,7 @@ tools/emu/winemu.py --windir ~/win31/Win/WINDOWS --work /tmp/nsemu --out shots \
     --script "sleep:22 shot:desktop.png key:ctrl+Escape sleep:2 shot:start.png"
 ```
 
-- `--progman` keeps Program Manager as the shell (NewShell can then be
+- `--progman` keeps Program Manager as the shell (NewShell16 can then be
   started from it, or via `--set 'WIN.INI:windows:run=C:\NEWSHELL\NEWSHELL.EXE'`).
 - `--set FILE:SECTION:KEY=VALUE` edits an INI file in the Windows
   directory before booting; an empty value removes the key. Changes persist
@@ -26,7 +26,7 @@ tools/emu/winemu.py --windir ~/win31/Win/WINDOWS --work /tmp/nsemu --out shots \
   comma separated), `type:TEXT` (`_` for spaces), `move:DX,DY`,
   `goto:X,Y`, `click:N`, `dclick:N`, `down:N`, `up:N`.
 
-Setting `taskman.exe=` to NewShell makes Ctrl+Esc open NewShell's Task
+Setting `taskman.exe=` to NewShell16 makes Ctrl+Esc open NewShell16's Task
 Manager (or, with `--set 'NEWSHELL.INI:Taskbar:CtrlEscStart=1'`, the Start
 menu), which allows driving most of the shell from the keyboard.
 
@@ -63,7 +63,7 @@ screenshots side by side.
 
 ## Testing the installer
 
-`--no-install` leaves out NewShell (no copy, `shell=` unchanged), so the
+`--no-install` leaves out NewShell16 (no copy, `shell=` unchanged), so the
 release can be installed with its own Setup from Program Manager:
 
 ```sh
@@ -74,5 +74,5 @@ tools/emu/winemu.py --windir ~/win31/Win/WINDOWS --work /tmp/nsemu-setup --out s
 ```
 
 Keep the `--work` directory between runs to test updates, option changes
-and removal on an installed system; with NewShell as the shell these go
+and removal on an installed system; with NewShell16 as the shell these go
 through Win16Setup's shell handover (a restart with Program Manager).

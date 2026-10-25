@@ -25,7 +25,7 @@
  * the running copy:
  *   NEWSHELL                 Task Manager (or Start menu, see CtrlEscStart),
  *                            so it can be used as "taskman.exe=" for Ctrl+Esc
- *   NEWSHELL /E [path]       Explorer
+ *   NEWSHELL /E [path]       File System window
  *   NEWSHELL /S              Start menu
  *   NEWSHELL path            open a folder, document or program
  */
@@ -392,6 +392,8 @@ int PASCAL WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
         DestroyWindow(g_hwndMain);
         return 1;
     }
+    if (g_bIsShell)
+        DesktopDefaultColor();
     DesktopCreate();
     LoadHookDll();
     HookApplySettings();

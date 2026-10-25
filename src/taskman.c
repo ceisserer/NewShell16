@@ -321,7 +321,7 @@ static void Terminate(void)
                    MB_YESNO | MB_ICONSTOP | MB_DEFBUTTON2) != IDYES)
         return;
     if (hTask == GetCurrentTask()) {
-        MessageBox(s_hwndTM, "NewShell cannot terminate itself.", "Terminate Task",
+        MessageBox(s_hwndTM, "NewShell16 cannot terminate itself.", "Terminate Task",
                    MB_OK | MB_ICONEXCLAMATION);
         return;
     }

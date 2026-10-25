@@ -22,7 +22,7 @@
  * the computer when the path is ""), in large icon, small icon or details
  * view. It handles selection, keyboard navigation, renaming, the item
  * context menu, clipboard commands and drag and drop. Folder windows and
- * the Explorer embed it; they get notified via WM_NS_FVNOTIFY.
+ * the File System window embed it; they get notified via WM_NS_FVNOTIFY.
  */
 #include <stdlib.h>
 #include <string.h>
@@ -912,7 +912,7 @@ static void BeginRename(HWND hwnd, LPFVIEW v)
 
 /*
  * Works out what is under a screen point during a drag: a folder (path in
- * lpDir), the Bin, or nothing. Folder views, the Explorer tree and desktop
+ * lpDir), the Bin, or nothing. Folder views, the File System tree and desktop
  * icons can be targets.
  */
 int DropTargetAt(POINT pt, LPSTR lpDir)

@@ -93,7 +93,7 @@ BEGIN
     END
     POPUP "&Help"
     BEGIN
-        MENUITEM "&About NewShell...",          CMD_ABOUT
+        MENUITEM "&About NewShell16...",          CMD_ABOUT
     END
 END
 
@@ -145,7 +145,7 @@ CAPTION "Run"
 FONT 8, "MS Sans Serif"
 BEGIN
     ICON            IDI_NEWSHELL, -1, 8, 8, 18, 20
-    LTEXT           "Type the name of a program, folder or document, and NewShell will open it for you.",
+    LTEXT           "Type the name of a program, folder or document, and NewShell16 will open it for you.",
                     -1, 36, 8, 176, 18
     LTEXT           "&Open:", -1, 8, 36, 24, 8
     EDITTEXT        IDC_RUNCMD, 36, 34, 176, 12, ES_AUTOHSCROLL
@@ -169,7 +169,7 @@ BEGIN
                     BS_AUTORADIOBUTTON, 36, 32, 150, 10
     CONTROL         "Restart the &computer", IDC_REBOOT, "Button",
                     BS_AUTORADIOBUTTON, 36, 44, 150, 10
-    CONTROL         "Close &NewShell only", IDC_CLOSESHELL, "Button",
+    CONTROL         "Close &NewShell16 only", IDC_CLOSESHELL, "Button",
                     BS_AUTORADIOBUTTON, 36, 56, 150, 10
     DEFPUSHBUTTON   "OK", IDOK, 82, 72, 50, 14, WS_GROUP
     PUSHBUTTON      "Cancel", IDCANCEL, 138, 72, 50, 14
@@ -177,7 +177,7 @@ END
 
 IDD_ABOUT DIALOG 40, 40, 180, 106
 STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
-CAPTION "About NewShell"
+CAPTION "About NewShell16"
 FONT 8, "MS Sans Serif"
 BEGIN
     ICON            IDI_NEWSHELL, -1, 8, 8, 18, 20
@@ -264,7 +264,7 @@ END
 
 IDD_OPTIONS DIALOG 30, 20, 240, 196
 STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
-CAPTION "NewShell Options"
+CAPTION "NewShell16 Options"
 FONT 8, "MS Sans Serif"
 BEGIN
     GROUPBOX        "Taskbar", -1, 6, 4, 228, 64
@@ -282,7 +282,7 @@ BEGIN
     CONTROL         "Delete to the &Bin", IDC_OPT_TOBIN, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 12, 128, 110, 10
     CONTROL         "Con&firm deleting", IDC_OPT_CONFIRMDEL, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 130, 128, 100, 10
     CONTROL         "&Refresh folders on file changes", IDC_OPT_FILEMON, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 12, 140, 210, 10
-    CONTROL         "Run &StartUp programs (when NewShell is the shell)", IDC_OPT_STARTUP, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 6, 160, 228, 10
+    CONTROL         "Run &StartUp programs (when NewShell16 is the shell)", IDC_OPT_STARTUP, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 6, 160, 228, 10
     DEFPUSHBUTTON   "OK", IDOK, 128, 176, 50, 14
     PUSHBUTTON      "Cancel", IDCANCEL, 184, 176, 50, 14
 END

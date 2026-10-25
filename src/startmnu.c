@@ -135,7 +135,7 @@ static void CreateDefaultMenu(void)
         }
         free(lpItems);
     }
-    WriteItem("Start\\&Programs", "Explorer", "$Explore", "", 0, "<explorer>", 0);
+    WriteItem("Start\\&Programs", "File System", "$Explore", "", 0, "<explorer>", 0);
     WriteItem("Start\\&Programs", "Task Manager", "$TaskManager", "", 0, "<taskman>", 0);
 
     WriteItem("Start\\&Settings", "&Control Panel", "CONTROL.EXE", "", 0, "<control>", 0);
