@@ -392,7 +392,7 @@ static void DrawLabel(HWND hwnd, HDC hdc, LPFVIEW v, int i, RECT FAR *lprc,
         SetTextColor(hdc, GetSysColor(COLOR_WINDOWTEXT));
     DrawText(hdc, lpText, -1, lprc, uFormat | DT_SINGLELINE | DT_NOPREFIX | DT_VCENTER);
     if (i == v->nFocus && GetFocus() == hwnd)
-        DrawFocusRect(hdc, lprc);
+        DrawItemFocus(hdc, lprc, p->bSel);
 }
 
 static void PaintItem(HWND hwnd, HDC hdc, LPFVIEW v, int i)

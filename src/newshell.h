@@ -99,6 +99,7 @@ void CfgSetStr(LPCSTR lpSection, LPCSTR lpKey, LPCSTR lpValue);
 
 /* ---- util.c ---------------------------------------------------------- */
 void FillSolid(HDC hdc, const RECT FAR *lprc, COLORREF clr);
+void DrawItemFocus(HDC hdc, const RECT FAR *lprc, BOOL bSel);
 void Draw3DEdge(HDC hdc, const RECT FAR *lprc, BOOL bSunken, BOOL bThick);
 #define CLIENT_EDGE     2
 void MovePane(HWND hwndPane, int x, int y, int cx, int cy);

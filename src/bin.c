@@ -331,6 +331,9 @@ static void DrawEntry(DRAWITEMSTRUCT FAR *lpdis)
         rcSel.left += 2;
         DrawText(hdc, PathFileName(szName), -1, &rcSel,
                  DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+        rcSel.left -= 2;
+        if (lpdis->itemState & ODS_FOCUS)
+            DrawItemFocus(hdc, &rcSel, bSel);
     }
     SetTextColor(hdc, GetSysColor(COLOR_WINDOWTEXT));
     PathParent(szName);
@@ -340,8 +343,6 @@ static void DrawEntry(DRAWITEMSTRUCT FAR *lpdis)
     FormatBytes(b->dwSize, szSize);
     SetRect(&rcText, rc.left + COL_NAME_CX + COL_FROM_CX, rc.top, rc.right - 4, rc.bottom);
     DrawText(hdc, szSize, -1, &rcText, DT_RIGHT | DT_VCENTER | DT_SINGLELINE);
-    if (lpdis->itemState & ODS_FOCUS)
-        DrawFocusRect(hdc, &rc);
     SelectObject(hdc, hfOld);
 }
 
