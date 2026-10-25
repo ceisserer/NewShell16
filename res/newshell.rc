@@ -1,0 +1,114 @@
+/*
+ * newshell.rc - NewShell16 resources
+ */
+#include <windows.h>
+#include <ver.h>
+#include "resource.h"
+
+IDI_NEWSHELL    ICON    "newshell.ico"
+IDI_FOLDER      ICON    "folder.ico"
+IDI_DOCUMENT    ICON    "document.ico"
+IDI_APP         ICON    "app.ico"
+IDI_COMPUTER    ICON    "computer.ico"
+IDI_FLOPPY      ICON    "floppy.ico"
+IDI_HDD         ICON    "hdd.ico"
+IDI_CDROM       ICON    "cdrom.ico"
+IDI_NETDRV      ICON    "netdrv.ico"
+IDI_BIN         ICON    "bin.ico"
+
+IDB_SMALL       BITMAP  "small.bmp"
+
+IDM_FOLDER MENU
+BEGIN
+    POPUP "&File"
+    BEGIN
+        MENUITEM "&Open\tEnter",            CMD_F_OPEN
+        MENUITEM "&Up One Level\tBackspace", CMD_F_UP
+        MENUITEM "&Computer",               CMD_F_COMPUTER
+        MENUITEM SEPARATOR
+        MENUITEM "&Close",                  CMD_F_CLOSE
+    END
+    POPUP "&View"
+    BEGIN
+        MENUITEM "&Refresh\tF5",            CMD_F_REFRESH
+    END
+    POPUP "&Help"
+    BEGIN
+        MENUITEM "&About NewShell...",      CMD_ABOUT
+    END
+END
+
+IDD_RUN DIALOG 20, 30, 220, 86
+STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Run"
+FONT 8, "MS Sans Serif"
+BEGIN
+    ICON            IDI_NEWSHELL, -1, 8, 8, 18, 20
+    LTEXT           "Type the name of a program, folder or document, and NewShell will open it for you.",
+                    -1, 36, 8, 176, 18
+    LTEXT           "&Open:", -1, 8, 36, 24, 8
+    EDITTEXT        IDC_RUNCMD, 36, 34, 176, 12, ES_AUTOHSCROLL
+    CONTROL         "Run &minimized", IDC_RUNMIN, "Button",
+                    BS_AUTOCHECKBOX | WS_TABSTOP, 36, 50, 80, 10
+    DEFPUSHBUTTON   "OK", IDOK, 52, 66, 50, 14
+    PUSHBUTTON      "Cancel", IDCANCEL, 107, 66, 50, 14
+    PUSHBUTTON      "&Browse...", IDC_BROWSE, 162, 66, 50, 14
+END
+
+IDD_SHUTDOWN DIALOG 40, 40, 196, 92
+STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Shut Down Windows"
+FONT 8, "MS Sans Serif"
+BEGIN
+    ICON            IDI_COMPUTER, -1, 8, 8, 18, 20
+    LTEXT           "What do you want to do?", -1, 36, 8, 150, 8
+    CONTROL         "&Exit Windows", IDC_EXITWIN, "Button",
+                    BS_AUTORADIOBUTTON | WS_GROUP | WS_TABSTOP, 36, 20, 150, 10
+    CONTROL         "&Restart Windows", IDC_RESTARTWIN, "Button",
+                    BS_AUTORADIOBUTTON, 36, 32, 150, 10
+    CONTROL         "Restart the &computer", IDC_REBOOT, "Button",
+                    BS_AUTORADIOBUTTON, 36, 44, 150, 10
+    CONTROL         "Close &NewShell only", IDC_CLOSESHELL, "Button",
+                    BS_AUTORADIOBUTTON, 36, 56, 150, 10
+    DEFPUSHBUTTON   "OK", IDOK, 82, 72, 50, 14, WS_GROUP
+    PUSHBUTTON      "Cancel", IDCANCEL, 138, 72, 50, 14
+END
+
+IDD_ABOUT DIALOG 40, 40, 180, 90
+STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "About NewShell"
+FONT 8, "MS Sans Serif"
+BEGIN
+    ICON            IDI_NEWSHELL, -1, 8, 8, 18, 20
+    LTEXT           "NewShell16", -1, 36, 8, 136, 8
+    LTEXT           "A Calmira-style shell for Windows 3.1", -1, 36, 18, 136, 8
+    LTEXT           "", IDC_VERSION, 36, 32, 136, 34
+    DEFPUSHBUTTON   "OK", IDOK, 65, 70, 50, 14
+END
+
+VS_VERSION_INFO VERSIONINFO
+FILEVERSION     0, 1, 0, 0
+PRODUCTVERSION  0, 1, 0, 0
+FILEFLAGSMASK   0x3F
+FILEFLAGS       0
+FILEOS          VOS_DOS_WINDOWS16
+FILETYPE        VFT_APP
+FILESUBTYPE     0
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904E4"
+        BEGIN
+            VALUE "FileDescription", "NewShell16 Windows shell\0"
+            VALUE "FileVersion",     "0.1\0"
+            VALUE "InternalName",    "NEWSHELL\0"
+            VALUE "OriginalFilename","NEWSHELL.EXE\0"
+            VALUE "ProductName",     "NewShell16\0"
+            VALUE "ProductVersion",  "0.1\0"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x0409, 1252
+    END
+END

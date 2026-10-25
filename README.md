@@ -1,47 +1,63 @@
 # NewShell16
 
-A re-implementation of the [Calmira](https://en.wikipedia.org/wiki/Calmira) shell
-for Windows 3.1x, written in plain C against the Win16 API.
+A re-implementation of the [Calmira](https://en.wikipedia.org/wiki/Calmira)
+shell for Windows 3.1x, written in plain C against the Win16 API.
 
 The original Calmira (by Li-Hsin Huang) was written in Delphi 1 and brought a
-Windows 95-style desktop to Windows 3.1: a taskbar with Start menu, desktop
-icons, folder windows, shortcuts, a recycle bin and more. NewShell16 aims to
-recreate that experience as a small, native 16-bit C program.
+Windows 95-style desktop to Windows 3.1. NewShell16 recreates that
+experience as a small, native 16-bit C program.
 
 ## Status
 
-Early bootstrap — only the project skeleton exists so far.
+Early but usable: it runs as the Windows 3.1 shell.
 
-## Goals
+- Taskbar with Start button, a button per running application (with its
+  icon, click to activate/minimise, right-click for its system menu) and a
+  clock
+- Start menu with Program Manager groups under *Programs*, custom entries,
+  Computer, Settings, Run and Shut Down
+- Desktop icons (Computer plus configurable shortcuts), draggable
+- Folder windows with large icons (icons taken from the programs and file
+  associations) and a Computer window listing the drives
+- Run, Shut Down and About dialogs
+- Runs `load=`/`run=` and the StartUp group when it is the shell
 
-- Plain C (C89), no C++ and no runtime frameworks
-- Win16 API only; runs on Windows 3.1 / 3.11 (Standard and 386 Enhanced mode)
-- Drop-in `SHELL=` replacement for Program Manager via `SYSTEM.INI`
-
-## Planned features (modelled on Calmira)
-
-- Taskbar with Start button, task buttons and tray clock
-- Configurable Start menu
-- Desktop with icons and shortcuts
-- Folder (Explorer-style) windows with drag & drop
-- Bin (recycle bin)
-- System / Computer window with drives
-- Run, Find and Shutdown dialogs
-- Settings stored in an INI file
+See [docs/design.md](docs/design.md) for internals, configuration and the
+roadmap.
 
 ## Building
 
-The intended toolchain is [Open Watcom C 1.9 / 2.0](https://github.com/open-watcom/open-watcom-v2),
-which can cross-compile 16-bit Windows binaries from Linux, DOS or Windows:
+Install [Open Watcom 2.0](https://github.com/open-watcom/open-watcom-v2),
+then:
 
 ```sh
+export WATCOM=/opt/watcom PATH=/opt/watcom/binl64:$PATH
 wmake
 ```
+
+Details in [docs/building.md](docs/building.md).
+
+## Installing
+
+1. Copy `build/newshell.exe` to e.g. `C:\NEWSHELL\NEWSHELL.EXE`.
+2. In `SYSTEM.INI`, `[boot]` section, set
+   `shell=C:\NEWSHELL\NEWSHELL.EXE`.
+3. Optionally also set `taskman.exe=C:\NEWSHELL\NEWSHELL.EXE` so Ctrl+Esc
+   opens the Start menu.
+
+NewShell16 can also be started from Program Manager to try it out; then
+*Shut Down → Close NewShell only* closes it again.
+
+## Testing
+
+[docs/testing.md](docs/testing.md) describes the DOSBox-X harness used to
+boot Windows 3.1 with NewShell16 and take screenshots.
 
 ## Layout
 
 ```
-src/    C sources and headers
-res/    resource scripts (.rc), icons, bitmaps
-docs/   design notes
+src/        C sources and headers
+res/        resource script, icons, bitmaps
+tools/      icon generator, emulator test harness
+docs/       documentation
 ```
