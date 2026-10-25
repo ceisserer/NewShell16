@@ -4,8 +4,6 @@
 
 [Setup]
 Product=NewShell16
-; the WIN.INI section of installations made as "NewShell"
-Key=NewShell
 Version=@VERSION@
 DefaultDir=C:\NEWSHELL
 Tagline=A Calmira-style shell for Windows 3.1 - version %VERSION%
@@ -47,7 +45,6 @@ Preview=RETHEME\THEMES\%ITEM%\PREVIEW.BMP
 
 [Group]
 Name=NewShell16
-Old=NewShell
 1=%DIR%\NEWSHELL.EXE,NewShell16
 2=%DIR%\SETUP.EXE,NewShell16 Setup
 3=NOTEPAD.EXE %DIR%\README.TXT,Read Me,NOTEPAD.EXE
