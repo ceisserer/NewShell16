@@ -154,8 +154,15 @@ ShowHidden=0
 DeleteToBin=1
 ConfirmDelete=1
 FileMonitor=1      ; refresh folders when files change
-View=0             ; 0 large icons, 1 small icons, 2 details
+View=0             ; 0 large icons, 1 small icons, 2 details, 3 list
+Columns=140,70,80,72,64,64,180  ; details: Name, Size, Type, Date, Time,
+                   ; Attributes, Description (dragged in the header)
 Sort=0             ; 0 name, 1 type, 2 size, 3 date
+
+[Explorer]
+Split=170          ; width of the File System window's folder tree
+Toolbar=1          ; View > Toolbar
+StatusBar=1        ; View > Status Bar
 
 [Startup]
 Run=1              ; run load=/run= and the StartUp group when the shell

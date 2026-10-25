@@ -46,6 +46,7 @@
 #define CLS_TASKMAN     "NSTaskMan"
 #define CLS_BIN         "NSBin"
 #define CLS_PROGRESS    "NSProgress"
+#define CLS_TOOLBAR     "NSToolbar"
 
 /* Private messages */
 #define WM_NS_OPENPATH  (WM_USER + 100)     /* wParam = global atom with path */
@@ -100,6 +101,7 @@ void CfgSetStr(LPCSTR lpSection, LPCSTR lpKey, LPCSTR lpValue);
 /* ---- util.c ---------------------------------------------------------- */
 void FillSolid(HDC hdc, const RECT FAR *lprc, COLORREF clr);
 void DrawItemFocus(HDC hdc, const RECT FAR *lprc, BOOL bSel);
+void DrawSmallImageDisabled(HDC hdc, int x, int y, int nIndex);
 void Draw3DEdge(HDC hdc, const RECT FAR *lprc, BOOL bSunken, BOOL bThick);
 #define CLIENT_EDGE     2
 void MovePane(HWND hwndPane, int x, int y, int cx, int cy);
@@ -182,6 +184,7 @@ LRESULT CALLBACK NSEXPORT DeskIconWndProc(HWND, UINT, WPARAM, LPARAM);
 #define FV_LARGE        0
 #define FV_SMALL        1
 #define FV_DETAILS      2
+#define FV_LIST         3
 
 #define FS_NAME         0
 #define FS_TYPE         1
@@ -225,9 +228,22 @@ int    DriveIcon(int nDrive, BYTE FAR *lpbType);
 BOOL FolderRegister(void);
 HWND FolderOpen(LPCSTR lpPath);     /* "" opens the Computer window */
 void FolderCloseAll(void);
-void PaintStatusBar(HWND hwnd, HDC hdc, int cyStatus, LPCSTR lpText);
+void PaintStatusBar(HWND hwnd, HDC hdc, int cyStatus, LPCSTR lpText, int xPane);
 int  StatusBarHeight(void);
 LRESULT CALLBACK NSEXPORT FolderWndProc(HWND, UINT, WPARAM, LPARAM);
+
+/* ---- toolbar.c ------------------------------------------------------- */
+#define TB_MAXBUTTONS   24
+
+typedef struct tagTBBTN {
+    UINT uCmd;              /* WM_COMMAND id; 0 = a gap */
+    int  nImage;            /* SMI_* */
+} TBBTN;
+
+BOOL ToolbarRegister(void);
+int  ToolbarHeight(void);
+HWND ToolbarCreate(HWND hwndParent, const TBBTN FAR *lpButtons, int nButtons);
+void ToolbarSetState(HWND hwnd, UINT uCmd, BOOL bChecked, BOOL bEnabled);
 
 /* ---- explorer.c ------------------------------------------------------ */
 BOOL ExplorerRegister(void);

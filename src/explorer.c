@@ -57,7 +57,22 @@ typedef struct tagEXPLORER {
     BOOL    bSplitting;
     BOOL    bNoSync;                /* suppress tree -> view updates */
     HWND    hwndLastFocus;          /* pane to refocus on activation */
+    HWND    hwndToolbar;
+    BOOL    bToolbar, bStatusBar;   /* View > Toolbar, Status Bar */
 } EXPLORER, FAR *LPEXPLORER;
+
+/* the toolbar: Calmira's Explorer buttons; 0 is a gap */
+static const TBBTN s_aButtons[] = {
+    { CMD_F_UP, SMI_TB_UP }, { CMD_F_NEWFOLDER, SMI_TB_NEWFOLDER }, { 0, 0 },
+    { CMD_F_CUT, SMI_TB_CUT }, { CMD_F_COPY, SMI_TB_COPY }, { CMD_F_PASTE, SMI_TB_PASTE },
+    { 0, 0 },
+    { CMD_F_DELETE, SMI_TB_DELETE }, { CMD_F_PROPERTIES, SMI_TB_PROPS }, { 0, 0 },
+    { CMD_F_LARGEICONS, SMI_TB_LARGE }, { CMD_F_SMALLICONS, SMI_TB_SMALL },
+    { CMD_F_LIST, SMI_TB_LIST }, { CMD_F_DETAILS, SMI_TB_DETAILS }, { 0, 0 },
+    { CMD_F_SORTNAME, SMI_TB_SORTNAME }, { CMD_F_SORTTYPE, SMI_TB_SORTTYPE },
+    { CMD_F_SORTSIZE, SMI_TB_SORTSIZE }, { CMD_F_SORTDATE, SMI_TB_SORTDATE }
+};
+#define NBUTTONS (sizeof(s_aButtons) / sizeof(s_aButtons[0]))
 
 static HWND s_hwndExplorers[MAX_EXPLORERS];
 static int  s_nExplorers;
@@ -346,19 +361,34 @@ static void DrawNode(LPEXPLORER e, DRAWITEMSTRUCT FAR *lpdis)
 /* Window procedure                                                     */
 /* -------------------------------------------------------------------- */
 
+/* The panes' top and bottom, inside the toolbar and status bar */
+static int PaneTop(LPEXPLORER e)
+{
+    return e->bToolbar ? ToolbarHeight() : 0;
+}
+
+static int PaneBottom(HWND hwnd, LPEXPLORER e)
+{
+    RECT rc;
+
+    GetClientRect(hwnd, &rc);
+    return rc.bottom - (e->bStatusBar ? StatusBarHeight() : 0);
+}
+
 static void Layout(HWND hwnd, LPEXPLORER e)
 {
     RECT rc;
-    int cy;
+    int y = PaneTop(e), cy = PaneBottom(hwnd, e) - y;
 
     GetClientRect(hwnd, &rc);
-    cy = rc.bottom - StatusBarHeight();
     if (e->xSplit > rc.right - 60)
         e->xSplit = rc.right - 60;
     if (e->xSplit < 60)
         e->xSplit = 60;
-    MovePane(e->hwndTree, 0, 0, e->xSplit, cy);
-    MovePane(e->hwndView, e->xSplit + SPLIT_CX, 0,
+    if (e->hwndToolbar)
+        MoveWindow(e->hwndToolbar, 0, 0, rc.right, ToolbarHeight(), TRUE);
+    MovePane(e->hwndTree, 0, y, e->xSplit, cy);
+    MovePane(e->hwndView, e->xSplit + SPLIT_CX, y,
              rc.right - e->xSplit - SPLIT_CX, cy);
 }
 
@@ -369,6 +399,37 @@ static void InvalidateStatus(HWND hwnd)
     GetClientRect(hwnd, &rc);
     rc.top = rc.bottom - StatusBarHeight();
     InvalidateRect(hwnd, &rc, FALSE);
+}
+
+/* The buttons follow the menu states of the folder view */
+static void UpdateToolbar(LPEXPLORER e)
+{
+    HMENU hMenu;
+    UINT uState;
+    int i;
+
+    if (!e->hwndToolbar || !e->bToolbar)
+        return;
+    hMenu = CreatePopupMenu();
+    for (i = 0; i < (int)NBUTTONS; i++)
+        if (s_aButtons[i].uCmd)
+            AppendMenu(hMenu, MF_STRING, s_aButtons[i].uCmd, "");
+    FViewInitMenu(e->hwndView, hMenu);
+    for (i = 0; i < (int)NBUTTONS; i++)
+        if (s_aButtons[i].uCmd) {
+            uState = GetMenuState(hMenu, s_aButtons[i].uCmd, MF_BYCOMMAND);
+            ToolbarSetState(e->hwndToolbar, s_aButtons[i].uCmd,
+                            (uState & MF_CHECKED) != 0, !(uState & MF_GRAYED));
+        }
+    DestroyMenu(hMenu);
+}
+
+static void ShowBars(HWND hwnd, LPEXPLORER e)
+{
+    ShowWindow(e->hwndToolbar, e->bToolbar ? SW_SHOWNA : SW_HIDE);
+    Layout(hwnd, e);
+    UpdateToolbar(e);
+    InvalidateRect(hwnd, NULL, TRUE);
 }
 
 static void SetTitle(HWND hwnd, LPEXPLORER e)
@@ -475,6 +536,18 @@ LRESULT CALLBACK NSEXPORT ExplorerWndProc(HWND hwnd, UINT msg, WPARAM wParam,
             }
             SetWindowLong(hwnd, 0, (LONG)e);
             e->xSplit = CfgGetInt("Explorer", "Split", 170);
+            e->bToolbar = CfgGetInt("Explorer", "Toolbar", 1);
+            e->bStatusBar = CfgGetInt("Explorer", "StatusBar", 1);
+            e->hwndToolbar = ToolbarCreate(hwnd, s_aButtons, NBUTTONS);
+            if (e->hwndToolbar && !e->bToolbar)
+                ShowWindow(e->hwndToolbar, SW_HIDE);
+            {
+                HMENU hView = GetSubMenu(GetMenu(hwnd), 2);
+
+                AppendMenu(hView, MF_SEPARATOR, 0, NULL);
+                AppendMenu(hView, MF_STRING, CMD_F_TOOLBAR, "T&oolbar");
+                AppendMenu(hView, MF_STRING, CMD_F_STATUSBAR, "&Status Bar");
+            }
             e->hwndTree = CreateWindow("LISTBOX", "",
                                        WS_CHILD | WS_VISIBLE | WS_VSCROLL
                                        | LBS_OWNERDRAWFIXED | LBS_NOTIFY
@@ -484,6 +557,7 @@ LRESULT CALLBACK NSEXPORT ExplorerWndProc(HWND hwnd, UINT msg, WPARAM wParam,
             if (!e->hwndTree || !e->hwndView)
                 return -1;
             BuildDrives(e);
+            UpdateToolbar(e);
             if (s_nExplorers < MAX_EXPLORERS)
                 s_hwndExplorers[s_nExplorers++] = hwnd;
         }
@@ -499,16 +573,21 @@ LRESULT CALLBACK NSEXPORT ExplorerWndProc(HWND hwnd, UINT msg, WPARAM wParam,
     case WM_PAINT:
         BeginPaint(hwnd, &ps);
         if (e) {
+            int y = PaneTop(e), yBottom = PaneBottom(hwnd, e);
+
             GetClientRect(hwnd, &rc);
-            DrawPaneEdge(ps.hdc, 0, 0, e->xSplit, rc.bottom - StatusBarHeight());
-            DrawPaneEdge(ps.hdc, e->xSplit + SPLIT_CX, 0,
-                         rc.right - e->xSplit - SPLIT_CX, rc.bottom - StatusBarHeight());
+            DrawPaneEdge(ps.hdc, 0, y, e->xSplit, yBottom - y);
+            DrawPaneEdge(ps.hdc, e->xSplit + SPLIT_CX, y,
+                         rc.right - e->xSplit - SPLIT_CX, yBottom - y);
             rc.left = e->xSplit;
             rc.right = e->xSplit + SPLIT_CX;
-            rc.bottom -= StatusBarHeight();
+            rc.top = y;
+            rc.bottom = yBottom;
             FillSolid(ps.hdc, &rc, GetSysColor(COLOR_BTNFACE));
-            FViewGetStatus(e->hwndView, szStatus, sizeof(szStatus));
-            PaintStatusBar(hwnd, ps.hdc, StatusBarHeight(), szStatus);
+            if (e->bStatusBar) {
+                FViewGetStatus(e->hwndView, szStatus, sizeof(szStatus));
+                PaintStatusBar(hwnd, ps.hdc, StatusBarHeight(), szStatus, e->xSplit);
+            }
         }
         EndPaint(hwnd, &ps);
         return 0;
@@ -518,7 +597,8 @@ LRESULT CALLBACK NSEXPORT ExplorerWndProc(HWND hwnd, UINT msg, WPARAM wParam,
             POINT pt;
             GetCursorPos(&pt);
             ScreenToClient(hwnd, &pt);
-            if (pt.x >= e->xSplit && pt.x < e->xSplit + SPLIT_CX) {
+            if (pt.x >= e->xSplit && pt.x < e->xSplit + SPLIT_CX
+                && pt.y >= PaneTop(e) && pt.y < PaneBottom(hwnd, e)) {
                 SetCursor(LoadCursor(g_hInst, MAKEINTRESOURCE(IDC_SPLIT)));
                 return TRUE;
             }
@@ -527,7 +607,9 @@ LRESULT CALLBACK NSEXPORT ExplorerWndProc(HWND hwnd, UINT msg, WPARAM wParam,
 
     case WM_LBUTTONDOWN:
         if (e && (int)LOWORD(lParam) >= e->xSplit
-            && (int)LOWORD(lParam) < e->xSplit + SPLIT_CX) {
+            && (int)LOWORD(lParam) < e->xSplit + SPLIT_CX
+            && (int)HIWORD(lParam) >= PaneTop(e)
+            && (int)HIWORD(lParam) < PaneBottom(hwnd, e)) {
             e->bSplitting = TRUE;
             SetCapture(hwnd);
         }
@@ -551,6 +633,8 @@ LRESULT CALLBACK NSEXPORT ExplorerWndProc(HWND hwnd, UINT msg, WPARAM wParam,
         return 0;
 
     case WM_ACTIVATE:
+        if (e && wParam != WA_INACTIVE)
+            UpdateToolbar(e);
         if (e && wParam == WA_INACTIVE) {
             HWND hwndFocus = GetFocus();
             if (hwndFocus == e->hwndTree || hwndFocus == e->hwndView)
@@ -596,8 +680,11 @@ LRESULT CALLBACK NSEXPORT ExplorerWndProc(HWND hwnd, UINT msg, WPARAM wParam,
         return 0;
 
     case WM_INITMENUPOPUP:
-        if (e)
+        if (e) {
             FViewInitMenu(e->hwndView, (HMENU)wParam);
+            CheckMenuItem((HMENU)wParam, CMD_F_TOOLBAR, e->bToolbar ? MF_CHECKED : MF_UNCHECKED);
+            CheckMenuItem((HMENU)wParam, CMD_F_STATUSBAR, e->bStatusBar ? MF_CHECKED : MF_UNCHECKED);
+        }
         return 0;
 
     case WM_NS_FVNOTIFY:
@@ -606,6 +693,7 @@ LRESULT CALLBACK NSEXPORT ExplorerWndProc(HWND hwnd, UINT msg, WPARAM wParam,
         switch (wParam) {
         case FVN_SELCHANGE:
             InvalidateStatus(hwnd);
+            UpdateToolbar(e);
             break;
         case FVN_OPENFOLDER:
             SelectPath(hwnd, e, (LPCSTR)lParam);
@@ -618,6 +706,7 @@ LRESULT CALLBACK NSEXPORT ExplorerWndProc(HWND hwnd, UINT msg, WPARAM wParam,
         case FVN_PATHCHANGED:
             SetTitle(hwnd, e);
             InvalidateStatus(hwnd);
+            UpdateToolbar(e);
             break;
         case FVN_TAB:
             SetFocus(e->hwndTree);
@@ -655,8 +744,22 @@ LRESULT CALLBACK NSEXPORT ExplorerWndProc(HWND hwnd, UINT msg, WPARAM wParam,
             if (FViewSelCount(e->hwndView) == 0)
                 return 0;
             break;
+        case CMD_F_TOOLBAR:
+            e->bToolbar = !e->bToolbar;
+            CfgSetInt("Explorer", "Toolbar", e->bToolbar);
+            ShowBars(hwnd, e);
+            return 0;
+        case CMD_F_STATUSBAR:
+            e->bStatusBar = !e->bStatusBar;
+            CfgSetInt("Explorer", "StatusBar", e->bStatusBar);
+            ShowBars(hwnd, e);
+            return 0;
         }
-        if (FViewCommand(e->hwndView, wParam) || StartMenuCommand(hwnd, wParam))
+        if (FViewCommand(e->hwndView, wParam)) {
+            UpdateToolbar(e);
+            return 0;
+        }
+        if (StartMenuCommand(hwnd, wParam))
             return 0;
         break;
 

@@ -71,6 +71,7 @@ BEGIN
     BEGIN
         MENUITEM "Lar&ge Icons",                CMD_F_LARGEICONS
         MENUITEM "S&mall Icons",                CMD_F_SMALLICONS
+        MENUITEM "&List",                       CMD_F_LIST
         MENUITEM "&Details",                    CMD_F_DETAILS
         MENUITEM SEPARATOR
         MENUITEM "by &Name",                    CMD_F_SORTNAME

@@ -188,6 +188,38 @@ void DrawSmallImage(HDC hdc, int x, int y, int nIndex)
     DeleteDC(hdcMem);
 }
 
+/* A small image as disabled: embossed in the highlight and shadow colours */
+void DrawSmallImageDisabled(HDC hdc, int x, int y, int nIndex)
+{
+    HDC hdcMem;
+    HBITMAP hbmOld;
+    HBRUSH hbrOld;
+    COLORREF clrBk, clrText;
+    int i;
+
+    if (!s_hbmSmall)
+        LoadSmallImages();
+    if (!s_hbmSmall)
+        return;
+    hdcMem = CreateCompatibleDC(hdc);
+    hbmOld = SelectObject(hdcMem, s_hbmSmallMask);
+    clrBk = SetBkColor(hdc, RGB(255, 255, 255));
+    clrText = SetTextColor(hdc, RGB(0, 0, 0));
+    /* the brush where the mask is 0 (the image), the destination elsewhere */
+    for (i = 0; i < 2; i++) {
+        HBRUSH hbr = CreateSolidBrush(GetSysColor(i ? COLOR_BTNSHADOW : COLOR_BTNHIGHLIGHT));
+
+        hbrOld = SelectObject(hdc, hbr);
+        BitBlt(hdc, x + 1 - i, y + 1 - i, 16, 16, hdcMem, nIndex * 16, 0, 0x00B8074AL);
+        SelectObject(hdc, hbrOld);
+        DeleteObject(hbr);
+    }
+    SetBkColor(hdc, clrBk);
+    SetTextColor(hdc, clrText);
+    SelectObject(hdcMem, hbmOld);
+    DeleteDC(hdcMem);
+}
+
 /* Windows 3.1 can only draw icons at 32x32; shrink one via a memory DC. */
 void DrawIconSmall(HDC hdc, int x, int y, HICON hIcon, COLORREF clrBk)
 {

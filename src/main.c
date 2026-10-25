@@ -323,7 +323,7 @@ static BOOL RegisterClasses(void)
     if (!RegisterClass(&wc))
         return FALSE;
 
-    return FolderRegister() && FViewRegister() && ExplorerRegister()
+    return FolderRegister() && FViewRegister() && ExplorerRegister() && ToolbarRegister()
         && TaskManRegister() && BinRegister() && FileOpRegister();
 }
 

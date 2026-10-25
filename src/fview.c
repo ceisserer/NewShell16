@@ -19,8 +19,9 @@
  * fview.c - the folder view control
  *
  * A child window showing the contents of a directory (or the drives of
- * the computer when the path is ""), in large icon, small icon or details
- * view. It handles selection, keyboard navigation, renaming, the item
+ * the computer when the path is ""), in large icon, small icon, list or
+ * details view; the details view is a table with resizable columns and
+ * the descriptions of DESCRIPT.ION. It handles selection, keyboard navigation, renaming, the item
  * context menu, clipboard commands and drag and drop. Folder windows and
  * the File System window embed it; they get notified via WM_NS_FVNOTIFY.
  */
@@ -38,11 +39,27 @@
 #define DRAG_THRESHOLD  4
 #define ID_RENAME       100
 
-/* details view columns */
-#define COL_NAME_CX     140
-#define COL_SIZE_CX     70
-#define COL_TYPE_CX     70
-#define COL_DATE_CX     110
+#define LINE_CX         16          /* horizontal scroll step (pixels) */
+#define SIZE_ZONE       3           /* header: distance to a column edge */
+#define COL_MIN_CX      16
+#define DESC_MAX        60          /* stored length of a description */
+
+/* details view columns (one set of widths for all views, NEWSHELL.INI
+   [Folders] Columns=) */
+#define DC_NAME         0
+#define DC_SIZE         1
+#define DC_TYPE         2
+#define DC_DATE         3
+#define DC_TIME         4
+#define DC_ATTR         5
+#define DC_DESC         6
+#define NCOLS           7
+
+static const char *s_szColName[NCOLS] = {
+    "Name", "Size", "Type", "Date", "Time", "Attributes", "Description"
+};
+static int s_cxCol[NCOLS] = { 140, 70, 80, 72, 64, 64, 180 };
+static BOOL s_bColsLoaded;
 
 typedef struct tagFITEM {
     char  szName[16];       /* file name, or "C:" for drives */
@@ -52,6 +69,7 @@ typedef struct tagFITEM {
     BYTE  bDriveType;
     DWORD dwSize;
     WORD  wDate, wTime;
+    WORD  wDesc;            /* offset + 1 in the description pool, 0 = none */
     HICON hIcon;
 } FITEM, FAR *LPFITEM;
 
@@ -70,6 +88,13 @@ typedef struct tagFVIEW {
     int     cxCell, cyCell;
     int     cyHeader;               /* details view column header */
     int     cyText;
+    int     xScroll;                /* details: horizontal offset (pixels) */
+    int     nLeft;                  /* list: first visible column */
+    int     nVisCols;               /* list: visible columns */
+    LPSTR   lpDesc;                 /* descriptions (DESCRIPT.ION) */
+    WORD    cbDesc, cbDescCap;
+    int     nSizing;                /* column being resized, -1 = none */
+    int     xSizeDown, cxSizeDown;
     DWORD   dwTotal;
     /* mouse */
     BOOL    bPressed;
@@ -105,6 +130,44 @@ static void Notify(HWND hwnd, UINT uCode, LPARAM lParam)
 /* -------------------------------------------------------------------- */
 /* Reading                                                              */
 /* -------------------------------------------------------------------- */
+
+static void LoadColumns(void)
+{
+    char szValue[64];
+    LPSTR p;
+    int i, n;
+
+    s_bColsLoaded = TRUE;
+    CfgGetStr("Folders", "Columns", "", szValue, sizeof(szValue));
+    for (p = szValue, i = 0; *p && i < NCOLS; i++) {
+        n = atoi(p);
+        if (n >= COL_MIN_CX && n < 1000)
+            s_cxCol[i] = n;
+        while (*p && *p != ',')
+            p++;
+        if (*p == ',')
+            p++;
+    }
+}
+
+static void SaveColumns(void)
+{
+    char szValue[64];
+    int i, n = 0;
+
+    for (i = 0; i < NCOLS; i++)
+        n += wsprintf(szValue + n, i ? ",%d" : "%d", s_cxCol[i]);
+    CfgSetStr("Folders", "Columns", szValue);
+}
+
+static int TableWidth(void)
+{
+    int i, cx = 0;
+
+    for (i = 0; i < NCOLS; i++)
+        cx += s_cxCol[i];
+    return cx;
+}
 
 static LPFITEM AddItem(LPFVIEW v)
 {
@@ -224,16 +287,94 @@ static void ReadDirectory(LPFVIEW v)
     }
 }
 
+/* Adds a description to the pool; returns its offset + 1, 0 if full */
+static WORD AddDesc(LPFVIEW v, LPCSTR lpText, int cb)
+{
+    WORD wOff;
+
+    if (cb > DESC_MAX)
+        cb = DESC_MAX;
+    if (v->cbDesc + cb + 1 > v->cbDescCap) {
+        WORD cbCap = v->cbDescCap ? v->cbDescCap * 2 : 512;
+        LPSTR lpNew;
+
+        if (cbCap > 32000 || v->cbDesc + cb + 1 > cbCap)
+            return 0;
+        lpNew = (LPSTR)realloc(v->lpDesc, cbCap);
+        if (!lpNew)
+            return 0;
+        v->lpDesc = lpNew;
+        v->cbDescCap = cbCap;
+    }
+    wOff = v->cbDesc;
+    _fmemcpy(v->lpDesc + wOff, lpText, cb);
+    v->lpDesc[wOff + cb] = '\0';
+    v->cbDesc += cb + 1;
+    return wOff + 1;
+}
+
+/*
+ * DESCRIPT.ION (4DOS, Calmira): one line per file, its name, blanks and
+ * the description. Only the first 16 KB are read.
+ */
+static void ReadDescriptions(LPFVIEW v)
+{
+    char szFile[MAXPATHLEN + 14], szName[16];
+    HFILE hf;
+    LPSTR lpBuf, p, q;
+    LPFITEM it;
+    UINT uOldMode;
+    int cb, i, n;
+
+    lstrcpy(szFile, v->szPath);
+    PathAppend(szFile, "DESCRIPT.ION");
+    uOldMode = SetErrorMode(1);
+    hf = _lopen(szFile, OF_READ | OF_SHARE_DENY_NONE);
+    SetErrorMode(uOldMode);
+    if (hf == HFILE_ERROR)
+        return;
+    lpBuf = (LPSTR)malloc(16384 + 1);
+    cb = lpBuf ? _lread(hf, lpBuf, 16384) : 0;
+    _lclose(hf);
+    if (!lpBuf)
+        return;
+    if (cb < 0)
+        cb = 0;
+    lpBuf[cb] = '\0';
+    for (p = lpBuf; *p; p = q) {
+        for (q = p; *q && *q != '\n' && *q != '\r'; q++)
+            ;
+        /* p..q is one line */
+        for (n = 0; p < q && *p != ' ' && *p != '\t' && n < 15; p++)
+            szName[n++] = *p;
+        szName[n] = '\0';
+        while (p < q && (*p == ' ' || *p == '\t'))
+            p++;
+        if (n && p < q)
+            for (i = 0, it = v->lpItems; i < v->nItems; i++, it++)
+                if (!it->wDesc && lstrcmpi(it->szName, szName) == 0) {
+                    it->wDesc = AddDesc(v, p, (int)(q - p));
+                    break;
+                }
+        while (*q == '\n' || *q == '\r')
+            q++;
+    }
+    free(lpBuf);
+}
+
 static void ReadFolder(LPFVIEW v)
 {
     HCURSOR hcurOld = SetCursor(LoadCursor(NULL, IDC_WAIT));
 
     v->nItems = 0;
     v->dwTotal = 0;
-    if (v->szPath[0] == '\0')
+    v->cbDesc = 0;
+    if (v->szPath[0] == '\0') {
         ReadDrives(v);
-    else
+    } else {
         ReadDirectory(v);
+        ReadDescriptions(v);
+    }
     SortItems(v);
     v->nFocus = v->nItems > 0 ? 0 : -1;
     v->nAnchor = v->nFocus;
@@ -244,13 +385,30 @@ static void ReadFolder(LPFVIEW v)
 /* Layout                                                               */
 /* -------------------------------------------------------------------- */
 
+/* Width of a small icon cell: the longest name, within limits */
+static int SmallCellWidth(HWND hwnd, LPFVIEW v)
+{
+    HDC hdc = GetDC(hwnd);
+    HFONT hfOld = SelectObject(hdc, g_hfontUI);
+    int i, cx, cxCell = 80;
+
+    for (i = 0; i < v->nItems; i++) {
+        cx = TextWidth(hdc, v->lpItems[i].szName) + 30;
+        if (cx > cxCell)
+            cxCell = cx;
+    }
+    SelectObject(hdc, hfOld);
+    ReleaseDC(hwnd, hdc);
+    return cxCell > 160 ? 160 : cxCell;
+}
+
 static void UpdateLayout(HWND hwnd, LPFVIEW v)
 {
     RECT rc;
-    int nRows, nMax, i, cx;
-    HDC hdc;
-    HFONT hfOld;
+    int nRows, nMax, nMaxX = 0, cxTable;
 
+    if (!s_bColsLoaded)
+        LoadColumns();
     GetClientRect(hwnd, &rc);
     v->cyHeader = 0;
     switch (v->nMode) {
@@ -259,49 +417,75 @@ static void UpdateLayout(HWND hwnd, LPFVIEW v)
         v->cyCell = LARGE_CY;
         break;
     case FV_SMALL:
-        hdc = GetDC(hwnd);
-        hfOld = SelectObject(hdc, g_hfontUI);
-        v->cxCell = 80;
-        for (i = 0; i < v->nItems; i++) {
-            cx = TextWidth(hdc, v->lpItems[i].szName) + 30;
-            if (cx > v->cxCell)
-                v->cxCell = cx;
-        }
-        if (v->cxCell > 160)
-            v->cxCell = 160;
-        SelectObject(hdc, hfOld);
-        ReleaseDC(hwnd, hdc);
+    case FV_LIST:
+        v->cxCell = SmallCellWidth(hwnd, v);
         v->cyCell = SMALL_CY;
         break;
     default:
+        cxTable = TableWidth();
         v->cxCell = rc.right - 2 * MARGIN;
-        if (v->cxCell < COL_NAME_CX)
-            v->cxCell = COL_NAME_CX;
+        if (v->cxCell < cxTable)
+            v->cxCell = cxTable;
         v->cyCell = SMALL_CY;
         v->cyHeader = v->cyText + 6;
+        nMaxX = cxTable + 2 * MARGIN - rc.right;
         break;
     }
-    v->nCols = (v->nMode == FV_DETAILS) ? 1 : (rc.right - 2 * MARGIN) / v->cxCell;
-    if (v->nCols < 1)
-        v->nCols = 1;
+    if (nMaxX < 0)
+        nMaxX = 0;
+    if (v->xScroll > nMaxX)
+        v->xScroll = nMaxX;
+    if (v->nMode != FV_DETAILS)
+        v->xScroll = 0;
+
     v->nVisRows = (rc.bottom - v->cyHeader - MARGIN) / v->cyCell;
     if (v->nVisRows < 1)
         v->nVisRows = 1;
+
+    if (v->nMode == FV_LIST) {
+        /* columns of nVisRows items, scrolled sideways */
+        v->nCols = 1;
+        v->nVisCols = (rc.right - 2 * MARGIN) / v->cxCell;
+        if (v->nVisCols < 1)
+            v->nVisCols = 1;
+        nMax = (v->nItems + v->nVisRows - 1) / v->nVisRows - v->nVisCols;
+        if (nMax < 0)
+            nMax = 0;
+        if (v->nLeft > nMax)
+            v->nLeft = nMax;
+        v->nTop = 0;
+        SetScrollRange(hwnd, SB_VERT, 0, 0, FALSE);
+        SetScrollRange(hwnd, SB_HORZ, 0, nMax, FALSE);
+        SetScrollPos(hwnd, SB_HORZ, v->nLeft, TRUE);
+        return;
+    }
+    v->nLeft = 0;
+    v->nCols = (v->nMode == FV_DETAILS) ? 1 : (rc.right - 2 * MARGIN) / v->cxCell;
+    if (v->nCols < 1)
+        v->nCols = 1;
     nRows = (v->nItems + v->nCols - 1) / v->nCols;
     nMax = nRows - v->nVisRows;
     if (nMax < 0)
         nMax = 0;
     if (v->nTop > nMax)
         v->nTop = nMax;
+    SetScrollRange(hwnd, SB_HORZ, 0, nMaxX, FALSE);
+    SetScrollPos(hwnd, SB_HORZ, v->xScroll, TRUE);
     SetScrollRange(hwnd, SB_VERT, 0, nMax, FALSE);
     SetScrollPos(hwnd, SB_VERT, v->nTop, TRUE);
 }
 
 static void CellRect(LPFVIEW v, int i, RECT FAR *lprc)
 {
-    int x = MARGIN + (i % v->nCols) * v->cxCell;
-    int y = MARGIN + v->cyHeader + (i / v->nCols - v->nTop) * v->cyCell;
+    int x, y;
 
+    if (v->nMode == FV_LIST) {
+        x = MARGIN + (i / v->nVisRows - v->nLeft) * v->cxCell;
+        y = MARGIN + (i % v->nVisRows) * v->cyCell;
+    } else {
+        x = MARGIN + (i % v->nCols) * v->cxCell - v->xScroll;
+        y = MARGIN + v->cyHeader + (i / v->nCols - v->nTop) * v->cyCell;
+    }
     SetRect(lprc, x, y, x + v->cxCell, y + v->cyCell);
 }
 
@@ -318,8 +502,8 @@ static void HotRect(HWND hwnd, LPFVIEW v, int i, RECT FAR *lprc)
 
         SelectObject(hdc, hfOld);
         ReleaseDC(hwnd, hdc);
-        if (v->nMode == FV_DETAILS && cx > COL_NAME_CX)
-            cx = COL_NAME_CX;
+        if (v->nMode == FV_DETAILS && cx > s_cxCol[DC_NAME])
+            cx = s_cxCol[DC_NAME];
         if (lprc->left + cx < lprc->right)
             lprc->right = lprc->left + cx;
     }
@@ -333,11 +517,19 @@ static int HitTest(HWND hwnd, LPFVIEW v, int x, int y)
 
     if (x < MARGIN || y < MARGIN + v->cyHeader)
         return -1;
-    col = (x - MARGIN) / v->cxCell;
-    row = (y - MARGIN - v->cyHeader) / v->cyCell + v->nTop;
-    if (col >= v->nCols)
-        return -1;
-    i = row * v->nCols + col;
+    if (v->nMode == FV_LIST) {
+        col = (x - MARGIN) / v->cxCell + v->nLeft;
+        row = (y - MARGIN) / v->cyCell;
+        if (row >= v->nVisRows)
+            return -1;
+        i = col * v->nVisRows + row;
+    } else {
+        col = (x - MARGIN + v->xScroll) / v->cxCell;
+        row = (y - MARGIN - v->cyHeader) / v->cyCell + v->nTop;
+        if (col >= v->nCols)
+            return -1;
+        i = row * v->nCols + col;
+    }
     if (i >= v->nItems)
         return -1;
     HotRect(hwnd, v, i, &rc);
@@ -350,11 +542,33 @@ static int HitTest(HWND hwnd, LPFVIEW v, int x, int y)
 /* Painting                                                             */
 /* -------------------------------------------------------------------- */
 
-static void FormatDateTime(WORD wDate, WORD wTime, LPSTR lpBuf)
+/* Date and time as set in Control Panel (WIN.INI [intl]) */
+static void FormatDate(WORD wDate, LPSTR lpBuf)
 {
-    wsprintf(lpBuf, "%02u.%02u.%04u %02u:%02u",
-             wDate & 31, (wDate >> 5) & 15, (wDate >> 9) + 1980,
-             wTime >> 11, (wTime >> 5) & 63);
+    char szSep[4];
+    UINT d = wDate & 31, m = (wDate >> 5) & 15, y = (wDate >> 9) + 1980;
+
+    GetProfileString("intl", "sDate", "/", szSep, sizeof(szSep));
+    switch (GetProfileInt("intl", "iDate", 0)) {
+    case 1:  wsprintf(lpBuf, "%02u%s%02u%s%04u", d, (LPSTR)szSep, m, (LPSTR)szSep, y); break;
+    case 2:  wsprintf(lpBuf, "%04u%s%02u%s%02u", y, (LPSTR)szSep, m, (LPSTR)szSep, d); break;
+    default: wsprintf(lpBuf, "%02u%s%02u%s%04u", m, (LPSTR)szSep, d, (LPSTR)szSep, y); break;
+    }
+}
+
+static void FormatTime(WORD wTime, LPSTR lpBuf)
+{
+    char szSep[4], szAmPm[8];
+    UINT h = wTime >> 11, mi = (wTime >> 5) & 63;
+
+    GetProfileString("intl", "sTime", ":", szSep, sizeof(szSep));
+    if (GetProfileInt("intl", "iTime", 0)) {
+        wsprintf(lpBuf, "%02u%s%02u", h, (LPSTR)szSep, mi);
+        return;
+    }
+    GetProfileString("intl", h < 12 ? "s1159" : "s2359", h < 12 ? "AM" : "PM",
+                     szAmPm, sizeof(szAmPm));
+    wsprintf(lpBuf, "%u%s%02u %s", h % 12 ? h % 12 : 12, (LPSTR)szSep, mi, (LPSTR)szAmPm);
 }
 
 static void TypeName(LPFITEM p, LPSTR lpBuf)
@@ -421,7 +635,7 @@ static void PaintItem(HWND hwnd, HDC hdc, LPFVIEW v, int i)
     DrawIconSmall(hdc, rc.left + 2, rc.top + 1, p->hIcon,
                   GetSysColor(COLOR_WINDOW));
     x = rc.left + 22;
-    cx = (v->nMode == FV_DETAILS ? COL_NAME_CX : v->cxCell) - 26;
+    cx = (v->nMode == FV_DETAILS ? s_cxCol[DC_NAME] : v->cxCell) - 26;
     FitText(hdc, p->szName, szLabel, sizeof(szLabel), cx);
     SetRect(&rcText, x, rc.top + 1, x + TextWidth(hdc, szLabel) + 4,
             rc.bottom - 1);
@@ -431,61 +645,79 @@ static void PaintItem(HWND hwnd, HDC hdc, LPFVIEW v, int i)
     }
 
     if (v->nMode == FV_DETAILS) {
+        int c;
+
         SetTextColor(hdc, GetSysColor(COLOR_WINDOWTEXT));
-        x = rc.left + COL_NAME_CX;
-        if (p->bKind == FK_FILE) {
-            if (p->dwSize < 1024L)
-                wsprintf(szLabel, "%lu bytes", p->dwSize);
-            else
-                wsprintf(szLabel, "%luKB", (p->dwSize + 1023L) / 1024L);
-            SetRect(&rcText, x, rc.top, x + COL_SIZE_CX - 8, rc.bottom);
-            DrawText(hdc, szLabel, -1, &rcText,
-                     DT_RIGHT | DT_SINGLELINE | DT_VCENTER);
-        }
-        x += COL_SIZE_CX;
-        TypeName(p, szLabel);
-        SetRect(&rcText, x, rc.top, x + COL_TYPE_CX - 4, rc.bottom);
-        DrawText(hdc, szLabel, -1, &rcText, DT_LEFT | DT_SINGLELINE | DT_VCENTER);
-        x += COL_TYPE_CX;
-        if (p->bKind != FK_DRIVE) {
-            FormatDateTime(p->wDate, p->wTime, szLabel);
-            SetRect(&rcText, x, rc.top, x + COL_DATE_CX - 4, rc.bottom);
-            DrawText(hdc, szLabel, -1, &rcText, DT_LEFT | DT_SINGLELINE | DT_VCENTER);
-            x += COL_DATE_CX;
-            wsprintf(szLabel, "%s%s%s%s",
-                     (LPSTR)((p->bAttr & _A_RDONLY) ? "R" : ""),
-                     (LPSTR)((p->bAttr & _A_HIDDEN) ? "H" : ""),
-                     (LPSTR)((p->bAttr & _A_SYSTEM) ? "S" : ""),
-                     (LPSTR)((p->bAttr & _A_ARCH) ? "A" : ""));
-            SetRect(&rcText, x, rc.top, rc.right, rc.bottom);
-            DrawText(hdc, szLabel, -1, &rcText, DT_LEFT | DT_SINGLELINE | DT_VCENTER);
+        x = rc.left + s_cxCol[DC_NAME];
+        for (c = DC_SIZE; c < NCOLS; x += s_cxCol[c], c++) {
+            UINT uAlign = DT_LEFT;
+
+            szLabel[0] = '\0';
+            switch (c) {
+            case DC_SIZE:
+                if (p->bKind == FK_FILE)
+                    FormatBytes(p->dwSize, szLabel);
+                uAlign = DT_RIGHT;
+                break;
+            case DC_TYPE:
+                TypeName(p, szLabel);
+                break;
+            case DC_DATE:
+                if (p->bKind != FK_DRIVE)
+                    FormatDate(p->wDate, szLabel);
+                break;
+            case DC_TIME:
+                if (p->bKind != FK_DRIVE)
+                    FormatTime(p->wTime, szLabel);
+                break;
+            case DC_ATTR:
+                if (p->bKind != FK_DRIVE)
+                    wsprintf(szLabel, "%s%s%s%s",
+                             (LPSTR)((p->bAttr & _A_RDONLY) ? "R" : ""),
+                             (LPSTR)((p->bAttr & _A_HIDDEN) ? "H" : ""),
+                             (LPSTR)((p->bAttr & _A_SYSTEM) ? "S" : ""),
+                             (LPSTR)((p->bAttr & _A_ARCH) ? "A" : ""));
+                break;
+            }
+            SetRect(&rcText, x + 2, rc.top, x + s_cxCol[c] - 6, rc.bottom);
+            if (rcText.right <= rcText.left)
+                continue;
+            if (c == DC_DESC) {
+                if (p->wDesc)
+                    DrawText(hdc, v->lpDesc + p->wDesc - 1, -1, &rcText,
+                             DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_NOPREFIX);
+            } else if (szLabel[0]) {
+                DrawText(hdc, szLabel, -1, &rcText,
+                         uAlign | DT_SINGLELINE | DT_VCENTER | DT_NOPREFIX);
+            }
         }
     }
 }
 
 static void PaintHeader(HWND hwnd, HDC hdc, LPFVIEW v)
 {
-    static const char *s_szCols[] = { "Name", "Size", "Type", "Modified", "Attr" };
-    static const int s_cx[] = { COL_NAME_CX, COL_SIZE_CX, COL_TYPE_CX,
-                                COL_DATE_CX, 0 };
     RECT rcClient, rc;
-    int i, x = 0;
+    int i, x = -v->xScroll, cx;
 
     GetClientRect(hwnd, &rcClient);
-    for (i = 0; i < 5; i++) {
-        int cx = s_cx[i] ? s_cx[i] : rcClient.right - x;
+    for (i = 0; i <= NCOLS && x < rcClient.right; i++, x += cx) {
+        /* the last box fills the rest of the line */
+        cx = i < NCOLS ? s_cxCol[i] : rcClient.right - x;
         if (i == 0)
             cx += MARGIN;
         SetRect(&rc, x, 0, x + cx, v->cyHeader);
+        if (rc.right <= 0)
+            continue;
         FillSolid(hdc, &rc, GetSysColor(COLOR_BTNFACE));
         Draw3DEdge(hdc, &rc, FALSE, FALSE);
+        if (i == NCOLS)
+            break;
         SetTextColor(hdc, GetSysColor(COLOR_BTNTEXT));
         InflateRect(&rc, -4, 0);
-        if (i == 1)
+        if (i == DC_SIZE)
             rc.right -= 4;
-        DrawText(hdc, s_szCols[i], -1, &rc,
-                 (i == 1 ? DT_RIGHT : DT_LEFT) | DT_SINGLELINE | DT_VCENTER);
-        x += cx;
+        DrawText(hdc, s_szColName[i], -1, &rc,
+                 (i == DC_SIZE ? DT_RIGHT : DT_LEFT) | DT_SINGLELINE | DT_VCENTER);
     }
 }
 
@@ -501,8 +733,13 @@ static void PaintView(HWND hwnd, HDC hdc, LPFVIEW v, const RECT FAR *lprcPaint)
         GetClientRect(hwnd, &rc);
         IntersectClipRect(hdc, 0, v->cyHeader, rc.right, rc.bottom);
     }
-    iFirst = v->nTop * v->nCols;
-    iLast = iFirst + (v->nVisRows + 1) * v->nCols;
+    if (v->nMode == FV_LIST) {
+        iFirst = v->nLeft * v->nVisRows;
+        iLast = iFirst + (v->nVisCols + 1) * v->nVisRows;
+    } else {
+        iFirst = v->nTop * v->nCols;
+        iLast = iFirst + (v->nVisRows + 1) * v->nCols;
+    }
     if (iLast > v->nItems)
         iLast = v->nItems;
     for (i = iFirst; i < iLast; i++) {
@@ -549,12 +786,44 @@ static void ScrollTo(HWND hwnd, LPFVIEW v, int nTop)
     InvalidateRect(hwnd, NULL, TRUE);
 }
 
+/* Horizontal scrolling: list view by columns, details view by pixels */
+static void ScrollToX(HWND hwnd, LPFVIEW v, int nPos)
+{
+    int nMin, nMax;
+
+    GetScrollRange(hwnd, SB_HORZ, &nMin, &nMax);
+    if (nPos > nMax)
+        nPos = nMax;
+    if (nPos < 0)
+        nPos = 0;
+    if (v->nMode == FV_LIST) {
+        if (nPos == v->nLeft)
+            return;
+        v->nLeft = nPos;
+    } else {
+        if (nPos == v->xScroll)
+            return;
+        v->xScroll = nPos;
+    }
+    SetScrollPos(hwnd, SB_HORZ, nPos, TRUE);
+    InvalidateRect(hwnd, NULL, TRUE);
+}
+
 static void EnsureVisible(HWND hwnd, LPFVIEW v, int i)
 {
     int nRow;
 
     if (i < 0)
         return;
+    if (v->nMode == FV_LIST) {
+        int nCol = i / v->nVisRows;
+
+        if (nCol < v->nLeft)
+            ScrollToX(hwnd, v, nCol);
+        else if (nCol >= v->nLeft + v->nVisCols)
+            ScrollToX(hwnd, v, nCol - v->nVisCols + 1);
+        return;
+    }
     nRow = i / v->nCols;
     if (nRow < v->nTop)
         ScrollTo(hwnd, v, nRow);
@@ -687,14 +956,16 @@ void FViewGetStatus(HWND hwnd, LPSTR lpBuf, int cbBuf)
             nSel++;
             dwSel += v->lpItems[i].dwSize;
         }
+    /* totals, a tab, the selection (two status bar fields) */
     if (v->szPath[0] == '\0') {
-        wsprintf(szText, "%d drive(s)", v->nItems);
-    } else if (nSel > 0) {
-        FormatBytes(dwSel, szSize);
-        wsprintf(szText, "%d object(s) selected  %s", nSel, (LPSTR)szSize);
+        wsprintf(szText, "%d drive(s)\tSelected %d item(s)", v->nItems, nSel);
     } else {
+        int n;
+
         FormatBytes(v->dwTotal, szSize);
-        wsprintf(szText, "%d object(s)  %s", v->nItems, (LPSTR)szSize);
+        n = wsprintf(szText, "%d object(s)  %s\t", v->nItems, (LPSTR)szSize);
+        FormatBytes(dwSel, szSize);
+        wsprintf(szText + n, "Selected %d item(s)  %s", nSel, (LPSTR)szSize);
     }
     lstrcpyn(lpBuf, szText, cbBuf);
 }
@@ -1018,6 +1289,8 @@ static void AppendViewMenu(HMENU hMenu, LPFVIEW v)
                CMD_F_LARGEICONS, "Lar&ge Icons");
     AppendMenu(hView, MF_STRING | (v->nMode == FV_SMALL ? MF_CHECKED : 0),
                CMD_F_SMALLICONS, "S&mall Icons");
+    AppendMenu(hView, MF_STRING | (v->nMode == FV_LIST ? MF_CHECKED : 0),
+               CMD_F_LIST, "&List");
     AppendMenu(hView, MF_STRING | (v->nMode == FV_DETAILS ? MF_CHECKED : 0),
                CMD_F_DETAILS, "&Details");
     AppendMenu(hSort, MF_STRING | (v->nSort == FS_NAME ? MF_CHECKED : 0),
@@ -1117,6 +1390,7 @@ BOOL FViewCommand(HWND hwnd, UINT id)
         break;
     case CMD_F_LARGEICONS:  FViewSetMode(hwnd, FV_LARGE); break;
     case CMD_F_SMALLICONS:  FViewSetMode(hwnd, FV_SMALL); break;
+    case CMD_F_LIST:        FViewSetMode(hwnd, FV_LIST); break;
     case CMD_F_DETAILS:     FViewSetMode(hwnd, FV_DETAILS); break;
     case CMD_F_SORTNAME:    FViewSetSort(hwnd, FS_NAME); break;
     case CMD_F_SORTTYPE:    FViewSetSort(hwnd, FS_TYPE); break;
@@ -1148,6 +1422,7 @@ void FViewInitMenu(HWND hwnd, HMENU hMenu)
     bFolder = v->szPath[0] != '\0';
     CheckMenuItem(hMenu, CMD_F_LARGEICONS, v->nMode == FV_LARGE ? MF_CHECKED : MF_UNCHECKED);
     CheckMenuItem(hMenu, CMD_F_SMALLICONS, v->nMode == FV_SMALL ? MF_CHECKED : MF_UNCHECKED);
+    CheckMenuItem(hMenu, CMD_F_LIST, v->nMode == FV_LIST ? MF_CHECKED : MF_UNCHECKED);
     CheckMenuItem(hMenu, CMD_F_DETAILS, v->nMode == FV_DETAILS ? MF_CHECKED : MF_UNCHECKED);
     CheckMenuItem(hMenu, CMD_F_SORTNAME, v->nSort == FS_NAME ? MF_CHECKED : MF_UNCHECKED);
     CheckMenuItem(hMenu, CMD_F_SORTTYPE, v->nSort == FS_TYPE ? MF_CHECKED : MF_UNCHECKED);
@@ -1172,12 +1447,27 @@ static void OnKeyDown(HWND hwnd, LPFVIEW v, WPARAM vk)
     BOOL bCtrl = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
     int i = v->nFocus < 0 ? 0 : v->nFocus;
     int nPage = v->nCols * v->nVisRows;
+    /* the step of Left/Right and of Up/Down: the list view runs in columns */
+    int nSide = v->nMode == FV_LIST ? v->nVisRows : v->nMode == FV_DETAILS ? 0 : 1;
+    int nLine = v->nMode == FV_LIST ? 1 : v->nCols;
 
+    if (v->nMode == FV_LIST)
+        nPage = v->nVisRows * v->nVisCols;
     switch (vk) {
-    case VK_LEFT:   MoveFocusTo(hwnd, v, v->nMode == FV_DETAILS ? i : i - 1, bShift, bCtrl); break;
-    case VK_RIGHT:  MoveFocusTo(hwnd, v, v->nMode == FV_DETAILS ? i : i + 1, bShift, bCtrl); break;
-    case VK_UP:     if (i - v->nCols >= 0) MoveFocusTo(hwnd, v, i - v->nCols, bShift, bCtrl); break;
-    case VK_DOWN:   if (i + v->nCols < v->nItems) MoveFocusTo(hwnd, v, i + v->nCols, bShift, bCtrl); break;
+    case VK_LEFT:
+        if (nSide == 0)
+            ScrollToX(hwnd, v, v->xScroll - LINE_CX);
+        else if (i - nSide >= 0)
+            MoveFocusTo(hwnd, v, i - nSide, bShift, bCtrl);
+        break;
+    case VK_RIGHT:
+        if (nSide == 0)
+            ScrollToX(hwnd, v, v->xScroll + LINE_CX);
+        else if (i + nSide < v->nItems)
+            MoveFocusTo(hwnd, v, i + nSide, bShift, bCtrl);
+        break;
+    case VK_UP:     if (i - nLine >= 0) MoveFocusTo(hwnd, v, i - nLine, bShift, bCtrl); break;
+    case VK_DOWN:   if (i + nLine < v->nItems) MoveFocusTo(hwnd, v, i + nLine, bShift, bCtrl); break;
     case VK_HOME:   MoveFocusTo(hwnd, v, 0, bShift, bCtrl); break;
     case VK_END:    MoveFocusTo(hwnd, v, v->nItems - 1, bShift, bCtrl); break;
     case VK_PRIOR:  MoveFocusTo(hwnd, v, i - nPage, bShift, bCtrl); break;
@@ -1278,6 +1568,48 @@ static void OnLButtonDown(HWND hwnd, LPFVIEW v, int x, int y)
     }
 }
 
+/* Details header: the column whose right edge is at x, or -1 */
+static int HeaderEdge(LPFVIEW v, int x)
+{
+    int i, xEdge = MARGIN - v->xScroll;
+
+    for (i = 0; i < NCOLS; i++) {
+        xEdge += s_cxCol[i];
+        if (x >= xEdge - SIZE_ZONE && x <= xEdge + SIZE_ZONE)
+            return i;
+    }
+    return -1;
+}
+
+/* Details header: the column at x, or -1 */
+static int HeaderColumn(LPFVIEW v, int x)
+{
+    int i, xEdge = MARGIN - v->xScroll;
+
+    for (i = 0; i < NCOLS; i++) {
+        xEdge += s_cxCol[i];
+        if (x < xEdge)
+            return i;
+    }
+    return -1;
+}
+
+/* Other views pick up changed column widths */
+static void ColumnsChanged(HWND hwndFrom)
+{
+    int i;
+
+    SaveColumns();
+    for (i = 0; i < s_nViews; i++) {
+        LPFVIEW w = GetView(s_hwndViews[i]);
+
+        if (s_hwndViews[i] != hwndFrom && w && w->nMode == FV_DETAILS) {
+            UpdateLayout(s_hwndViews[i], w);
+            InvalidateRect(s_hwndViews[i], NULL, TRUE);
+        }
+    }
+}
+
 LRESULT CALLBACK NSEXPORT FViewWndProc(HWND hwnd, UINT msg, WPARAM wParam,
                                        LPARAM lParam)
 {
@@ -1300,7 +1632,10 @@ LRESULT CALLBACK NSEXPORT FViewWndProc(HWND hwnd, UINT msg, WPARAM wParam,
             _fmemset(v, 0, sizeof(FVIEW));
             SetWindowLong(hwnd, 0, (LONG)v);
             v->nRenaming = -1;
+            v->nSizing = -1;
             v->nMode = CfgGetInt("Folders", "View", FV_LARGE);
+            if (v->nMode < FV_LARGE || v->nMode > FV_LIST)
+                v->nMode = FV_LARGE;
             v->nSort = CfgGetInt("Folders", "Sort", FS_NAME);
 
             hdc = GetDC(hwnd);
@@ -1357,23 +1692,80 @@ LRESULT CALLBACK NSEXPORT FViewWndProc(HWND hwnd, UINT msg, WPARAM wParam,
         }
         return 0;
 
+    case WM_HSCROLL:
+        if (!v)
+            break;
+        {
+            int nPos = v->nMode == FV_LIST ? v->nLeft : v->xScroll;
+            int nStep = v->nMode == FV_LIST ? 1 : LINE_CX;
+            int nPage = v->nMode == FV_LIST ? v->nVisCols : nStep * 8;
+
+            switch (wParam) {
+            case SB_LINEUP:         ScrollToX(hwnd, v, nPos - nStep); break;
+            case SB_LINEDOWN:       ScrollToX(hwnd, v, nPos + nStep); break;
+            case SB_PAGEUP:         ScrollToX(hwnd, v, nPos - nPage); break;
+            case SB_PAGEDOWN:       ScrollToX(hwnd, v, nPos + nPage); break;
+            case SB_THUMBTRACK:
+            case SB_THUMBPOSITION:  ScrollToX(hwnd, v, LOWORD(lParam)); break;
+            case SB_TOP:            ScrollToX(hwnd, v, 0); break;
+            case SB_BOTTOM:         ScrollToX(hwnd, v, 32767); break;
+            }
+        }
+        return 0;
+
+    case WM_SETCURSOR:
+        /* the size cursor on the column edges of the details header */
+        if (v && (HWND)wParam == hwnd && LOWORD(lParam) == HTCLIENT
+            && v->nMode == FV_DETAILS) {
+            GetCursorPos(&pt);
+            ScreenToClient(hwnd, &pt);
+            if (pt.y < v->cyHeader && HeaderEdge(v, pt.x) >= 0) {
+                SetCursor(LoadCursor(NULL, IDC_SIZEWE));
+                return TRUE;
+            }
+        }
+        break;
+
     case WM_LBUTTONDOWN:
         if (!v)
             break;
         if (v->nMode == FV_DETAILS && (int)HIWORD(lParam) < v->cyHeader) {
+            int x = (int)LOWORD(lParam), c = HeaderEdge(v, x);
+
+            if (c >= 0) {
+                /* drag the column's right edge */
+                v->nSizing = c;
+                v->xSizeDown = x;
+                v->cxSizeDown = s_cxCol[c];
+                SetCapture(hwnd);
+                return 0;
+            }
             /* header click: sort by that column */
-            int x = (int)LOWORD(lParam);
-            int nSort = x < COL_NAME_CX + MARGIN ? FS_NAME
-                      : x < COL_NAME_CX + MARGIN + COL_SIZE_CX ? FS_SIZE
-                      : x < COL_NAME_CX + MARGIN + COL_SIZE_CX + COL_TYPE_CX ? FS_TYPE
-                      : FS_DATE;
-            FViewSetSort(hwnd, nSort);
+            switch (HeaderColumn(v, x)) {
+            case DC_NAME:   FViewSetSort(hwnd, FS_NAME); break;
+            case DC_SIZE:   FViewSetSort(hwnd, FS_SIZE); break;
+            case DC_TYPE:   FViewSetSort(hwnd, FS_TYPE); break;
+            case DC_DATE:
+            case DC_TIME:   FViewSetSort(hwnd, FS_DATE); break;
+            }
             return 0;
         }
         OnLButtonDown(hwnd, v, (int)LOWORD(lParam), (int)HIWORD(lParam));
         return 0;
 
     case WM_MOUSEMOVE:
+        if (v && v->nSizing >= 0) {
+            int cx = v->cxSizeDown + (int)LOWORD(lParam) - v->xSizeDown;
+
+            if (cx < COL_MIN_CX)
+                cx = COL_MIN_CX;
+            if (cx != s_cxCol[v->nSizing]) {
+                s_cxCol[v->nSizing] = cx;
+                UpdateLayout(hwnd, v);
+                InvalidateRect(hwnd, NULL, TRUE);
+            }
+            return 0;
+        }
         if (!v || !v->bPressed)
             break;
         pt.x = (int)LOWORD(lParam);
@@ -1395,6 +1787,12 @@ LRESULT CALLBACK NSEXPORT FViewWndProc(HWND hwnd, UINT msg, WPARAM wParam,
         return 0;
 
     case WM_LBUTTONUP:
+        if (v && v->nSizing >= 0) {
+            v->nSizing = -1;
+            ReleaseCapture();
+            ColumnsChanged(hwnd);
+            return 0;
+        }
         if (!v || !v->bPressed)
             break;
         v->bPressed = FALSE;
@@ -1479,6 +1877,8 @@ LRESULT CALLBACK NSEXPORT FViewWndProc(HWND hwnd, UINT msg, WPARAM wParam,
         if (v) {
             if (v->lpItems)
                 free(v->lpItems);
+            if (v->lpDesc)
+                free(v->lpDesc);
             free(v);
             SetWindowLong(hwnd, 0, 0L);
         }
@@ -1508,7 +1908,7 @@ BOOL FViewRegister(void)
 
 HWND FViewCreate(HWND hwndParent, LPCSTR lpPath)
 {
-    return CreateWindow(CLS_FVIEW, "", WS_CHILD | WS_VISIBLE | WS_VSCROLL,
+    return CreateWindow(CLS_FVIEW, "", WS_CHILD | WS_VISIBLE | WS_VSCROLL | WS_HSCROLL,
                         0, 0, 0, 0, hwndParent, (HMENU)1, g_hInst,
                         (LPVOID)lpPath);
 }
