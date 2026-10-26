@@ -63,6 +63,7 @@ static const CFGENTRY s_entries[] = {
     { "Taskbar",     "MaxClamp",      &g_cfg.bMaxClamp,        TRUE  },
     { "Taskbar",     "CtrlEscStart",  &g_cfg.bCtrlEscStart,    FALSE },
     { "Taskbar",     "WinKey",        &g_cfg.bWinKey,          TRUE  },
+    { "Desktop",     "RightClose",    &g_cfg.bRightClose,      FALSE },
     { "Desktop",     "Icons",         &g_cfg.bDesktopIcons,    TRUE  },
     { "Desktop",     "Menu",          &g_cfg.bDesktopMenu,     TRUE  },
     { "Desktop",     "SnapToGrid",    &g_cfg.bSnapToGrid,      TRUE  },

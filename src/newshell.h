@@ -98,6 +98,7 @@ typedef struct tagNSCONFIG {
     BOOL bFileHints;        /* folder windows: hints with file details */
     BOOL bAskDrop;          /* ask Copy/Move/Alias after a drag */
     BOOL bDragCopy;         /* drags copy unless Shift is held */
+    BOOL bRightClose;       /* right click on minimise/maximise boxes closes */
 } NSCONFIG;
 
 extern NSCONFIG g_cfg;
