@@ -220,6 +220,58 @@ void DrawSmallImageDisabled(HDC hdc, int x, int y, int nIndex)
     DeleteDC(hdcMem);
 }
 
+/*
+ * Shades an icon drawn at x, y as selected (Windows 95 style): every
+ * other pixel of the icon, not of the background clrBk, becomes the
+ * highlight colour.
+ */
+void ShadeArea(HDC hdc, int x, int y, int cx, int cy, COLORREF clrBk)
+{
+    static WORD wChecker[8] = { 0xAA, 0x55, 0xAA, 0x55, 0xAA, 0x55, 0xAA, 0x55 };
+    HDC hdcMask;
+    HBITMAP hbmMask, hbmPat, hbmOld;
+    HBRUSH hbrPat, hbrHi, hbrOld;
+    COLORREF clrBkOld, clrTextOld;
+
+    hdcMask = CreateCompatibleDC(hdc);
+    hbmMask = CreateBitmap(cx, cy, 1, 1, NULL);
+    hbmPat = CreateBitmap(8, 8, 1, 1, wChecker);
+    if (!hdcMask || !hbmMask || !hbmPat) {
+        if (hdcMask)
+            DeleteDC(hdcMask);
+        if (hbmMask)
+            DeleteObject(hbmMask);
+        if (hbmPat)
+            DeleteObject(hbmPat);
+        return;
+    }
+    hbmOld = SelectObject(hdcMask, hbmMask);
+    /* 1 = background (clrBk), 0 = icon */
+    clrBkOld = SetBkColor(hdc, clrBk);
+    BitBlt(hdcMask, 0, 0, cx, cy, hdc, x, y, SRCCOPY);
+    /* leave out every other pixel: OR in the checker */
+    hbrPat = CreatePatternBrush(hbmPat);
+    hbrOld = SelectObject(hdcMask, hbrPat);
+    SetBrushOrg(hdcMask, 0, 0);
+    PatBlt(hdcMask, 0, 0, cx, cy, 0x00FA0089L);        /* DPo */
+    SelectObject(hdcMask, hbrOld);
+    DeleteObject(hbrPat);
+    /* the highlight where the mask is 0 */
+    SetBkColor(hdc, RGB(255, 255, 255));
+    clrTextOld = SetTextColor(hdc, RGB(0, 0, 0));
+    hbrHi = CreateSolidBrush(NsColor(NSC_SELECTION));
+    hbrOld = SelectObject(hdc, hbrHi);
+    BitBlt(hdc, x, y, cx, cy, hdcMask, 0, 0, 0x00B8074AL);  /* PSDPxax */
+    SelectObject(hdc, hbrOld);
+    DeleteObject(hbrHi);
+    SetBkColor(hdc, clrBkOld);
+    SetTextColor(hdc, clrTextOld);
+    SelectObject(hdcMask, hbmOld);
+    DeleteDC(hdcMask);
+    DeleteObject(hbmMask);
+    DeleteObject(hbmPat);
+}
+
 /* Windows 3.1 can only draw icons at 32x32; shrink one via a memory DC. */
 void DrawIconSmall(HDC hdc, int x, int y, HICON hIcon, COLORREF clrBk)
 {
@@ -282,6 +334,169 @@ void FitText(HDC hdc, LPCSTR lpSrc, LPSTR lpDst, int cbDst, int cxMax)
         lpDst[n] = '\0';
     }
     lstrcpyn(lpDst, "...", cbDst);
+}
+
+/* -------------------------------------------------------------------- */
+/* Colours                                                              */
+/* -------------------------------------------------------------------- */
+
+/*
+ * NewShell16's own colours, [Colors] in NEWSHELL.INI ("Taskbar=192 192
+ * 192"); the system colour where none is set.
+ */
+static const char *s_szColorKey[NSC_COUNT] = { "Taskbar", "StartMenu", "Selection" };
+static const int   s_nColorSys[NSC_COUNT] = { COLOR_BTNFACE, COLOR_BTNFACE, COLOR_HIGHLIGHT };
+static COLORREF    s_clrCustom[NSC_COUNT];
+static BOOL        s_bColorSet[NSC_COUNT], s_bColorsRead;
+
+void NsColorsChanged(void)
+{
+    char szValue[24];
+    LPSTR p;
+    int i, k, v[3];
+
+    s_bColorsRead = TRUE;
+    for (i = 0; i < NSC_COUNT; i++) {
+        CfgGetStr("Colors", s_szColorKey[i], "", szValue, sizeof(szValue));
+        s_bColorSet[i] = FALSE;
+        for (p = szValue, k = 0; *p && k < 3; k++) {
+            v[k] = 0;
+            while (*p == ' ' || *p == ',')
+                p++;
+            while (*p >= '0' && *p <= '9')
+                v[k] = v[k] * 10 + (*p++ - '0');
+        }
+        if (k == 3) {
+            s_clrCustom[i] = RGB(v[0], v[1], v[2]);
+            s_bColorSet[i] = TRUE;
+        }
+    }
+}
+
+COLORREF NsColor(int nWhich)
+{
+    if (!s_bColorsRead)
+        NsColorsChanged();
+    return s_bColorSet[nWhich] ? s_clrCustom[nWhich] : GetSysColor(s_nColorSys[nWhich]);
+}
+
+/* -------------------------------------------------------------------- */
+/* Sharing (Windows for Workgroups)                                     */
+/* -------------------------------------------------------------------- */
+
+typedef WORD (FAR PASCAL *SHAREDLGPROC)(HWND, WORD, LPSTR);
+
+static SHAREDLGPROC ShareProc(BOOL bShare)
+{
+    return (SHAREDLGPROC)GetProcAddress(GetModuleHandle("USER"),
+                                        bShare ? "WNETSHAREASDIALOG" : "WNETSTOPSHAREDIALOG");
+}
+
+/* Whether the network (Windows for Workgroups) can share folders */
+BOOL NetShareAvailable(void)
+{
+    return ShareProc(TRUE) != NULL;
+}
+
+void NetShareDialog(HWND hwnd, LPCSTR lpPath, BOOL bShare)
+{
+    char szPath[MAXPATHLEN];
+    SHAREDLGPROC lpfn = ShareProc(bShare);
+
+    lstrcpyn(szPath, lpPath, sizeof(szPath));
+    if (lpfn)
+        lpfn(hwnd, 1 /* WNTYPE_DRIVE */, szPath);
+}
+
+/* -------------------------------------------------------------------- */
+/* Hints                                                                */
+/* -------------------------------------------------------------------- */
+
+/* One small yellow popup with text, used by folder views and the taskbar */
+static HWND s_hwndHint;
+static char s_szHint[256];
+
+LRESULT CALLBACK NSEXPORT HintWndProc(HWND hwnd, UINT msg, WPARAM wParam,
+                                      LPARAM lParam)
+{
+    PAINTSTRUCT ps;
+    RECT rc;
+    HFONT hfOld;
+
+    switch (msg) {
+    case WM_PAINT:
+        BeginPaint(hwnd, &ps);
+        GetClientRect(hwnd, &rc);
+        FillSolid(ps.hdc, &rc, RGB(255, 255, 225));
+        hfOld = SelectObject(ps.hdc, g_hfontUI);
+        SetBkMode(ps.hdc, TRANSPARENT);
+        SetTextColor(ps.hdc, RGB(0, 0, 0));
+        InflateRect(&rc, -3, -1);
+        DrawText(ps.hdc, s_szHint, -1, &rc, DT_LEFT | DT_NOPREFIX);
+        SelectObject(ps.hdc, hfOld);
+        EndPaint(hwnd, &ps);
+        return 0;
+    case WM_MOUSEACTIVATE:
+        return MA_NOACTIVATE;
+    }
+    return DefWindowProc(hwnd, msg, wParam, lParam);
+}
+
+BOOL HintRegister(void)
+{
+    WNDCLASS wc;
+
+    _fmemset(&wc, 0, sizeof(wc));
+    wc.style = CS_SAVEBITS;
+    wc.lpfnWndProc = HintWndProc;
+    wc.hInstance = g_hInst;
+    wc.hCursor = LoadCursor(NULL, IDC_ARROW);
+    wc.lpszClassName = CLS_HINT;
+    return RegisterClass(&wc);
+}
+
+/* Shows lpText (lines split by \n) with its top left near x, y on screen */
+void HintShow(LPCSTR lpText, int x, int y)
+{
+    RECT rc;
+    HDC hdc;
+    HFONT hfOld;
+    int cxScreen = GetSystemMetrics(SM_CXSCREEN);
+    int cyScreen = GetSystemMetrics(SM_CYSCREEN);
+
+    if (!s_hwndHint)
+        s_hwndHint = CreateWindow(CLS_HINT, "", WS_POPUP | WS_BORDER, 0, 0, 0, 0,
+                                  NULL, NULL, g_hInst, NULL);
+    if (!s_hwndHint)
+        return;
+    lstrcpyn(s_szHint, lpText, sizeof(s_szHint));
+    hdc = GetDC(NULL);
+    hfOld = SelectObject(hdc, g_hfontUI);
+    SetRect(&rc, 0, 0, 300, 0);
+    DrawText(hdc, s_szHint, -1, &rc, DT_CALCRECT | DT_LEFT | DT_NOPREFIX);
+    SelectObject(hdc, hfOld);
+    ReleaseDC(NULL, hdc);
+    if (x + rc.right + 8 > cxScreen)
+        x = cxScreen - rc.right - 8;
+    if (x < 0)
+        x = 0;
+    if (y + rc.bottom + 4 > cyScreen)
+        y = cyScreen - rc.bottom - 4;
+    SetWindowPos(s_hwndHint, HWND_TOPMOST, x, y, rc.right + 8, rc.bottom + 4,
+                 SWP_NOACTIVATE | SWP_SHOWWINDOW);
+    InvalidateRect(s_hwndHint, NULL, FALSE);
+    UpdateWindow(s_hwndHint);
+}
+
+void HintHide(void)
+{
+    if (s_hwndHint && IsWindowVisible(s_hwndHint))
+        ShowWindow(s_hwndHint, SW_HIDE);
+}
+
+BOOL HintVisible(void)
+{
+    return s_hwndHint && IsWindowVisible(s_hwndHint);
 }
 
 /* -------------------------------------------------------------------- */
@@ -362,6 +577,57 @@ BOOL PathIsDirectory(LPCSTR lpPath)
     return (attr & _A_SUBDIR) != 0;
 }
 
+/* Case-insensitive wildcard match supporting * and ? */
+BOOL WildMatch(LPCSTR p, LPCSTR s)
+{
+    while (*p) {
+        if (*p == '*') {
+            while (*p == '*')
+                p++;
+            if (!*p)
+                return TRUE;
+            for (; *s; s++)
+                if (WildMatch(p, s))
+                    return TRUE;
+            return FALSE;
+        }
+        if (!*s)
+            return FALSE;
+        if (*p != '?' && (*p & ~0x20) != (*s & ~0x20)
+            && !(*p == *s))
+            return FALSE;
+        p++;
+        s++;
+    }
+    return *s == '\0';
+}
+
+/*
+ * Whether a file name matches one of the patterns of a list separated by
+ * ';', ',' or blanks ("*.TXT;*.DOC"). "*.*" and "X.*" also match names
+ * without an extension, as in DOS.
+ */
+BOOL MatchSpecList(LPCSTR lpName, LPCSTR lpList)
+{
+    char szPat[32], szName[16];
+    int n;
+
+    lstrcpyn(szName, lpName, sizeof(szName) - 1);
+    if (!_fstrchr(szName, '.'))
+        lstrcat(szName, ".");
+    while (*lpList) {
+        while (*lpList == ';' || *lpList == ',' || *lpList == ' ')
+            lpList++;
+        for (n = 0; *lpList && *lpList != ';' && *lpList != ',' && *lpList != ' '; lpList++)
+            if (n < sizeof(szPat) - 1)
+                szPat[n++] = *lpList;
+        szPat[n] = '\0';
+        if (n && (WildMatch(szPat, lpName) || WildMatch(szPat, szName)))
+            return TRUE;
+    }
+    return FALSE;
+}
+
 BOOL IsShiftDown(void)
 {
     return (GetKeyState(VK_SHIFT) & 0x8000) != 0;
@@ -410,6 +676,8 @@ BOOL LaunchCommand(HWND hwnd, LPCSTR lpCmdLine, LPCSTR lpDir, int nShow)
 
     while (*lpCmdLine == ' ')
         lpCmdLine++;
+    if (IsUrl(lpCmdLine))
+        return OpenUrl(hwnd, lpCmdLine);
     while (*lpCmdLine && *lpCmdLine != ' ' && i < sizeof(szFile) - 1)
         szFile[i++] = *lpCmdLine++;
     szFile[i] = '\0';
@@ -446,6 +714,8 @@ BOOL OpenPath(HWND hwnd, LPCSTR lpPath)
     lstrcpyn(szDir, lpPath, sizeof(szDir));
     PathParent(szDir);
     hInst = ShellExecute(hwnd, NULL, lpPath, NULL, szDir, SW_SHOWNORMAL);
+    if ((UINT)hInst == 31)              /* no association: pick a program */
+        return OpenWithDialog(hwnd, lpPath);
     if ((UINT)hInst <= 32) {
         ShowLaunchError(hwnd, (UINT)hInst, lpPath);
         return FALSE;

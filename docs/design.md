@@ -11,20 +11,29 @@ executable, `NEWSHELL.EXE`.
 | `main.c` | `WinMain`, hidden main window, shell detection, hook DLL loading, start-up programs, second-instance forwarding |
 | `taskbar.c` | Taskbar window: Start button, task buttons, clock, task system menus |
 | `startmnu.c` | Owner-drawn Start menu from `NSSTART.INI`, `$` macros |
+| `startprop.c` | Start Menu Properties: the Start menu as an editable tree, its look |
 | `progman.c` | `PROGMAN.INI` / `*.GRP` reader, `load=`/`run=`, StartUp group |
-| `desktop.c` | Desktop icons (Computer, Bin, shortcuts), desktop menu |
-| `fview.c` | Folder view control: views, selection, rename, clipboard, drag and drop |
+| `dde.c` | Program Manager DDE server for setup programs |
+| `desktop.c` | Desktop icons (Computer, Bin, shortcuts), desktop menu, drops on the desktop |
+| `shortcut.c` | Shortcut Properties and Change Icon dialogs |
+| `alias.c` | Aliases (`.ALS` files in Calmira's format) |
+| `fview.c` | Folder view control: views, selection, rubber band, rename, clipboard, drag and drop, hints |
+| `folddlg.c` | Select Files, Set Filter, Go To, Open With, Describe, Columns; `DESCRIPT.ION` |
 | `folder.c` | Folder windows and the Computer window (frames around a folder view) |
-| `explorer.c` | File System window: folder tree plus folder view |
-| `fileops.c` | Copy, move, delete, rename, new folder; progress and replace dialogs |
-| `bin.c` | The Bin and its window |
-| `props.c` | Properties dialog for files, folders, drives and selections |
+| `explorer.c` | File System and Browse Folders windows: folder tree plus folder view |
+| `toolbar.c` | Toolbar of folder and File System windows |
+| `fileops.c` | Copy, move, delete, rename, new folder; progress, replace and confirmation dialogs |
+| `bin.c` | The Bin, its window and its properties |
+| `props.c` | Properties dialog: files, folders, drives (pie), selections, version, association |
 | `taskman.c` | Task Manager, cascade and tile |
-| `find.c` | Find dialog |
+| `find.c` | Find dialog: names, contents, result menu |
 | `icons.c` | File icon lookup and caching |
-| `dialogs.c` | Run, Shut Down, About, Options |
+| `dialogs.c` | Run, Shut Down, About |
+| `options.c` | The Options dialog |
+| `system.c` | Sounds, web addresses, splash and shutdown screens, Tip of the Day, help, saved windows |
+| `users.c` | Users: logon dialog, per-user settings |
 | `settings.c` | `NEWSHELL.INI` |
-| `util.c` | 3D drawing, small images, path helpers, launching |
+| `util.c` | 3D drawing, small images, colours, hints, path helpers, launching |
 | `nshook.c` | `NSHOOK.DLL`: system hooks (see below) |
 
 ## Windows 3.1 specifics
@@ -34,9 +43,22 @@ executable, `NEWSHELL.EXE`.
   created/destroyed, for an immediate taskbar update), a `WH_CALLWNDPROC`
   hook that shrinks the maximised size in `WM_GETMINMAXINFO` so windows
   stop above the taskbar, a subclass of the desktop window for the
-  right-click menu, a keyboard hook for the Windows key, and the
-  undocumented `KERNEL.FileCdr` callback for file system changes. Without
-  the DLL NewShell16 still works; the taskbar then relies on its timer.
+  right-click menu and for files dropped from File Manager, a keyboard
+  hook for the Windows key and hot keys, a `WH_GETMESSAGE` hook that
+  closes windows on a right click on their minimise or maximise box,
+  and the undocumented `KERNEL.FileCdr` callback for file system
+  changes. Without the DLL NewShell16 still works; the taskbar then
+  relies on its timer.
+- **Program Manager DDE.** Setup programs create their groups by DDE
+  with Program Manager (service and topic `PROGMAN`). As the shell,
+  NewShell16 answers in its place with plain DDE messages (which DDEML
+  clients understand), one hidden window per conversation, and turns
+  the commands into submenus of Programs in `NSSTART.INI`.
+- **One data segment.** Windows 3.1 runs a program with several data
+  segments only once, and Ctrl+Esc relies on a second copy of
+  NEWSHELL.EXE handing its command line to the first. String literals
+  therefore go into the code segments (`-zc`) and large tables are
+  allocated from the global heap.
 - **Task list.** The taskbar also polls the top-level windows (visible,
   unowned, with a caption) from a 500 ms timer to catch title changes.
   The Retheme16 engine's window (class `Retheme16`), which only exists so
@@ -107,6 +129,7 @@ restyles those system parts:
 | `NEWSHELL` | (when running) Task Manager, or Start menu with `CtrlEscStart=1` |
 | `NEWSHELL /S` | Start menu |
 | `NEWSHELL /E [path]` | File System window |
+| `NEWSHELL /D` | show the desktop (minimise everything; again: restore) |
 | `NEWSHELL path` | open a folder, document or program |
 
 ## NSSTART.INI
@@ -132,56 +155,146 @@ executable or icon file, or a built-in image: `<programs>`, `<documents>`,
 `<favorites>`, `<internet>`...
 
 Built-in commands: `$Run`, `$ShutDown`, `$Find`, `$Explore [path]`,
-`$System` (Computer), `$Bin`, `$TaskManager`, `$Folder path`,
-`$MinimizePrograms`, `$ArrangeIcons`, `$TaskbarProp` (Options), `$Help`.
-They can also be used for desktop shortcuts.
+`$BrowseFolders`, `$System` (Computer), `$Bin`, `$TaskManager`,
+`$Folder path`, `$MinimizePrograms`, `$ClearDesktop`, `$CascadeBrowsers`,
+`$CloseBrowsers`, `$ArrangeIcons`, `$LineUpIcons`, `$ScreenSaver`,
+`$ToggleTaskbar`, `$Tips`, `$Help`, `$TaskbarProp`, `$DesktopProp`,
+`$FileSystemProp`, `$SystemProp` (pages of the Options), `$StartMenuProp`,
+`$BinProp`. They can also be used for desktop shortcuts, aliases and hot
+keys. Commands starting with `http://`, `ftp://`, `www.` and the like
+open in the web browser.
+
+Settings > Start Menu (`$StartMenuProp`) edits the menu as a tree and
+writes `NSSTART.INI` anew. Setup programs add their groups to Programs
+over DDE.
 
 ## NEWSHELL.INI
 
-Most options are set in the Options dialog (Start → Settings → Taskbar).
+Nearly every option is in the Options dialog (Start > Settings >
+Taskbar); the look of the Start menu is in Start Menu Properties.
 
 ```ini
 [Taskbar]
 Clock=1            ; show the clock
 HideMinApps=1      ; move minimised windows off screen
+MinAbove=0         ; (HideMinApps=0) icons of minimised windows above the bar
 MaxClamp=1         ; keep maximised windows above the taskbar
 CtrlEscStart=0     ; Ctrl+Esc: 0 = Task Manager, 1 = Start menu
-WinKey=1           ; Windows key opens the Start menu
+WinKey=1           ; Windows key: Start menu, Win+E/R/F/M/D/Tab
+AutoHide=0         ; slide away, back when the mouse reaches the bottom
+AnimSteps=6
+Enabled=1          ; 0: no taskbar
+Hints=1            ; captions, date and resources as hints
+DocFirst=0         ; "README.TXT - Notepad"
+LowerDoc=0         ; ... "readme.txt - Notepad"
+Exclude=           ; programs (module names) without a button
+Tray=              ; programs shown as icons beside the clock
 
 [Desktop]
 Icons=1
 Menu=1             ; right-click menu on the desktop
+SnapToGrid=1
+SingleClick=0
+ShortcutArrows=1
+RightClose=0       ; right click on minimise/maximise boxes closes
+ComputerCaption=Computer
+BinCaption=Bin
 Shortcut1=Notepad|NOTEPAD.EXE
 Shortcut2=Documents|$Folder C:\DOCS
+Shortcut3=Write|WRITE.EXE|C:\DOCS|2|PROGMAN.EXE|5
+                   ; caption|command|folder|show (0 1 2)|icon file|icon index
 
 [Folders]
 NewWindow=1        ; open sub-folders in new windows
 ShowHidden=0
-DeleteToBin=1
-ConfirmDelete=1
+Toolbar=1
+StatusBar=1
+FlatToolbar=0
 FileMonitor=1      ; refresh folders when files change
 View=0             ; 0 large icons, 1 small icons, 2 details, 3 list
 Columns=140,70,80,72,64,64,180  ; details: Name, Size, Type, Date, Time,
                    ; Attributes, Description (dragged in the header)
+HiddenColumns=0    ; bit n switches column n off (View > Columns)
 Sort=0             ; 0 name, 1 type, 2 size, 3 date
+Capitalize=0       ; "Calc.exe"
+HideExtensions=0   ; no .EXE for programs with their own icon
+ShadeSelected=1
+FileHints=1
+WindowPos=0        ; new windows: 0 Windows, 1 cascaded, 2 like the last one
+SaveWindows=0      ; reopen the windows of the last session
+Inspect=NOTEPAD.EXE
+DeleteToBin=1
+ConfirmDelete=1
+ConfirmCopy=0      ; before copying or moving
+ConfirmReplace=1   ; each replaced file
+ConfirmFolders=1   ; copying into an existing folder
+ConfirmProtected=1 ; read-only, hidden and system files
+AskOnDrop=0        ; Move / Copy / Alias menu after every drag
+DragCopy=0         ; drags copy unless Shift is held
 
 [Explorer]
 Split=170          ; width of the File System window's folder tree
 Toolbar=1          ; View > Toolbar
 StatusBar=1        ; View > Status Bar
+RememberLast=1     ; open at the last folder (Last=)
+
+[Start Menu]
+Win95Look=1        ; banner and 3D frame, else a plain menu
+ColouredBar=1
+BoldSelect=0
+LargeTop=1         ; large icons on the first level
+ItemHeight=34
+Font=              ; "Arial,9,700,0": face, points, weight, italic
+MouseUp=0          ; open when the Start button is released
+ProgramsGroup=     ; the submenu for Program Manager groups (default Programs)
 
 [Startup]
 Run=1              ; run load=/run= and the StartUp group when the shell
+ProgmanDDE=1       ; answer setup programs in Program Manager's place
+
+[Preferences]
+Splash=0
+ShutdownScreen=1
+ShowTips=0
+OpenComputer=0     ; open the Computer window at start-up
+ComputerQuits=0    ; closing the Computer window shuts down
+
+[Bin]
+Capacity=0         ; MB, 0 = no limit (the oldest items go first)
+EmptyOnExit=0
+
+[Colors]           ; "r g b"; the system colours when not set
+Taskbar=
+StartMenu=
+Selection=
+
+[Sounds]           ; .WAV files
+Startup=
+Exit=
+StartMenu=
+OpenFolder=
+EmptyBin=
+
+[Internet]
+Browser=           ; else the program associated with .HTM
+
+[Hotkeys]
+1=Ctrl+Alt+N,NOTEPAD.EXE   ; key, command (or $ macro)
+
+[Find]
+Icons=1
+MatchCase=0
+
+[Users]            ; always in the shared NEWSHELL.INI
+Enabled=0          ; logon dialog; user n has NSUSERn.INI and NSMENUn.INI
 ```
 
 ## Roadmap
 
 [calmira-parity.md](calmira-parity.md) compares NewShell16 with Calmira
-feature by feature. The main gaps:
+feature by feature. What is still missing:
 
-- Shortcuts (aliases) as files, dragging items onto the desktop
-- Documents menu, editing the Start menu from a dialog
-- Rubber-band selection, dragging with the right mouse button
-- Disk tools (format, label), network drive connections
-- Folder window toolbar, file filters, Open With
-- Screen saver / "show desktop" helpers, tips of the day
+- Localisation (Calmira's string tables)
+- A help file (the Windows help compiler is only in the SDK)
+- Disk tools (format, label), drive states in the folder tree
+- Drag and drop inside Start Menu Properties

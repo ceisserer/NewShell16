@@ -38,9 +38,9 @@
 #include <string.h>
 #include "newshell.h"
 
-#define START_INI       "NSSTART.INI"
+#define START_INI       NS_STARTINI
 #define SM_MAXITEMS     240
-#define SM_MAXKEYS      4096
+#define SM_MAXKEYS      SM_KEYBUF
 #define SM_GROUPMAX     64
 
 #define TOP_MIN_H       34      /* item heights: at least this, or font + gap */
@@ -61,9 +61,7 @@
 
 typedef struct tagSMITEM {
     char   szText[40];
-    char   szCmd[80];
-    char   szDir[48];
-    char   szIcon[48];
+    char   szIcon[80];
     BYTE   bShow;
     BYTE   bIconIndex;
     BYTE   bFlags;
@@ -74,7 +72,14 @@ typedef struct tagSMITEM {
     int    yTop;                /* top-level items: offset from menu top */
 } SMITEM, FAR *LPSMITEM;
 
+/* what an item runs, kept apart to stay within 64 KB per array */
+typedef struct tagSMCMD {
+    char   szCmd[128];
+    char   szDir[80];
+} SMCMD, FAR *LPSMCMD;
+
 static LPSMITEM s_lpItems;
+static LPSMCMD  s_lpCmds;
 static int      s_nItems;
 static int      s_cyMenu;
 static int      s_cyTop, s_cySub;   /* item heights for the current font */
@@ -82,6 +87,12 @@ static HFONT    s_hfMenu;           /* GetMenuFont() when the menu opened */
 static BOOL     s_bThemed;          /* the theme engine draws the menus */
 static HFONT    s_hfBanner, s_hfBannerLight;
 static int      s_cyBannerFont;
+static HFONT    s_hfCustom;         /* [Start Menu] Font=, if set */
+static HFONT    s_hfBoldMenu;       /* bold version of s_hfMenu */
+static BOOL     s_b3D = TRUE;       /* Calmira's 3D menu (banner, button face) */
+static BOOL     s_bColBar = TRUE;   /* coloured selection bar, else a frame */
+static BOOL     s_bBoldSel;         /* selected item in bold */
+static BOOL     s_bLargeTop = TRUE; /* large icons on the first level */
 
 static const char *s_szImageNames[] = {
     "<programs>", "<documents>", "<settings>", "<find>", "<run>", "<shutdown>",
@@ -147,13 +158,124 @@ static void CreateDefaultMenu(void)
     WriteItem("Start\\&Settings", "&Control Panel", "CONTROL.EXE", "", 0, "<control>", 0);
     WriteItem("Start\\&Settings", "&Printers", "PRINTMAN.EXE", "", 0, "<printer>", 0);
     WriteItem("Start\\&Settings", "&Taskbar...", "$TaskbarProp", "", 0, "<taskbar>", 0);
+    WriteItem("Start\\&Settings", "&Start Menu...", "$StartMenuProp", "", 0, "<start>", 0);
     WriteItem("Start\\&Settings", "&Windows Setup", "SETUP.EXE", "", 0, "", 0);
     WritePrivateProfileString(NULL, NULL, NULL, START_INI);    /* flush */
+}
+
+/* Creates NSSTART.INI from the Program Manager groups if it is missing */
+void StartMenuEnsure(void)
+{
+    char szTest[8];
+
+    if (GetPrivateProfileString("Start", NULL, "", szTest, sizeof(szTest),
+                                START_INI) == 0)
+        CreateDefaultMenu();
+}
+
+/*
+ * The section of the Programs submenu, where Program Manager groups go:
+ * "Start\" and the first top-level submenu named Programs (ignoring '&'),
+ * or [Start Menu] ProgramsGroup= in NEWSHELL.INI.
+ */
+void StartMenuProgramsSection(LPSTR lpBuf, int cbBuf)
+{
+    char szName[48], szPlain[48];
+    char *pKeys, *p;
+    int i, n;
+
+    CfgGetStr("Start Menu", "ProgramsGroup", "", szName, sizeof(szName));
+    if (!szName[0]) {
+        lstrcpy(szName, "&Programs");
+        pKeys = (char *)malloc(SM_MAXKEYS);
+        if (pKeys) {
+            GetPrivateProfileString("Start", NULL, "", pKeys, SM_MAXKEYS, START_INI);
+            for (p = pKeys; *p; p += lstrlen(p) + 1) {
+                for (i = n = 0; p[i] && n < sizeof(szPlain) - 1; i++)
+                    if (p[i] != '&')
+                        szPlain[n++] = p[i];
+                szPlain[n] = '\0';
+                if (lstrcmpi(szPlain, "Programs*") == 0) {
+                    lstrcpyn(szName, p, sizeof(szName));
+                    szName[lstrlen(szName) - 1] = '\0';
+                    break;
+                }
+            }
+            free(pKeys);
+        }
+    }
+    if (lstrlen(szName) + 7 > cbBuf)
+        szName[cbBuf - 7] = '\0';
+    wsprintf(lpBuf, "Start\\%s", (LPSTR)szName);
+}
+
+/*
+ * Runs the items of group lpGroup of the Programs menu (the StartUp
+ * group). Returns FALSE if NSSTART.INI has no such group.
+ */
+BOOL StartMenuRunGroup(LPCSTR lpGroup)
+{
+    char szSection[128], szValue[300], szProbe[8];
+    char *pKeys, *p;
+    LPSTR f[5], q;
+    int i, n;
+
+    if (GetPrivateProfileString("Start", NULL, "", szProbe, sizeof(szProbe),
+                                START_INI) == 0)
+        return FALSE;
+    StartMenuProgramsSection(szSection, sizeof(szSection) - 48);
+    lstrcat(szSection, "\\");
+    lstrcat(szSection, lpGroup);
+    pKeys = (char *)malloc(SM_MAXKEYS);
+    if (!pKeys)
+        return FALSE;
+    if (GetPrivateProfileString(szSection, NULL, "", pKeys, SM_MAXKEYS, START_INI) == 0) {
+        free(pKeys);
+        return FALSE;
+    }
+    for (p = pKeys; *p; p += lstrlen(p) + 1) {
+        if (*p == '-')
+            continue;
+        GetPrivateProfileString(szSection, p, "", szValue, sizeof(szValue), START_INI);
+        f[0] = szValue;
+        for (i = 1; i < 5; i++)
+            f[i] = "";
+        for (q = szValue, n = 0; *q && n < 4; q++)
+            if (*q == ';') {
+                *q = '\0';
+                f[++n] = q + 1;
+            }
+        if (f[0][0] == '$')
+            ExecMacro(g_hwndMain, f[0]);
+        else if (f[0][0])
+            LaunchCommand(NULL, f[0], f[1], f[2][0] == '1' ? SW_SHOWMINNOACTIVE
+                                                         : SW_SHOWNORMAL);
+    }
+    free(pKeys);
+    return TRUE;
 }
 
 /* -------------------------------------------------------------------- */
 /* Building                                                             */
 /* -------------------------------------------------------------------- */
+
+/* Item metrics depend on the options */
+static BOOL HasBanner(LPSMITEM p)
+{
+    return (p->bFlags & SF_TOP) && s_b3D;
+}
+
+static BOOL IsLarge(LPSMITEM p)
+{
+    return (p->bFlags & SF_TOP) && s_bLargeTop;
+}
+
+static int ItemHeight(LPSMITEM p)
+{
+    if (p->bFlags & SF_SEP)
+        return SEP_H;
+    return IsLarge(p) ? s_cyTop : s_cySub;
+}
 
 static int ImageByName(LPCSTR lpName)
 {
@@ -165,9 +287,16 @@ static int ImageByName(LPCSTR lpName)
     return -1;
 }
 
+/* The SMI_* image for "<name>", or -1 */
+int StartMenuImage(LPCSTR lpName)
+{
+    return ImageByName(lpName);
+}
+
 /* Splits "a;b;n;c;m" into the item's fields */
 static void ParseValue(LPSMITEM p, LPSTR lpValue)
 {
+    LPSMCMD c = &s_lpCmds[p - s_lpItems];
     LPSTR f[5];
     int i, n = 0;
 
@@ -179,8 +308,8 @@ static void ParseValue(LPSMITEM p, LPSTR lpValue)
             *lpValue = '\0';
             f[++n] = lpValue + 1;
         }
-    lstrcpyn(p->szCmd, f[0], sizeof(p->szCmd));
-    lstrcpyn(p->szDir, f[1], sizeof(p->szDir));
+    lstrcpyn(c->szCmd, f[0], sizeof(c->szCmd));
+    lstrcpyn(c->szDir, f[1], sizeof(c->szDir));
     p->bShow = (BYTE)atoi(f[2]);
     lstrcpyn(p->szIcon, f[3], sizeof(p->szIcon));
     p->bIconIndex = (BYTE)atoi(f[4]);
@@ -195,6 +324,7 @@ static LPSMITEM NewItem(HMENU hMenu, BOOL bTop)
         return NULL;
     p = &s_lpItems[s_nItems];
     _fmemset(p, 0, sizeof(SMITEM));
+    _fmemset(&s_lpCmds[s_nItems], 0, sizeof(SMCMD));
     p->hMenu = hMenu;
     p->nPos = GetMenuItemCount(hMenu);
     p->nImage = -1;
@@ -306,38 +436,110 @@ static void LayoutTop(void)
     for (i = 0; i < s_nItems; i++)
         if (s_lpItems[i].bFlags & SF_TOP) {
             s_lpItems[i].yTop = y;
-            y += (s_lpItems[i].bFlags & SF_SEP) ? SEP_H : s_cyTop;
+            y += ItemHeight(&s_lpItems[i]);
         }
     s_cyMenu = y;
+}
+
+/* "face,points,weight[,italic]" from [Start Menu] Font= */
+static HFONT CreateCustomFont(void)
+{
+    char szValue[64];
+    LOGFONT lf;
+    LPSTR p;
+    HDC hdc;
+    int n;
+
+    CfgGetStr("Start Menu", "Font", "", szValue, sizeof(szValue));
+    if (!szValue[0])
+        return NULL;
+    _fmemset(&lf, 0, sizeof(lf));
+    for (p = szValue; *p && *p != ','; p++)
+        ;
+    if (*p)
+        *p++ = '\0';
+    lstrcpyn(lf.lfFaceName, szValue, sizeof(lf.lfFaceName));
+    n = atoi(p);
+    hdc = GetDC(NULL);
+    lf.lfHeight = -MulDiv(n > 0 ? n : 8, GetDeviceCaps(hdc, LOGPIXELSY), 72);
+    ReleaseDC(NULL, hdc);
+    while (*p && *p != ',')
+        p++;
+    lf.lfWeight = *p ? atoi(++p) : FW_NORMAL;
+    while (*p && *p != ',')
+        p++;
+    lf.lfItalic = (BYTE)(*p && p[1] == '1');
+    lf.lfCharSet = ANSI_CHARSET;
+    lf.lfPitchAndFamily = VARIABLE_PITCH | FF_SWISS;
+    return CreateFontIndirect(&lf);
+}
+
+/* The Start Menu Properties were changed: options and font are read again */
+void StartMenuOptionsChanged(void)
+{
+    if (s_hfCustom) {
+        DeleteObject(s_hfCustom);
+        s_hfCustom = NULL;
+    }
+    s_b3D = CfgGetInt("Start Menu", "Win95Look", 1);
+    s_hfCustom = CreateCustomFont();
+}
+
+static void ReadOptions(void)
+{
+    static BOOL s_bRead;
+    LOGFONT lf;
+
+    if (!s_bRead) {
+        s_bRead = TRUE;
+        s_hfCustom = CreateCustomFont();
+    }
+    s_b3D = CfgGetInt("Start Menu", "Win95Look", 1);
+    s_bColBar = CfgGetInt("Start Menu", "ColouredBar", 1);
+    s_bBoldSel = CfgGetInt("Start Menu", "BoldSelect", 0);
+    s_bLargeTop = CfgGetInt("Start Menu", "LargeTop", 1);
+    s_hfMenu = s_hfCustom ? s_hfCustom : GetMenuFont();
+    if (s_hfBoldMenu) {
+        DeleteObject(s_hfBoldMenu);
+        s_hfBoldMenu = NULL;
+    }
+    if (s_bBoldSel && GetObject(s_hfMenu, sizeof(lf), &lf)) {
+        lf.lfWeight = FW_BOLD;
+        s_hfBoldMenu = CreateFontIndirect(&lf);
+    }
 }
 
 void StartMenuShow(HWND hwndOwner, int x, int y)
 {
     HMENU hMenu;
-    char szTest[8];
 
     if (!s_lpItems) {
         s_lpItems = (LPSMITEM)malloc(SM_MAXITEMS * sizeof(SMITEM));
-        if (!s_lpItems)
+        s_lpCmds = (LPSMCMD)malloc(SM_MAXITEMS * sizeof(SMCMD));
+        if (!s_lpItems || !s_lpCmds) {
+            StartMenuFree();
             return;
+        }
     }
-    if (GetPrivateProfileString("Start", NULL, "", szTest, sizeof(szTest),
-                                START_INI) == 0)
-        CreateDefaultMenu();
+    StartMenuEnsure();
+    PlayEventSound("StartMenu");
 
     s_nItems = 0;
     CreateBannerFont();
-    s_hfMenu = GetMenuFont();
+    ReadOptions();
     s_bThemed = ThemeEngineActive();
     {
         TEXTMETRIC tm;
         HDC hdc = GetDC(NULL);
         HFONT hfOld = SelectObject(hdc, s_hfMenu);
+        int cyLarge = CfgGetInt("Start Menu", "ItemHeight", TOP_MIN_H);
 
         GetTextMetrics(hdc, &tm);
         SelectObject(hdc, hfOld);
         ReleaseDC(NULL, hdc);
-        s_cyTop = tm.tmHeight + 10 > TOP_MIN_H ? tm.tmHeight + 10 : TOP_MIN_H;
+        if (cyLarge < SUB_MIN_H || cyLarge > 64)
+            cyLarge = TOP_MIN_H;
+        s_cyTop = tm.tmHeight + 10 > cyLarge ? tm.tmHeight + 10 : cyLarge;
         s_cySub = tm.tmHeight + 4 > SUB_MIN_H ? tm.tmHeight + 4 : SUB_MIN_H;
     }
     hMenu = BuildMenu("Start", TRUE);
@@ -360,6 +562,7 @@ static LPSMITEM ItemFromData(DWORD dwData)
 
 static void LoadItemIcon(LPSMITEM p)
 {
+    LPSMCMD c = &s_lpCmds[p - s_lpItems];
     char szFile[MAXPATHLEN];
     OFSTRUCT of;
     int i;
@@ -372,14 +575,14 @@ static void LoadItemIcon(LPSMITEM p)
         if (p->hIcon)
             return;
     }
-    if (p->szCmd[0] == '$') {
-        p->nImage = (_fstrnicmp(p->szCmd, "$Folder", 7) == 0
-                     || _fstrnicmp(p->szCmd + 1, "LargeIconFolder", 15) == 0)
+    if (c->szCmd[0] == '$') {
+        p->nImage = (_fstrnicmp(c->szCmd, "$Folder", 7) == 0
+                     || _fstrnicmp(c->szCmd + 1, "LargeIconFolder", 15) == 0)
                     ? SMI_FOLDER : SMI_APP;
         return;
     }
-    for (i = 0; p->szCmd[i] && p->szCmd[i] != ' ' && i < sizeof(szFile) - 1; i++)
-        szFile[i] = p->szCmd[i];
+    for (i = 0; c->szCmd[i] && c->szCmd[i] != ' ' && i < sizeof(szFile) - 1; i++)
+        szFile[i] = c->szCmd[i];
     szFile[i] = '\0';
     if (szFile[0] == '\0') {
         p->nImage = SMI_APP;
@@ -407,16 +610,14 @@ BOOL StartMenuMeasureItem(MEASUREITEMSTRUCT FAR *lpmis)
     if (lpmis->CtlType != ODT_MENU || !(p = ItemFromData(lpmis->itemData)))
         return FALSE;
     hdc = GetDC(NULL);
-    hfOld = SelectObject(hdc, s_hfMenu);
+    hfOld = SelectObject(hdc, s_hfBoldMenu ? s_hfBoldMenu : s_hfMenu);
     cx = LOWORD(GetTextExtent(hdc, p->szText, lstrlen(p->szText)));
     SelectObject(hdc, hfOld);
     ReleaseDC(NULL, hdc);
 
-    if (p->bFlags & SF_SEP)
-        lpmis->itemHeight = SEP_H;
-    else
-        lpmis->itemHeight = (p->bFlags & SF_TOP) ? s_cyTop : s_cySub;
-    lpmis->itemWidth = ((p->bFlags & SF_TOP) ? BANNER_W + TOP_TEXT_X : SUB_TEXT_X) + cx + 20;
+    lpmis->itemHeight = ItemHeight(p);
+    lpmis->itemWidth = (HasBanner(p) ? BANNER_W : 0)
+                       + (IsLarge(p) ? TOP_TEXT_X : SUB_TEXT_X) + cx + 20;
     return TRUE;
 }
 
@@ -500,8 +701,8 @@ static BOOL IsLastItem(LPSMITEM p)
  */
 static void PaintItem(HDC hdc, RECT rc, LPSMITEM p, BOOL bSel)
 {
-    BOOL bTop = (p->bFlags & SF_TOP) != 0;
-    COLORREF clrFace = GetSysColor(COLOR_BTNFACE);
+    BOOL bTop = HasBanner(p), bLarge = IsLarge(p);
+    COLORREF clrFace = s_b3D ? NsColor(NSC_STARTMENU) : GetSysColor(COLOR_MENU);
     RECT rcIn, rcText;
     int cy;
 
@@ -511,7 +712,7 @@ static void PaintItem(HDC hdc, RECT rc, LPSMITEM p, BOOL bSel)
         rc.left += BANNER_W;
     }
     rcIn = rc;
-    if (!s_bThemed) {
+    if (!s_bThemed && s_b3D) {
         RECT rcLine;
 
         if (!bTop) {
@@ -541,11 +742,18 @@ static void PaintItem(HDC hdc, RECT rc, LPSMITEM p, BOOL bSel)
         return;
     }
 
-    if (bSel)
-        FillSolid(hdc, &rcIn, GetSysColor(COLOR_HIGHLIGHT));
+    if (bSel && s_bColBar)
+        FillSolid(hdc, &rcIn, NsColor(NSC_SELECTION));
+    else if (bSel) {
+        /* a plain bar: a sunken frame around the item */
+        RECT rcBar = rcIn;
+
+        InflateRect(&rcBar, -1, 0);
+        Draw3DEdge(hdc, &rcBar, TRUE, FALSE);
+    }
     if (!(p->bFlags & SF_ICONDONE))
         LoadItemIcon(p);
-    if (bTop) {
+    if (bLarge) {
         int x = rc.left + TOP_ICON_X, idi = LargeIcon(p->nImage);
 
         cy = rc.top + (rc.bottom - rc.top - 32) / 2;
@@ -561,17 +769,18 @@ static void PaintItem(HDC hdc, RECT rc, LPSMITEM p, BOOL bSel)
             DrawSmallImage(hdc, rc.left + SUB_ICON_X, cy, p->nImage);
         else if (p->hIcon)
             DrawIconSmall(hdc, rc.left + SUB_ICON_X, cy, p->hIcon,
-                          bSel ? GetSysColor(COLOR_HIGHLIGHT) : clrFace);
+                          bSel && s_bColBar ? NsColor(NSC_SELECTION) : clrFace);
     }
 
     {
-        HFONT hfOld = SelectObject(hdc, s_hfMenu);
+        HFONT hfOld = SelectObject(hdc, bSel && s_hfBoldMenu ? s_hfBoldMenu : s_hfMenu);
         int nOldMode = SetBkMode(hdc, TRANSPARENT);
         COLORREF clrOld = SetTextColor(hdc,
-            GetSysColor(bSel ? COLOR_HIGHLIGHTTEXT
-                             : (p->bFlags & SF_EMPTY) ? COLOR_GRAYTEXT : COLOR_BTNTEXT));
+            GetSysColor(bSel && s_bColBar ? COLOR_HIGHLIGHTTEXT
+                        : (p->bFlags & SF_EMPTY) ? COLOR_GRAYTEXT
+                        : s_b3D ? COLOR_BTNTEXT : COLOR_MENUTEXT));
 
-        SetRect(&rcText, rc.left + (bTop ? TOP_TEXT_X : SUB_TEXT_X), rc.top,
+        SetRect(&rcText, rc.left + (bLarge ? TOP_TEXT_X : SUB_TEXT_X), rc.top,
                 rc.right, rc.bottom);
         DrawText(hdc, p->szText, -1, &rcText, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
         SetTextColor(hdc, clrOld);
@@ -592,10 +801,10 @@ static void DrawOuterFrame(HDC hdc, const RECT FAR *lprc, LPSMITEM p)
     SetRect(&rc, lprc->left - 1, lprc->top, lprc->left, lprc->bottom);
     if (p->nPos == 0)
         rc.top--;
-    FillSolid(hdc, &rc, GetSysColor(COLOR_BTNFACE));
+    FillSolid(hdc, &rc, NsColor(NSC_STARTMENU));
     if (p->nPos == 0) {
         SetRect(&rc, lprc->left - 1, lprc->top - 1, lprc->right, lprc->top);
-        FillSolid(hdc, &rc, GetSysColor(COLOR_BTNFACE));
+        FillSolid(hdc, &rc, NsColor(NSC_STARTMENU));
     }
 }
 
@@ -623,7 +832,7 @@ BOOL StartMenuDrawItem(DRAWITEMSTRUCT FAR *lpdis)
         if (hdcMem)
             DeleteDC(hdcMem);
         PaintItem(lpdis->hDC, rc, p, bSel);
-        if (!s_bThemed)
+        if (!s_bThemed && s_b3D)
             DrawOuterFrame(lpdis->hDC, &rc, p);
         return TRUE;
     }
@@ -635,7 +844,7 @@ BOOL StartMenuDrawItem(DRAWITEMSTRUCT FAR *lpdis)
     SelectObject(hdcMem, hbmOld);
     DeleteObject(hbm);
     DeleteDC(hdcMem);
-    if (!s_bThemed)
+    if (!s_bThemed && s_b3D)
         DrawOuterFrame(lpdis->hDC, &rc, p);
     return TRUE;
 }
@@ -708,21 +917,34 @@ BOOL ExecMacro(HWND hwnd, LPCSTR lpCmd)
     else if (!lstrcmpi(szName, "$ShutDown"))    DoShutdownDialog();
     else if (!lstrcmpi(szName, "$Find"))        FindOpen(lpArg);
     else if (!lstrcmpi(szName, "$Explore"))     ExplorerOpen(lpArg);
+    else if (!lstrcmpi(szName, "$BrowseFolders")) ExplorerOpenTree(lpArg);
     else if (!lstrcmpi(szName, "$System"))      FolderOpen("");
     else if (!lstrcmpi(szName, "$Bin"))         BinOpen();
     else if (!lstrcmpi(szName, "$TaskManager")) TaskManOpen();
     else if (!lstrcmpi(szName, "$MinimizePrograms")) TasksMinimizeAll();
-    else if (!lstrcmpi(szName, "$ArrangeIcons") || !lstrcmpi(szName, "$LineUpIcons"))
+    else if (!lstrcmpi(szName, "$ClearDesktop"))  ShellCommand(CMD_CLEARDESKTOP);
+    else if (!lstrcmpi(szName, "$CascadeBrowsers")) ShellCommand(CMD_CASCADEFOLDERS);
+    else if (!lstrcmpi(szName, "$CloseBrowsers")) ShellCommand(CMD_CLOSEFOLDERS);
+    else if (!lstrcmpi(szName, "$Tips"))         TipsDialog(hwnd);
+    else if (!lstrcmpi(szName, "$ScreenSaver"))   ShellCommand(CMD_SCREENSAVER);
+    else if (!lstrcmpi(szName, "$ToggleTaskbar")) ShellCommand(CMD_TOGGLETASKBAR);
+    else if (!lstrcmpi(szName, "$ArrangeIcons"))
         DesktopArrange();
+    else if (!lstrcmpi(szName, "$LineUpIcons"))
+        DesktopLineUp();
     else if (!lstrcmpi(szName, "$Folder") || !lstrcmpi(szName, "$LargeIconFolder")
              || !lstrcmpi(szName, "$SmallIconFolder") || !lstrcmpi(szName, "$ListFolder"))
         FolderOpen(lpArg);
-    else if (!lstrcmpi(szName, "$TaskbarProp") || !lstrcmpi(szName, "$DesktopProp")
-             || !lstrcmpi(szName, "$StartMenuProp") || !lstrcmpi(szName, "$BinProp")
-             || !lstrcmpi(szName, "$SystemProp") || !lstrcmpi(szName, "$FileSystemProp"))
-        OptionsDialog(hwnd);
+    else if (!lstrcmpi(szName, "$StartMenuProp"))
+        StartMenuPropertiesDialog(hwnd);
+    else if (!lstrcmpi(szName, "$BinProp"))
+        BinPropertiesDialog(hwnd);
+    else if (!lstrcmpi(szName, "$TaskbarProp"))     OptionsDialogPage(hwnd, 0);
+    else if (!lstrcmpi(szName, "$DesktopProp"))     OptionsDialogPage(hwnd, 1);
+    else if (!lstrcmpi(szName, "$FileSystemProp"))  OptionsDialogPage(hwnd, 2);
+    else if (!lstrcmpi(szName, "$SystemProp"))      OptionsDialogPage(hwnd, 4);
     else if (!lstrcmpi(szName, "$Help"))
-        WinHelp(hwnd, "WINHELP.HLP", HELP_CONTENTS, 0L);
+        ShellHelp(hwnd);
     else {
         wsprintf(szMsg, "The command %s is not supported.", (LPSTR)szName);
         MessageBox(hwnd, szMsg, NS_APPNAME, MB_OK | MB_ICONINFORMATION);
@@ -735,15 +957,15 @@ BOOL StartMenuCommand(HWND hwnd, UINT id)
 {
     if (id >= CMD_SM_FIRST && id < CMD_SM_FIRST + SM_MAXITEMS) {
         int k = id - CMD_SM_FIRST;
-        LPSMITEM p;
+        LPSMCMD c;
 
         if (!s_lpItems || k >= s_nItems)
             return TRUE;
-        p = &s_lpItems[k];
-        if (p->szCmd[0] == '$')
-            ExecMacro(hwnd, p->szCmd);
-        else if (p->szCmd[0])
-            LaunchCommand(hwnd, p->szCmd, p->szDir, ShowMode(p->bShow));
+        c = &s_lpCmds[k];
+        if (c->szCmd[0] == '$')
+            ExecMacro(hwnd, c->szCmd);
+        else if (c->szCmd[0])
+            LaunchCommand(hwnd, c->szCmd, c->szDir, ShowMode(s_lpItems[k].bShow));
         return TRUE;
     }
 
@@ -751,12 +973,16 @@ BOOL StartMenuCommand(HWND hwnd, UINT id)
     case CMD_RUN:           RunDialog(hwnd); break;
     case CMD_SHUTDOWN:      DoShutdownDialog(); break;
     case CMD_ABOUT:         AboutDialog(hwnd); break;
+    case CMD_TIPS:          TipsDialog(hwnd); break;
+    case CMD_HELP:          ShellHelp(hwnd); break;
     case CMD_COMPUTER:      FolderOpen(""); break;
     case CMD_EXPLORER:      ExplorerOpen(NULL); break;
+    case CMD_BROWSEFOLDERS: ExplorerOpenTree(NULL); break;
     case CMD_BIN:           BinOpen(); break;
     case CMD_FIND:          FindOpen(NULL); break;
     case CMD_TASKMAN:       TaskManOpen(); break;
     case CMD_OPTIONS:       OptionsDialog(hwnd); break;
+    case CMD_STARTPROPS:    StartMenuPropertiesDialog(hwnd); break;
     case CMD_DESKTOPPROPS:  LaunchCommand(hwnd, "CONTROL.EXE DESKTOP", NULL, SW_SHOWNORMAL); break;
     case CMD_CONTROLPANEL:  LaunchCommand(hwnd, "CONTROL.EXE", NULL, SW_SHOWNORMAL); break;
     case CMD_CLOSESHELL:    CloseShell(); break;
@@ -772,6 +998,10 @@ void StartMenuFree(void)
         free(s_lpItems);
         s_lpItems = NULL;
     }
+    if (s_lpCmds) {
+        free(s_lpCmds);
+        s_lpCmds = NULL;
+    }
     if (s_hfBanner) {
         DeleteObject(s_hfBanner);
         s_hfBanner = NULL;
@@ -779,5 +1009,13 @@ void StartMenuFree(void)
     if (s_hfBannerLight) {
         DeleteObject(s_hfBannerLight);
         s_hfBannerLight = NULL;
+    }
+    if (s_hfCustom) {
+        DeleteObject(s_hfCustom);
+        s_hfCustom = NULL;
+    }
+    if (s_hfBoldMenu) {
+        DeleteObject(s_hfBoldMenu);
+        s_hfBoldMenu = NULL;
     }
 }

@@ -25,8 +25,12 @@
  *    so the taskbar updates at once;
  *  - a WH_CALLWNDPROC hook that reduces the maximised size of top-level
  *    windows (WM_GETMINMAXINFO) so they do not cover the taskbar;
- *  - a subclass of the desktop window reporting right clicks;
- *  - a keyboard hook for the Windows key (VK 0xFF under Windows 3.1);
+ *  - a subclass of the desktop window reporting right clicks and files
+ *    dropped on it;
+ *  - a keyboard hook for the Windows key (VK 0xFF under Windows 3.1),
+ *    alone (on its release) or with another key, and for hot keys;
+ *  - a WH_GETMESSAGE hook that closes a window when its minimise or
+ *    maximise box is clicked with the right mouse button (as Calmira);
  *  - KERNEL's undocumented file change callback (FileCdr), queued in a
  *    small ring buffer so the shell can refresh folder windows.
  */
@@ -54,6 +58,11 @@ static int       s_yLimit;
 static HHOOK     s_hShellHook;
 static HHOOK     s_hWndHook;
 static HHOOK     s_hKeyHook;
+static HHOOK     s_hMsgHook;
+static WORD      s_wHotkeys[MAX_HOTKEYS];
+static int       s_nHotkeys;
+static BOOL      s_bWinDown;        /* the Windows key is held */
+static BOOL      s_bWinUsed;        /* ... and another key was pressed with it */
 static WNDPROC   s_lpfnOldDesk;
 static BOOL      s_bFileCdr;
 
@@ -103,16 +112,74 @@ LRESULT CALLBACK __export NsWndProcHook(int nCode, WPARAM wParam, LPARAM lParam)
     return CallNextHookEx(s_hWndHook, nCode, wParam, lParam);
 }
 
+static BOOL IsWinKey(WPARAM vk)
+{
+    return vk == 0xFF || vk == 0x5B || vk == 0x5C;
+}
+
 LRESULT CALLBACK __export NsKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam)
 {
-    /* key down (bit 31 clear), not a repeat (bit 30 clear) */
-    if (nCode >= 0 && (wParam == 0xFF || wParam == 0x5B || wParam == 0x5C)
-        && !(lParam & 0xC0000000L) && s_hwndNotify) {
-        if (!(GetSystemDebugState() & (SDS_MENU | SDS_SYSMODAL)))
-            PostMessage(s_hwndNotify, WM_NS_WINKEY, 0, 0L);
+    BOOL bUp = (lParam & 0x80000000L) != 0, bRepeat = (lParam & 0x40000000L) != 0;
+    WORD wKey;
+    int i;
+
+    if (nCode < 0 || !s_hwndNotify)
+        return CallNextHookEx(s_hKeyHook, nCode, wParam, lParam);
+    if (IsWinKey(wParam) && (s_uFlags & NSH_WINKEY)) {
+        /* alone it opens the Start menu when released */
+        if (!bUp && !bRepeat) {
+            s_bWinDown = TRUE;
+            s_bWinUsed = FALSE;
+        } else if (bUp) {
+            if (s_bWinDown && !s_bWinUsed
+                && !(GetSystemDebugState() & (SDS_MENU | SDS_SYSMODAL)))
+                PostMessage(s_hwndNotify, WM_NS_WINKEY, 0, 0L);
+            s_bWinDown = FALSE;
+        }
         return 1;
     }
+    if (!bUp && !bRepeat && (s_uFlags & NSH_HOTKEYS) && s_nHotkeys) {
+        wKey = (WORD)(wParam & 0xFF);
+        if (GetKeyState(VK_SHIFT) < 0)
+            wKey |= HK_SHIFT;
+        if (GetKeyState(VK_CONTROL) < 0)
+            wKey |= HK_CTRL;
+        if (GetKeyState(VK_MENU) < 0)
+            wKey |= HK_ALT;
+        if (s_bWinDown)
+            wKey |= HK_WIN;
+        for (i = 0; i < s_nHotkeys; i++)
+            if (s_wHotkeys[i] == wKey) {
+                s_bWinUsed = TRUE;
+                if (!(GetSystemDebugState() & SDS_SYSMODAL))
+                    PostMessage(s_hwndNotify, WM_NS_HOTKEY, i, 0L);
+                return 1;
+            }
+    }
+    if (s_bWinDown && !bUp)
+        s_bWinUsed = TRUE;
     return CallNextHookEx(s_hKeyHook, nCode, wParam, lParam);
+}
+
+void FAR PASCAL __export NsHookSetHotkeys(const WORD FAR *lpKeys, int nKeys)
+{
+    int i;
+
+    s_nHotkeys = nKeys < MAX_HOTKEYS ? nKeys : MAX_HOTKEYS;
+    for (i = 0; i < s_nHotkeys; i++)
+        s_wHotkeys[i] = lpKeys[i];
+}
+
+LRESULT CALLBACK __export NsGetMsgProc(int nCode, WPARAM wParam, LPARAM lParam)
+{
+    MSG FAR *lpmsg = (MSG FAR *)lParam;
+
+    if (nCode >= 0 && lpmsg->message == WM_NCRBUTTONUP
+        && (lpmsg->wParam == HTREDUCE || lpmsg->wParam == HTZOOM)) {
+        PostMessage(lpmsg->hwnd, WM_SYSCOMMAND, SC_CLOSE, 0L);
+        lpmsg->message = WM_NULL;
+    }
+    return CallNextHookEx(s_hMsgHook, nCode, wParam, lParam);
 }
 
 LRESULT CALLBACK __export NsDesktopProc(HWND hwnd, UINT msg, WPARAM wParam,
@@ -124,6 +191,11 @@ LRESULT CALLBACK __export NsDesktopProc(HWND hwnd, UINT msg, WPARAM wParam,
         pt.y = HIWORD(lParam);
         ClientToScreen(hwnd, &pt);
         PostMessage(s_hwndNotify, WM_NS_DESKMENU, 0, MAKELPARAM(pt.x, pt.y));
+    }
+    /* files from File Manager: the shell makes shortcuts of them */
+    if (msg == WM_DROPFILES && s_hwndNotify) {
+        PostMessage(s_hwndNotify, WM_NS_DESKDROP, wParam, 0L);
+        return 0;
     }
     return CallWindowProc(s_lpfnOldDesk, hwnd, msg, wParam, lParam);
 }
@@ -176,6 +248,11 @@ void FAR PASCAL __export NsHookStop(void)
         UnhookWindowsHookEx(s_hKeyHook);
         s_hKeyHook = NULL;
     }
+    if (s_hMsgHook) {
+        UnhookWindowsHookEx(s_hMsgHook);
+        s_hMsgHook = NULL;
+    }
+    s_bWinDown = FALSE;
     if (s_lpfnOldDesk) {
         SetWindowLong(GetDesktopWindow(), GWL_WNDPROC, (LONG)s_lpfnOldDesk);
         s_lpfnOldDesk = NULL;
@@ -207,10 +284,15 @@ UINT FAR PASCAL __export NsHookStart(HWND hwndNotify, int yLimit, UINT uFlags)
         if (s_hWndHook)
             uDone |= NSH_MAXIMIZE;
     }
-    if (uFlags & NSH_WINKEY) {
+    if (uFlags & (NSH_WINKEY | NSH_HOTKEYS)) {
         s_hKeyHook = SetWindowsHookEx(WH_KEYBOARD, (HOOKPROC)NsKeyboardProc, s_hInst, NULL);
         if (s_hKeyHook)
-            uDone |= NSH_WINKEY;
+            uDone |= uFlags & (NSH_WINKEY | NSH_HOTKEYS);
+    }
+    if (uFlags & NSH_RCLOSE) {
+        s_hMsgHook = SetWindowsHookEx(WH_GETMESSAGE, (HOOKPROC)NsGetMsgProc, s_hInst, NULL);
+        if (s_hMsgHook)
+            uDone |= NSH_RCLOSE;
     }
     if (uFlags & NSH_DESKTOP) {
         s_lpfnOldDesk = (WNDPROC)SetWindowLong(GetDesktopWindow(), GWL_WNDPROC,

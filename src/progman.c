@@ -215,6 +215,10 @@ void PmRunStartupGroup(void)
 
     GetPrivateProfileString("Settings", "Startup", "StartUp", szStartup,
                             sizeof(szStartup), "PROGMAN.INI");
+    /* once the Start menu exists, its StartUp group is the one that counts
+       (setup programs add to it over DDE) */
+    if (StartMenuRunGroup(szStartup))
+        return;
     lpItems = (LPPMITEM)malloc(MAX_STARTUP_ITEMS * sizeof(PMITEM));
     if (!lpItems)
         return;

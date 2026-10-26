@@ -20,7 +20,12 @@
  *
  * The tree is an owner-drawn list box whose items mirror a flat array of
  * nodes in display order (drives at level 0, folders below). Expanding a
- * node inserts its sub-folders after it; collapsing removes them.
+ * node inserts its sub-folders after it; collapsing removes them. A right
+ * click on the tree has Calmira's tree menu. Browse Folders is the same
+ * window with the tree only; there a double click opens a folder window.
+ *
+ *   [Explorer]
+ *   RememberLast=1     ; open at the folder shown last ([Explorer] Last=)
  */
 #include <stdlib.h>
 #include <string.h>
@@ -59,20 +64,14 @@ typedef struct tagEXPLORER {
     HWND    hwndLastFocus;          /* pane to refocus on activation */
     HWND    hwndToolbar;
     BOOL    bToolbar, bStatusBar;   /* View > Toolbar, Status Bar */
+    BOOL    bTreeOnly;              /* Browse Folders: only the tree */
 } EXPLORER, FAR *LPEXPLORER;
 
-/* the toolbar: Calmira's Explorer buttons; 0 is a gap */
-static const TBBTN s_aButtons[] = {
-    { CMD_F_UP, SMI_TB_UP }, { CMD_F_NEWFOLDER, SMI_TB_NEWFOLDER }, { 0, 0 },
-    { CMD_F_CUT, SMI_TB_CUT }, { CMD_F_COPY, SMI_TB_COPY }, { CMD_F_PASTE, SMI_TB_PASTE },
-    { 0, 0 },
-    { CMD_F_DELETE, SMI_TB_DELETE }, { CMD_F_PROPERTIES, SMI_TB_PROPS }, { 0, 0 },
-    { CMD_F_LARGEICONS, SMI_TB_LARGE }, { CMD_F_SMALLICONS, SMI_TB_SMALL },
-    { CMD_F_LIST, SMI_TB_LIST }, { CMD_F_DETAILS, SMI_TB_DETAILS }, { 0, 0 },
-    { CMD_F_SORTNAME, SMI_TB_SORTNAME }, { CMD_F_SORTTYPE, SMI_TB_SORTTYPE },
-    { CMD_F_SORTSIZE, SMI_TB_SORTSIZE }, { CMD_F_SORTDATE, SMI_TB_SORTDATE }
-};
-#define NBUTTONS (sizeof(s_aButtons) / sizeof(s_aButtons[0]))
+#define WM_NS_TREEMENU  (WM_USER + 140)     /* tree right click, lParam = point */
+
+static BOOL    s_bCreateTreeOnly;   /* for the window being created */
+static FARPROC s_lpfnTreeProc;
+static WNDPROC s_lpfnOldTree;
 
 static HWND s_hwndExplorers[MAX_EXPLORERS];
 static int  s_nExplorers;
@@ -227,6 +226,32 @@ static void Expand(LPEXPLORER e, int i)
     free(lpNew);
 }
 
+/* One past the last node below node i */
+static int SubtreeEnd(LPEXPLORER e, int i)
+{
+    int j = i + 1;
+
+    while (j < e->nNodes && e->lpNodes[j].bLevel > e->lpNodes[i].bLevel)
+        j++;
+    return j;
+}
+
+/* Expands node i and everything below it (as far as the node table goes) */
+static void ExpandBranch(LPEXPLORER e, int i)
+{
+    HCURSOR hcurOld = SetCursor(LoadCursor(NULL, IDC_WAIT));
+    int j;
+
+    for (j = i; j < SubtreeEnd(e, i) && e->nNodes < MAX_NODES - 256; j++)
+        if (!(e->lpNodes[j].bFlags & (NF_EXPANDED | NF_NOCHILDREN))) {
+            if ((e->lpNodes[j].bFlags & NF_DRIVE)
+                && GetDriveType(e->lpNodes[j].szName[0] - 'A') != DRIVE_FIXED)
+                continue;
+            Expand(e, j);
+        }
+    SetCursor(hcurOld);
+}
+
 static void Toggle(LPEXPLORER e, int i)
 {
     SendMessage(e->hwndTree, WM_SETREDRAW, FALSE, 0L);
@@ -339,7 +364,7 @@ static void DrawNode(LPEXPLORER e, DRAWITEMSTRUCT FAR *lpdis)
     if (n->bFlags & NF_DRIVE)
         DrawIconSmall(hdc, x, rc.top + 1, IconStock(n->bIcon), GetSysColor(COLOR_WINDOW));
     else
-        DrawSmallImage(hdc, x, rc.top + 1, SMI_FOLDER);
+        DrawSmallImage(hdc, x, rc.top + 1, bSel ? SMI_FOLDEROPEN : SMI_FOLDER);
     x += 19;
 
     hfOld = SelectObject(hdc, g_hfontUI);
@@ -381,6 +406,11 @@ static void Layout(HWND hwnd, LPEXPLORER e)
     int y = PaneTop(e), cy = PaneBottom(hwnd, e) - y;
 
     GetClientRect(hwnd, &rc);
+    if (e->bTreeOnly) {
+        MovePane(e->hwndTree, 0, 0, rc.right, rc.bottom);
+        MoveWindow(e->hwndView, 0, 0, 0, 0, FALSE);
+        return;
+    }
     if (e->xSplit > rc.right - 60)
         e->xSplit = rc.right - 60;
     if (e->xSplit < 60)
@@ -401,27 +431,10 @@ static void InvalidateStatus(HWND hwnd)
     InvalidateRect(hwnd, &rc, FALSE);
 }
 
-/* The buttons follow the menu states of the folder view */
 static void UpdateToolbar(LPEXPLORER e)
 {
-    HMENU hMenu;
-    UINT uState;
-    int i;
-
-    if (!e->hwndToolbar || !e->bToolbar)
-        return;
-    hMenu = CreatePopupMenu();
-    for (i = 0; i < (int)NBUTTONS; i++)
-        if (s_aButtons[i].uCmd)
-            AppendMenu(hMenu, MF_STRING, s_aButtons[i].uCmd, "");
-    FViewInitMenu(e->hwndView, hMenu);
-    for (i = 0; i < (int)NBUTTONS; i++)
-        if (s_aButtons[i].uCmd) {
-            uState = GetMenuState(hMenu, s_aButtons[i].uCmd, MF_BYCOMMAND);
-            ToolbarSetState(e->hwndToolbar, s_aButtons[i].uCmd,
-                            (uState & MF_CHECKED) != 0, !(uState & MF_GRAYED));
-        }
-    DestroyMenu(hMenu);
+    if (e->bToolbar)
+        ToolbarSyncView(e->hwndToolbar, e->hwndView);
 }
 
 static void ShowBars(HWND hwnd, LPEXPLORER e)
@@ -437,6 +450,11 @@ static void SetTitle(HWND hwnd, LPEXPLORER e)
     char szTitle[MAXPATHLEN + 16];
     LPCSTR lpPath = FViewGetPath(e->hwndView);
 
+    if (e->bTreeOnly) {
+        wsprintf(szTitle, "Browse Folders - %s", *lpPath ? lpPath : (LPCSTR)"Computer");
+        SetWindowText(hwnd, szTitle);
+        return;
+    }
     wsprintf(szTitle, "File System - %s", *lpPath ? lpPath : (LPCSTR)"Computer");
     SetWindowText(hwnd, szTitle);
 }
@@ -485,7 +503,13 @@ static int OnTreeKey(HWND hwnd, LPEXPLORER e, UINT vk)
                 return j;
         return -2;
     case VK_RETURN:
-        Toggle(e, i);
+        if (e->bTreeOnly) {
+            char szPath[MAXPATHLEN];
+
+            NodePath(e, i, szPath);
+            FolderOpen(szPath);
+        } else
+            Toggle(e, i);
         return -2;
     case VK_TAB:
         SetFocus(e->hwndView);
@@ -498,6 +522,136 @@ static int OnTreeKey(HWND hwnd, LPEXPLORER e, UINT vk)
     }
     (void)hwnd;
     return -1;
+}
+
+/* -------------------------------------------------------------------- */
+/* Tree menu                                                            */
+/* -------------------------------------------------------------------- */
+
+/* Right clicks on the tree: select the node, then the menu */
+LRESULT CALLBACK NSEXPORT TreeSubclassProc(HWND hwnd, UINT msg, WPARAM wParam,
+                                           LPARAM lParam)
+{
+    if (msg == WM_RBUTTONDOWN) {
+        int i = (int)SendMessage(hwnd, LB_GETTOPINDEX, 0, 0L)
+                + (int)HIWORD(lParam) / ITEM_CY;
+
+        SetFocus(hwnd);
+        if (i < (int)SendMessage(hwnd, LB_GETCOUNT, 0, 0L)
+            && i != (int)SendMessage(hwnd, LB_GETCURSEL, 0, 0L)) {
+            SendMessage(hwnd, LB_SETCURSEL, i, 0L);
+            SendMessage(GetParent(hwnd), WM_COMMAND, GetWindowWord(hwnd, GWW_ID),
+                        MAKELPARAM(hwnd, LBN_SELCHANGE));
+        }
+        return 0;
+    }
+    if (msg == WM_RBUTTONUP) {
+        POINT pt;
+
+        pt.x = LOWORD(lParam);
+        pt.y = HIWORD(lParam);
+        ClientToScreen(hwnd, &pt);
+        SendMessage(GetParent(hwnd), WM_NS_TREEMENU, 0, MAKELPARAM(pt.x, pt.y));
+        return 0;
+    }
+    return CallWindowProc(s_lpfnOldTree, hwnd, msg, wParam, lParam);
+}
+
+static void TreeMenu(HWND hwnd, LPEXPLORER e, POINT pt)
+{
+    HMENU hMenu = CreatePopupMenu();
+    int i = (int)SendMessage(e->hwndTree, LB_GETCURSEL, 0, 0L);
+    UINT uNode = i >= 0 ? MF_ENABLED : MF_GRAYED;
+    UINT uExp = MF_GRAYED, uCol = MF_GRAYED;
+
+    if (i >= 0 && !(e->lpNodes[i].bFlags & NF_NOCHILDREN)) {
+        uExp = MF_ENABLED;
+        if (e->lpNodes[i].bFlags & NF_EXPANDED)
+            uCol = MF_ENABLED;
+    }
+    AppendMenu(hMenu, MF_STRING | uNode, CMD_T_OPEN, "&Open");
+    AppendMenu(hMenu, MF_STRING | uNode, CMD_T_EXPLORE, "&Explore");
+    AppendMenu(hMenu, MF_STRING | uNode, CMD_T_FIND, "&Find...");
+    AppendMenu(hMenu, MF_SEPARATOR, 0, NULL);
+    AppendMenu(hMenu, MF_STRING | uExp, CMD_T_EXPAND, "Expand One &Level");
+    AppendMenu(hMenu, MF_STRING | uExp, CMD_T_EXPANDBRANCH, "Expand &Branch");
+    AppendMenu(hMenu, MF_STRING, CMD_T_EXPANDALL, "Expand &All");
+    AppendMenu(hMenu, MF_STRING | uCol, CMD_T_COLLAPSE, "&Collapse Branch");
+    AppendMenu(hMenu, MF_SEPARATOR, 0, NULL);
+    AppendMenu(hMenu, MF_STRING | uNode, CMD_T_NEWFOLDER, "New Fol&der");
+    AppendMenu(hMenu, MF_STRING, CMD_T_REFRESH, "&Refresh");
+    if (NetShareAvailable()) {
+        AppendMenu(hMenu, MF_SEPARATOR, 0, NULL);
+        AppendMenu(hMenu, MF_STRING | uNode, CMD_T_SHARE, "&Share As...");
+        AppendMenu(hMenu, MF_STRING | uNode, CMD_T_STOPSHARE, "S&top Sharing...");
+    }
+    AppendMenu(hMenu, MF_SEPARATOR, 0, NULL);
+    AppendMenu(hMenu, MF_STRING | uNode, CMD_T_PROPERTIES, "P&roperties");
+    TrackPopupMenu(hMenu, 0, pt.x, pt.y, 0, hwnd, NULL);
+    DestroyMenu(hMenu);
+}
+
+static void TreeCommand(HWND hwnd, LPEXPLORER e, UINT id)
+{
+    char szPath[MAXPATHLEN], szName[16];
+    int i = (int)SendMessage(e->hwndTree, LB_GETCURSEL, 0, 0L), j;
+    HGLOBAL hList = NULL;
+
+    if (i >= 0)
+        NodePath(e, i, szPath);
+    else if (id != CMD_T_EXPANDALL && id != CMD_T_REFRESH)
+        return;
+    switch (id) {
+    case CMD_T_OPEN:        FolderOpen(szPath); return;
+    case CMD_T_EXPLORE:     ExplorerOpen(szPath); return;
+    case CMD_T_FIND:        FindOpen(szPath); return;
+    case CMD_T_SHARE:       NetShareDialog(hwnd, szPath, TRUE); return;
+    case CMD_T_STOPSHARE:   NetShareDialog(hwnd, szPath, FALSE); return;
+    case CMD_T_PROPERTIES:
+        PathListAdd(&hList, szPath);
+        if (hList) {
+            PropertiesDialog(hwnd, hList);
+            GlobalFree(hList);
+        }
+        return;
+    case CMD_T_NEWFOLDER:
+        if (FileOpNewFolder(hwnd, szPath, szName)) {
+            ExplorerRefreshPath(szPath);
+            FViewRefreshPath(szPath);
+        }
+        return;
+    }
+    SendMessage(e->hwndTree, WM_SETREDRAW, FALSE, 0L);
+    switch (id) {
+    case CMD_T_EXPAND:
+        Expand(e, i);
+        break;
+    case CMD_T_EXPANDBRANCH:
+        ExpandBranch(e, i);
+        break;
+    case CMD_T_EXPANDALL:
+        for (j = 0; j < e->nNodes; j++)
+            if (e->lpNodes[j].bLevel == 0)
+                ExpandBranch(e, j);
+        break;
+    case CMD_T_COLLAPSE:
+        Collapse(e, i);
+        break;
+    case CMD_T_REFRESH:
+        lstrcpy(szPath, FViewGetPath(e->hwndView));
+        DeleteNodes(e, 0, e->nNodes);
+        BuildDrives(e);
+        SendMessage(e->hwndTree, WM_SETREDRAW, TRUE, 0L);
+        if (!szPath[0] || !PathIsDirectory(szPath)) {
+            GetWindowsDirectory(szPath, sizeof(szPath));
+            szPath[3] = '\0';
+        }
+        SelectPath(hwnd, e, szPath);
+        FViewRefresh(e->hwndView);
+        return;
+    }
+    SendMessage(e->hwndTree, WM_SETREDRAW, TRUE, 0L);
+    InvalidateRect(e->hwndTree, NULL, TRUE);
 }
 
 static void RemoveExplorer(HWND hwnd)
@@ -536,18 +690,14 @@ LRESULT CALLBACK NSEXPORT ExplorerWndProc(HWND hwnd, UINT msg, WPARAM wParam,
             }
             SetWindowLong(hwnd, 0, (LONG)e);
             e->xSplit = CfgGetInt("Explorer", "Split", 170);
-            e->bToolbar = CfgGetInt("Explorer", "Toolbar", 1);
-            e->bStatusBar = CfgGetInt("Explorer", "StatusBar", 1);
-            e->hwndToolbar = ToolbarCreate(hwnd, s_aButtons, NBUTTONS);
+            e->bTreeOnly = s_bCreateTreeOnly;
+            e->bToolbar = CfgGetInt("Explorer", "Toolbar", 1) && !e->bTreeOnly;
+            e->bStatusBar = CfgGetInt("Explorer", "StatusBar", 1) && !e->bTreeOnly;
+            if (e->bTreeOnly)
+                SetMenu(hwnd, LoadMenu(g_hInst, MAKEINTRESOURCE(IDM_TREE)));
+            e->hwndToolbar = ToolbarCreate(hwnd, g_aFolderButtons, g_nFolderButtons);
             if (e->hwndToolbar && !e->bToolbar)
                 ShowWindow(e->hwndToolbar, SW_HIDE);
-            {
-                HMENU hView = GetSubMenu(GetMenu(hwnd), 2);
-
-                AppendMenu(hView, MF_SEPARATOR, 0, NULL);
-                AppendMenu(hView, MF_STRING, CMD_F_TOOLBAR, "T&oolbar");
-                AppendMenu(hView, MF_STRING, CMD_F_STATUSBAR, "&Status Bar");
-            }
             e->hwndTree = CreateWindow("LISTBOX", "",
                                        WS_CHILD | WS_VISIBLE | WS_VSCROLL
                                        | LBS_OWNERDRAWFIXED | LBS_NOTIFY
@@ -556,6 +706,12 @@ LRESULT CALLBACK NSEXPORT ExplorerWndProc(HWND hwnd, UINT msg, WPARAM wParam,
             e->hwndView = FViewCreate(hwnd, (LPCSTR)lpcs->lpCreateParams);
             if (!e->hwndTree || !e->hwndView)
                 return -1;
+            if (e->bTreeOnly)
+                ShowWindow(e->hwndView, SW_HIDE);
+            if (!s_lpfnTreeProc)
+                s_lpfnTreeProc = MakeProcInstance((FARPROC)TreeSubclassProc, g_hInst);
+            s_lpfnOldTree = (WNDPROC)SetWindowLong(e->hwndTree, GWL_WNDPROC,
+                                                   (LONG)s_lpfnTreeProc);
             BuildDrives(e);
             UpdateToolbar(e);
             if (s_nExplorers < MAX_EXPLORERS)
@@ -729,9 +885,16 @@ LRESULT CALLBACK NSEXPORT ExplorerWndProc(HWND hwnd, UINT msg, WPARAM wParam,
                 OnTreeClick(hwnd, e);
             else if (HIWORD(lParam) == LBN_DBLCLK) {
                 i = (int)SendMessage(e->hwndTree, LB_GETCURSEL, 0, 0L);
-                if (i >= 0)
+                if (i >= 0 && e->bTreeOnly) {
+                    NodePath(e, i, szPath);
+                    FolderOpen(szPath);
+                } else if (i >= 0)
                     Toggle(e, i);
             }
+            return 0;
+        }
+        if (wParam >= CMD_T_FIRST && wParam <= CMD_T_LAST) {
+            TreeCommand(hwnd, e, wParam);
             return 0;
         }
         switch (wParam) {
@@ -763,8 +926,15 @@ LRESULT CALLBACK NSEXPORT ExplorerWndProc(HWND hwnd, UINT msg, WPARAM wParam,
             return 0;
         break;
 
+    case WM_NS_TREEMENU:
+        if (e)
+            TreeMenu(hwnd, e, MAKEPOINT(lParam));
+        return 0;
+
     case WM_DESTROY:
         RemoveExplorer(hwnd);
+        if (e && e->hwndView && FViewGetPath(e->hwndView)[0])
+            CfgSetStr("Explorer", "Last", FViewGetPath(e->hwndView));
         if (e) {
             free(e->lpNodes);
             free(e);
@@ -795,21 +965,41 @@ BOOL ExplorerRegister(void)
     return RegisterClass(&wc);
 }
 
+static HWND OpenWindow(LPCSTR lpPath, BOOL bTreeOnly);
+
 HWND ExplorerOpen(LPCSTR lpPath)
+{
+    return OpenWindow(lpPath, FALSE);
+}
+
+/* Browse Folders: a window with only the folder tree */
+HWND ExplorerOpenTree(LPCSTR lpPath)
+{
+    return OpenWindow(lpPath, TRUE);
+}
+
+static HWND OpenWindow(LPCSTR lpPath, BOOL bTreeOnly)
 {
     char szPath[MAXPATHLEN];
     LPEXPLORER e;
     HWND hwnd;
 
     lstrcpyn(szPath, lpPath ? lpPath : "", sizeof(szPath));
+    if (szPath[0] == '\0' && CfgGetInt("Explorer", "RememberLast", 1)) {
+        CfgGetStr("Explorer", "Last", "", szPath, sizeof(szPath));
+        if (szPath[0] && !PathIsDirectory(szPath))
+            szPath[0] = '\0';
+    }
     if (szPath[0] == '\0') {
         GetWindowsDirectory(szPath, sizeof(szPath));
         szPath[3] = '\0';
     }
     PathNormalize(szPath);
-    hwnd = CreateWindow(CLS_EXPLORER, "File System", WS_OVERLAPPEDWINDOW,
-                        CW_USEDEFAULT, 0, 560, 340, NULL, NULL, g_hInst,
-                        (LPVOID)"");
+    s_bCreateTreeOnly = bTreeOnly;
+    hwnd = CreateWindow(CLS_EXPLORER, bTreeOnly ? "Browse Folders" : "File System",
+                        WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, 0,
+                        bTreeOnly ? 240 : 560, 340, NULL, NULL, g_hInst, (LPVOID)"");
+    s_bCreateTreeOnly = FALSE;
     if (!hwnd)
         return NULL;
     e = GetExplorer(hwnd);
@@ -889,6 +1079,39 @@ int ExplorerDropTarget(HWND hwnd, POINT pt, LPSTR lpDir)
         return DT_NONE;
     NodePath(e, i, lpDir);
     return DT_FOLDER;
+}
+
+/* Drives were connected or disconnected: rebuild the trees */
+void ExplorerRefreshDrives(void)
+{
+    char szPath[MAXPATHLEN];
+    LPEXPLORER e;
+    int w;
+
+    for (w = 0; w < s_nExplorers; w++) {
+        e = GetExplorer(s_hwndExplorers[w]);
+        if (!e)
+            continue;
+        lstrcpy(szPath, FViewGetPath(e->hwndView));
+        SendMessage(e->hwndTree, WM_SETREDRAW, FALSE, 0L);
+        DeleteNodes(e, 0, e->nNodes);
+        BuildDrives(e);
+        SendMessage(e->hwndTree, WM_SETREDRAW, TRUE, 0L);
+        if (!PathIsDirectory(szPath)) {
+            GetWindowsDirectory(szPath, sizeof(szPath));
+            szPath[3] = '\0';
+        }
+        SelectPath(s_hwndExplorers[w], e, szPath);
+    }
+}
+
+int ExplorerGetWindows(HWND FAR *lpOut, int nMax)
+{
+    int i;
+
+    for (i = 0; i < s_nExplorers && i < nMax; i++)
+        lpOut[i] = s_hwndExplorers[i];
+    return i;
 }
 
 void ExplorerCloseAll(void)

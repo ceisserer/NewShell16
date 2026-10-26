@@ -18,8 +18,10 @@
 /*
  * folder.c - folder windows and the Computer window
  *
- * A folder window is a frame holding a folder view (fview.c), a menu bar
- * and a status bar. The Computer window is a folder window for path "".
+ * A folder window is a frame holding a folder view (fview.c), a menu bar,
+ * a toolbar and a status bar (both can be switched off in the View menu,
+ * [Folders] Toolbar= and StatusBar=). The Computer window is a folder
+ * window for path "".
  */
 #include <string.h>
 #include "newshell.h"
@@ -30,15 +32,56 @@ static HWND s_hwndFolders[MAX_FOLDERS];
 static int  s_nFolders;
 static int  s_cyStatus;
 
+#define ID_TOOLBAR      2
+
+static void NewWindowRect(RECT FAR *lprc);
+
 static HWND ViewOf(HWND hwnd)
 {
     return GetDlgItem(hwnd, 1);
 }
 
+static HWND ToolbarOf(HWND hwnd)
+{
+    return GetDlgItem(hwnd, ID_TOOLBAR);
+}
+
+static int BarTop(void)
+{
+    return g_cfg.bFolderToolbar ? ToolbarHeight() : 0;
+}
+
+static int BarBottom(void)
+{
+    return g_cfg.bFolderStatusBar ? StatusBarHeight() : 0;
+}
+
+static void Layout(HWND hwnd)
+{
+    RECT rc;
+
+    GetClientRect(hwnd, &rc);
+    if (ToolbarOf(hwnd)) {
+        ShowWindow(ToolbarOf(hwnd), g_cfg.bFolderToolbar ? SW_SHOWNA : SW_HIDE);
+        MoveWindow(ToolbarOf(hwnd), 0, 0, rc.right, ToolbarHeight(), TRUE);
+    }
+    MovePane(ViewOf(hwnd), 0, BarTop(), rc.right, rc.bottom - BarTop() - BarBottom());
+    InvalidateRect(hwnd, NULL, TRUE);
+}
+
 static void SetTitle(HWND hwnd)
 {
+    char szTitle[MAXPATHLEN + 32];
     LPCSTR lpPath = FViewGetPath(ViewOf(hwnd));
-    SetWindowText(hwnd, *lpPath ? lpPath : "Computer");
+    LPCSTR lpFilter = FViewGetFilter(ViewOf(hwnd));
+
+    if (!*lpPath)
+        CfgGetStr("Desktop", "ComputerCaption", "Computer", szTitle, 40);
+    else if (lstrcmp(lpFilter, "*.*") != 0)
+        wsprintf(szTitle, "%s (%s)", lpPath, lpFilter);
+    else
+        lstrcpy(szTitle, lpPath);
+    SetWindowText(hwnd, szTitle);
 }
 
 /*
@@ -104,9 +147,23 @@ static void InvalidateStatus(HWND hwnd)
 {
     RECT rc;
 
+    ToolbarSyncView(ToolbarOf(hwnd), ViewOf(hwnd));
+    if (!g_cfg.bFolderStatusBar)
+        return;
     GetClientRect(hwnd, &rc);
     rc.top = rc.bottom - StatusBarHeight();
     InvalidateRect(hwnd, &rc, FALSE);
+}
+
+/* View > Toolbar / Status Bar: every folder window follows */
+void FolderBarsChanged(void)
+{
+    int i;
+
+    for (i = 0; i < s_nFolders; i++) {
+        Layout(s_hwndFolders[i]);
+        ToolbarSyncView(ToolbarOf(s_hwndFolders[i]), ViewOf(s_hwndFolders[i]));
+    }
 }
 
 static void OpenSubfolder(HWND hwnd, LPCSTR lpPath)
@@ -152,8 +209,14 @@ LRESULT CALLBACK NSEXPORT FolderWndProc(HWND hwnd, UINT msg, WPARAM wParam,
         {
             CREATESTRUCT FAR *lpcs = (CREATESTRUCT FAR *)lParam;
 
+            HWND hwndTb;
+
             if (!FViewCreate(hwnd, (LPCSTR)lpcs->lpCreateParams))
                 return -1;
+            hwndTb = ToolbarCreate(hwnd, g_aFolderButtons, g_nFolderButtons);
+            if (hwndTb)
+                SetWindowWord(hwndTb, GWW_ID, ID_TOOLBAR);
+            ToolbarSyncView(hwndTb, ViewOf(hwnd));
             SetTitle(hwnd);
             if (s_nFolders < MAX_FOLDERS)
                 s_hwndFolders[s_nFolders++] = hwnd;
@@ -161,9 +224,7 @@ LRESULT CALLBACK NSEXPORT FolderWndProc(HWND hwnd, UINT msg, WPARAM wParam,
         return 0;
 
     case WM_SIZE:
-        MovePane(ViewOf(hwnd), 0, 0, LOWORD(lParam),
-                 HIWORD(lParam) - StatusBarHeight());
-        InvalidateRect(hwnd, NULL, FALSE);
+        Layout(hwnd);
         return 0;
 
     case WM_PAINT:
@@ -171,12 +232,19 @@ LRESULT CALLBACK NSEXPORT FolderWndProc(HWND hwnd, UINT msg, WPARAM wParam,
         {
             RECT rc;
             GetClientRect(hwnd, &rc);
-            DrawPaneEdge(ps.hdc, 0, 0, rc.right, rc.bottom - StatusBarHeight());
+            DrawPaneEdge(ps.hdc, 0, BarTop(), rc.right, rc.bottom - BarTop() - BarBottom());
         }
-        FViewGetStatus(ViewOf(hwnd), szStatus, sizeof(szStatus));
-        PaintStatusBar(hwnd, ps.hdc, StatusBarHeight(), szStatus, 0);
+        if (g_cfg.bFolderStatusBar) {
+            FViewGetStatus(ViewOf(hwnd), szStatus, sizeof(szStatus));
+            PaintStatusBar(hwnd, ps.hdc, StatusBarHeight(), szStatus, 0);
+        }
         EndPaint(hwnd, &ps);
         return 0;
+
+    case WM_ACTIVATE:
+        if (wParam != WA_INACTIVE)
+            ToolbarSyncView(ToolbarOf(hwnd), ViewOf(hwnd));
+        break;
 
     case WM_SETFOCUS:
         SetFocus(ViewOf(hwnd));
@@ -184,6 +252,10 @@ LRESULT CALLBACK NSEXPORT FolderWndProc(HWND hwnd, UINT msg, WPARAM wParam,
 
     case WM_INITMENUPOPUP:
         FViewInitMenu(ViewOf(hwnd), (HMENU)wParam);
+        CheckMenuItem((HMENU)wParam, CMD_F_TOOLBAR,
+                      g_cfg.bFolderToolbar ? MF_CHECKED : MF_UNCHECKED);
+        CheckMenuItem((HMENU)wParam, CMD_F_STATUSBAR,
+                      g_cfg.bFolderStatusBar ? MF_CHECKED : MF_UNCHECKED);
         return 0;
 
     case WM_NS_FVNOTIFY:
@@ -212,6 +284,16 @@ LRESULT CALLBACK NSEXPORT FolderWndProc(HWND hwnd, UINT msg, WPARAM wParam,
         switch (wParam) {
         case CMD_F_COMPUTER:    FolderOpen(""); return 0;
         case CMD_F_CLOSE:       DestroyWindow(hwnd); return 0;
+        case CMD_F_TOOLBAR:
+            g_cfg.bFolderToolbar = !g_cfg.bFolderToolbar;
+            CfgSave();
+            FolderBarsChanged();
+            return 0;
+        case CMD_F_STATUSBAR:
+            g_cfg.bFolderStatusBar = !g_cfg.bFolderStatusBar;
+            CfgSave();
+            FolderBarsChanged();
+            return 0;
         case CMD_F_EXPLORE:
             if (FViewSelCount(hwndView) == 0) {
                 ExplorerOpen(FViewGetPath(hwndView));
@@ -222,11 +304,36 @@ LRESULT CALLBACK NSEXPORT FolderWndProc(HWND hwnd, UINT msg, WPARAM wParam,
         case CMD_FIND:          FindOpen(FViewGetPath(hwndView)); return 0;
         case CMD_RUN:           RunDialog(hwnd); return 0;
         }
-        if (FViewCommand(hwndView, wParam) || StartMenuCommand(hwnd, wParam))
+        if (FViewCommand(hwndView, wParam)) {
+            ToolbarSyncView(ToolbarOf(hwnd), hwndView);
+            return 0;
+        }
+        if (StartMenuCommand(hwnd, wParam))
             return 0;
         break;
 
+    case WM_CLOSE:
+        /* the Computer window can stand for the whole shell */
+        if (!FViewGetPath(ViewOf(hwnd))[0] && CfgGetInt("Preferences", "ComputerQuits", 0)) {
+            DoShutdownDialog();
+            return 0;
+        }
+        break;
+
     case WM_DESTROY:
+        {
+            WINDOWPLACEMENT wp;
+            char szPos[40];
+
+            wp.length = sizeof(wp);
+            if (GetWindowPlacement(hwnd, &wp)) {
+                wsprintf(szPos, "%d,%d,%d,%d", wp.rcNormalPosition.left,
+                         wp.rcNormalPosition.top,
+                         wp.rcNormalPosition.right - wp.rcNormalPosition.left,
+                         wp.rcNormalPosition.bottom - wp.rcNormalPosition.top);
+                CfgSetStr("Folders", "LastWindow", szPos);
+            }
+        }
         RemoveFolder(hwnd);
         return 0;
     }
@@ -270,15 +377,72 @@ HWND FolderOpen(LPCSTR lpPath)
         }
     }
 
-    hwnd = CreateWindow(CLS_FOLDER, "", WS_OVERLAPPEDWINDOW,
-                        CW_USEDEFAULT, 0, 440, 300, NULL, NULL, g_hInst,
-                        (LPVOID)szPath);
+    {
+        RECT rc;
+
+        NewWindowRect(&rc);
+        hwnd = CreateWindow(CLS_FOLDER, "", WS_OVERLAPPEDWINDOW,
+                            rc.left, rc.top, rc.right, rc.bottom, NULL, NULL, g_hInst,
+                            (LPVOID)szPath);
+    }
     if (!hwnd)
         return NULL;
+    PlayEventSound("OpenFolder");
     ShowWindow(hwnd, SW_SHOWNORMAL);
     UpdateWindow(hwnd);
     TaskbarRefresh();
     return hwnd;
+}
+
+/* The folder a folder window shows ("" for the Computer) */
+LPSTR FolderWindowPath(HWND hwnd, LPSTR lpBuf)
+{
+    lstrcpy(lpBuf, FViewGetPath(ViewOf(hwnd)));
+    return lpBuf;
+}
+
+/*
+ * Where a new folder window goes ([Folders] WindowPos=): 0 where Windows
+ * puts it, 1 cascaded from the last one opened, 2 where the last one
+ * closed was.
+ */
+static void NewWindowRect(RECT FAR *lprc)
+{
+    static int s_nCascade;
+    char szPos[40];
+    LPSTR p;
+    int v[4], i, nStep = GetSystemMetrics(SM_CYCAPTION) + GetSystemMetrics(SM_CYFRAME);
+
+    SetRect(lprc, CW_USEDEFAULT, 0, 440, 300);
+    switch (CfgGetInt("Folders", "WindowPos", 0)) {
+    case 1:
+        lprc->left = 40 + (s_nCascade % 8) * nStep;
+        lprc->top = 20 + (s_nCascade % 8) * nStep;
+        s_nCascade++;
+        break;
+    case 2:
+        CfgGetStr("Folders", "LastWindow", "", szPos, sizeof(szPos));
+        for (p = szPos, i = 0; *p && i < 4; i++) {
+            v[i] = 0;
+            while (*p >= '0' && *p <= '9')
+                v[i] = v[i] * 10 + (*p++ - '0');
+            if (*p == ',')
+                p++;
+        }
+        if (i == 4 && v[2] >= 100 && v[3] >= 60)
+            SetRect(lprc, v[0], v[1], v[2], v[3]);
+        break;
+    }
+}
+
+/* The folder windows (and File System windows) into lpOut */
+int FolderGetWindows(HWND FAR *lpOut, int nMax)
+{
+    int i, n = 0;
+
+    for (i = 0; i < s_nFolders && n < nMax; i++)
+        lpOut[n++] = s_hwndFolders[i];
+    return n + ExplorerGetWindows(lpOut + n, nMax - n);
 }
 
 void FolderCloseAll(void)

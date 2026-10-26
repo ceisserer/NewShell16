@@ -25,7 +25,10 @@ wmake clean
 The makefile compiles with `-w4 -we`, so warnings fail the build.
 
 Compiler settings: large memory model (`-ml`), Windows prologs with smart
-callbacks (`-zWs`), 286 code (`-2`). The executable is marked as a
+callbacks (`-zWs`), string literals in the code segment (`-zc`), 286 code
+(`-2`). The data segment must stay a single one (a program with several
+cannot run twice, and the second copy forwards Ctrl+Esc and command
+lines), so large tables are allocated from the global heap. The executable is marked as a
 Windows 3.1 application (`wrc -31`).
 
 ## Release and installer

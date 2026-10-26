@@ -38,7 +38,7 @@ STARTDEF = ["", "programs", "folder", "find", "run", "explorer", "shutdown",
 # Single 16x16 bitmaps in BMP/
 BITMAPS = ["PARENT", "MKDIR", "CUT", "COPY", "PASTE", "DELETE", "PROP", "LARGE",
            "SMALL", "LIST", "DETAILS", "SORTNAME", "SORTTYPE", "SORTSIZE",
-           "SORTDATE", "PRINT", "SPLEAF"]
+           "SORTDATE", "PRINT", "SPLEAF", "EDIT", "OPEN", "INSERT", "NEWPRG"]
 
 
 def read_res(path):

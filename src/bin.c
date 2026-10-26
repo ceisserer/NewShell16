@@ -25,7 +25,13 @@
  *   [Files]                 [Sizes]
  *   NS000001.TXT=C:\A.TXT   NS000001.TXT=1234
  *
- * Only fixed drives get a Bin; other items are deleted directly.
+ * Only fixed drives get a Bin; other items are deleted directly. The Bin
+ * Properties set its caption, a capacity (the oldest items are deleted
+ * when it is exceeded) and whether it is emptied when Windows exits:
+ *
+ *   [Bin]
+ *   Capacity=0         ; MB, 0 = no limit
+ *   EmptyOnExit=0
  */
 #include <stdlib.h>
 #include <string.h>
@@ -123,6 +129,9 @@ BOOL BinSend(LPCSTR lpPath)
     WritePrivateProfileString("Files", szName, szPath, szIni);
     wsprintf(szSize, "%lu%s", dwSize, (LPSTR)(bDir ? ",D" : ""));
     WritePrivateProfileString("Sizes", szName, szSize, szIni);
+    /* Undelete starts at the drive of the last item */
+    wsprintf(szSize, "%c", szPath[0]);
+    CfgSetStr("Bin", "LastDrive", szSize);
     return TRUE;
 }
 
@@ -261,8 +270,39 @@ static void FillList(void)
     InvalidateRect(s_hwndBin, NULL, TRUE);
 }
 
+static void Destroy(HWND hwnd, LPBINITEM b);
+
+static int CompareAge(const void *a, const void *b)
+{
+    /* the generated names count up: NS000001 is the oldest */
+    return lstrcmpi(((LPBINITEM)a)->szBinName, ((LPBINITEM)b)->szBinName);
+}
+
+/* Deletes the oldest items while the Bin holds more than its capacity */
+static void Trim(void)
+{
+    DWORD dwCap = (DWORD)CfgGetInt("Bin", "Capacity", 0) * 1048576L;
+    DWORD dwTotal = 0;
+    int i;
+
+    if (dwCap == 0)
+        return;
+    LoadBin();
+    for (i = 0; i < s_nItems; i++)
+        dwTotal += s_lpItems[i].dwSize;
+    if (dwTotal <= dwCap)
+        return;
+    if (s_nItems > 1)
+        qsort(s_lpItems, s_nItems, sizeof(BINITEM), CompareAge);
+    for (i = 0; i < s_nItems && dwTotal > dwCap; i++) {
+        dwTotal -= s_lpItems[i].dwSize;
+        Destroy(NULL, &s_lpItems[i]);
+    }
+}
+
 void BinChanged(void)
 {
+    Trim();
     if (s_hwndBin)
         FillList();
     DesktopBinChanged();
@@ -296,6 +336,7 @@ static void EmptyBin(HWND hwnd)
         return;
     for (i = 0; i < s_nItems; i++)
         Destroy(hwnd, &s_lpItems[i]);
+    PlayEventSound("EmptyBin");
     BinChanged();
 }
 
@@ -457,6 +498,7 @@ LRESULT CALLBACK NSEXPORT BinWndProc(HWND hwnd, UINT msg, WPARAM wParam,
                 ForSelected(hwnd, Destroy);
             return 0;
         case CMD_BIN_EMPTY:     EmptyBin(hwnd); return 0;
+        case CMD_BIN_PROPS:     BinPropertiesDialog(hwnd); return 0;
         case CMD_F_REFRESH:     FillList(); return 0;
         case CMD_F_CLOSE:       DestroyWindow(hwnd); return 0;
         case CMD_ABOUT:         AboutDialog(hwnd); return 0;
@@ -495,14 +537,129 @@ void BinOpen(void)
         SetActiveWindow(s_hwndBin);
         return;
     }
-    s_hwndBin = CreateWindow(CLS_BIN, "Bin", WS_OVERLAPPEDWINDOW,
-                             CW_USEDEFAULT, 0, 460, 260, NULL, NULL, g_hInst, NULL);
+    {
+        char szCaption[40];
+
+        CfgGetStr("Desktop", "BinCaption", "Bin", szCaption, sizeof(szCaption));
+        s_hwndBin = CreateWindow(CLS_BIN, szCaption, WS_OVERLAPPEDWINDOW,
+                                 CW_USEDEFAULT, 0, 460, 260, NULL, NULL, g_hInst, NULL);
+    }
     if (!s_hwndBin)
         return;
     FillList();
     ShowWindow(s_hwndBin, SW_SHOWNORMAL);
     UpdateWindow(s_hwndBin);
     TaskbarRefresh();
+}
+
+/* Undelete (Ctrl+U): restores the newest item, from the drive deleted
+   from last if it has any */
+BOOL BinUndelete(HWND hwndOwner)
+{
+    char szDrive[4];
+    LPBINITEM b = NULL;
+    int i, nPass;
+
+    LoadBin();
+    CfgGetStr("Bin", "LastDrive", "", szDrive, sizeof(szDrive));
+    for (nPass = 0; nPass < 2 && !b; nPass++)
+        for (i = 0; i < s_nItems; i++) {
+            if (nPass == 0 && (s_lpItems[i].szOrig[0] & ~0x20) != (szDrive[0] & ~0x20))
+                continue;
+            if (!b || lstrcmpi(s_lpItems[i].szBinName, b->szBinName) > 0)
+                b = &s_lpItems[i];
+        }
+    if (!b) {
+        MessageBox(hwndOwner, "The Bin is empty.", NS_APPNAME, MB_OK | MB_ICONINFORMATION);
+        return FALSE;
+    }
+    Restore(hwndOwner, b);
+    BinChanged();
+    return TRUE;
+}
+
+/* Windows is exiting: empty the Bin if the properties say so */
+void BinExit(void)
+{
+    int i;
+
+    if (!CfgGetInt("Bin", "EmptyOnExit", 0))
+        return;
+    LoadBin();
+    for (i = 0; i < s_nItems; i++)
+        Destroy(NULL, &s_lpItems[i]);
+}
+
+/* -------------------------------------------------------------------- */
+/* Bin Properties                                                       */
+/* -------------------------------------------------------------------- */
+
+BOOL CALLBACK NSEXPORT BinPropsDlgProc(HWND hDlg, UINT msg, WPARAM wParam,
+                                       LPARAM lParam)
+{
+    char szText[96], szSize[24];
+    DWORD dwTotal = 0;
+    BOOL bOK;
+    int i;
+
+    (void)lParam;
+    switch (msg) {
+    case WM_INITDIALOG:
+        CfgGetStr("Desktop", "BinCaption", "Bin", szText, 40);
+        SetDlgItemText(hDlg, IDC_BINCAPTION, szText);
+        SendDlgItemMessage(hDlg, IDC_BINCAPTION, EM_LIMITTEXT, 39, 0L);
+        SetDlgItemInt(hDlg, IDC_BINCAPACITY, CfgGetInt("Bin", "Capacity", 0), FALSE);
+        CheckDlgButton(hDlg, IDC_BINEMPTYEXIT, CfgGetInt("Bin", "EmptyOnExit", 0));
+        CheckDlgButton(hDlg, IDC_BINDIRECT, !g_cfg.bDeleteToBin);
+        LoadBin();
+        for (i = 0; i < s_nItems; i++)
+            dwTotal += s_lpItems[i].dwSize;
+        FormatBytes(dwTotal, szSize);
+        wsprintf(szText, "The Bin holds %d item(s), %s.", s_nItems, (LPSTR)szSize);
+        SetDlgItemText(hDlg, IDC_BINSTATUS, szText);
+        return TRUE;
+
+    case WM_COMMAND:
+        if (wParam == IDOK) {
+            i = GetDlgItemInt(hDlg, IDC_BINCAPACITY, &bOK, FALSE);
+            if (!bOK) {
+                MessageBox(hDlg, "Please enter the capacity in MB (0 for no limit).",
+                           "Bin Properties", MB_OK | MB_ICONEXCLAMATION);
+                SetFocus(GetDlgItem(hDlg, IDC_BINCAPACITY));
+                return TRUE;
+            }
+            CfgSetInt("Bin", "Capacity", i);
+            CfgSetInt("Bin", "EmptyOnExit", IsDlgButtonChecked(hDlg, IDC_BINEMPTYEXIT) != 0);
+            g_cfg.bDeleteToBin = !IsDlgButtonChecked(hDlg, IDC_BINDIRECT);
+            CfgSave();
+            GetDlgItemText(hDlg, IDC_BINCAPTION, szText, 40);
+            if (!szText[0])
+                lstrcpy(szText, "Bin");
+            CfgSetStr("Desktop", "BinCaption", szText);
+            if (s_hwndBin)
+                SetWindowText(s_hwndBin, szText);
+            EndDialog(hDlg, IDOK);
+            DesktopCaptionsChanged();
+            BinChanged();
+            return TRUE;
+        }
+        if (wParam == IDCANCEL) {
+            EndDialog(hDlg, IDCANCEL);
+            return TRUE;
+        }
+        break;
+    }
+    return FALSE;
+}
+
+void BinPropertiesDialog(HWND hwndOwner)
+{
+    FARPROC lpfn = MakeProcInstance((FARPROC)BinPropsDlgProc, g_hInst);
+
+    if (!s_lpItems)
+        s_lpItems = (LPBINITEM)malloc(MAX_BIN * sizeof(BINITEM));
+    DialogBox(g_hInst, MAKEINTRESOURCE(IDD_BINPROPS), hwndOwner, (DLGPROC)lpfn);
+    FreeProcInstance(lpfn);
 }
 
 void BinClose(void)

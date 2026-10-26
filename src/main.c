@@ -27,10 +27,13 @@
  *                            so it can be used as "taskman.exe=" for Ctrl+Esc
  *   NEWSHELL /E [path]       File System window
  *   NEWSHELL /S              Start menu
+ *   NEWSHELL /D              show the desktop (minimise all, again: restore)
  *   NEWSHELL path            open a folder, document or program
  */
+#include <stdlib.h>
 #include <string.h>
 #include "newshell.h"
+#include <dde.h>
 #include "nshook.h"
 
 #define TIMER_FILECHANGE    1
@@ -49,6 +52,12 @@ static HINSTANCE           s_hHookDll;
 static NSHOOKSTART         s_lpfnHookStart;
 static NSHOOKSTOP          s_lpfnHookStop;
 static NSHOOKGETFILECHANGE s_lpfnHookGetChange;
+static NSHOOKSETHOTKEYS    s_lpfnHookSetHotkeys;
+
+/* hot keys: the key for the hook, and the command it runs */
+static WORD s_wHotkey[MAX_HOTKEYS];
+static char s_szHotCmd[MAX_HOTKEYS][80];
+static int  s_nHotkeys;
 static char s_szChanged[MAX_CHANGED_DIRS][MAXPATHLEN];
 static int  s_nChanged;
 
@@ -91,10 +100,109 @@ static void LoadHookDll(void)
     s_lpfnHookStop = (NSHOOKSTOP)GetProcAddress(s_hHookDll, "NSHOOKSTOP");
     s_lpfnHookGetChange = (NSHOOKGETFILECHANGE)GetProcAddress(s_hHookDll,
                                                               "NSHOOKGETFILECHANGE");
+    s_lpfnHookSetHotkeys = (NSHOOKSETHOTKEYS)GetProcAddress(s_hHookDll, "NSHOOKSETHOTKEYS");
     if (!s_lpfnHookStart || !s_lpfnHookStop || !s_lpfnHookGetChange) {
         FreeLibrary(s_hHookDll);
         s_hHookDll = NULL;
     }
+}
+
+/*
+ * "Ctrl+Alt+E", "Win+R", "Shift+F5": the key for the hook, 0 if it is not
+ * understood
+ */
+static WORD ParseHotkey(LPCSTR lp)
+{
+    static const struct { const char *pszName; BYTE bVk; } s_keys[] = {
+        { "Space", VK_SPACE }, { "Enter", VK_RETURN }, { "Tab", VK_TAB },
+        { "Esc", VK_ESCAPE }, { "Backspace", VK_BACK }, { "Insert", VK_INSERT },
+        { "Delete", VK_DELETE }, { "Home", VK_HOME }, { "End", VK_END },
+        { "PgUp", VK_PRIOR }, { "PgDn", VK_NEXT }, { "Up", VK_UP }, { "Down", VK_DOWN },
+        { "Left", VK_LEFT }, { "Right", VK_RIGHT }, { "Pause", VK_PAUSE }
+    };
+    char szPart[16];
+    WORD wMods = 0, wKey = 0;
+    int n, i;
+
+    while (*lp) {
+        for (n = 0; *lp && *lp != '+'; lp++)
+            if (n < sizeof(szPart) - 1 && *lp != ' ')
+                szPart[n++] = *lp;
+        szPart[n] = '\0';
+        if (*lp == '+')
+            lp++;
+        if (!lstrcmpi(szPart, "Ctrl"))
+            wMods |= HK_CTRL;
+        else if (!lstrcmpi(szPart, "Alt"))
+            wMods |= HK_ALT;
+        else if (!lstrcmpi(szPart, "Shift"))
+            wMods |= HK_SHIFT;
+        else if (!lstrcmpi(szPart, "Win"))
+            wMods |= HK_WIN;
+        else if (n == 1)
+            wKey = (WORD)(BYTE)(DWORD)AnsiUpper((LPSTR)(DWORD)(BYTE)szPart[0]);
+        else if ((szPart[0] | 0x20) == 'f' && szPart[1] >= '1' && szPart[1] <= '9')
+            wKey = VK_F1 + atoi(szPart + 1) - 1;
+        else
+            for (i = 0; i < sizeof(s_keys) / sizeof(s_keys[0]); i++)
+                if (!lstrcmpi(szPart, s_keys[i].pszName))
+                    wKey = s_keys[i].bVk;
+    }
+    /* a plain letter would take that key from every program */
+    if (!wKey || !(wMods & (HK_CTRL | HK_ALT | HK_WIN)) && !(wKey >= VK_F1 && wKey <= VK_F12))
+        return 0;
+    return wKey | wMods;
+}
+
+static void AddHotkey(WORD wKey, LPCSTR lpCmd)
+{
+    if (!wKey || s_nHotkeys >= MAX_HOTKEYS)
+        return;
+    s_wHotkey[s_nHotkeys] = wKey;
+    lstrcpyn(s_szHotCmd[s_nHotkeys], lpCmd, sizeof(s_szHotCmd[0]));
+    s_nHotkeys++;
+}
+
+/*
+ * The hot keys: those of Windows 95 with the Windows key, then
+ * [Hotkeys] in NEWSHELL.INI, "1=Ctrl+Alt+N,NOTEPAD.EXE".
+ */
+static void LoadHotkeys(void)
+{
+    char szKey[8], szValue[120];
+    LPSTR lpCmd;
+    int i;
+
+    s_nHotkeys = 0;
+    if (g_cfg.bWinKey) {
+        AddHotkey('E' | HK_WIN, "$Explore");
+        AddHotkey('R' | HK_WIN, "$Run");
+        AddHotkey('F' | HK_WIN, "$Find");
+        AddHotkey('M' | HK_WIN, "$MinimizePrograms");
+        AddHotkey('D' | HK_WIN, "$ClearDesktop");
+        AddHotkey(VK_TAB | HK_WIN, "$TaskManager");
+    }
+    for (i = 1; i <= MAX_HOTKEYS; i++) {
+        wsprintf(szKey, "%d", i);
+        CfgGetStr("Hotkeys", szKey, "", szValue, sizeof(szValue));
+        lpCmd = _fstrchr(szValue, ',');
+        if (!lpCmd)
+            continue;
+        *lpCmd++ = '\0';
+        while (*lpCmd == ' ')
+            lpCmd++;
+        AddHotkey(ParseHotkey(szValue), lpCmd);
+    }
+}
+
+static void RunHotkey(int i)
+{
+    if (i < 0 || i >= s_nHotkeys)
+        return;
+    if (s_szHotCmd[i][0] == '$')
+        ExecMacro(g_hwndMain, s_szHotCmd[i]);
+    else
+        LaunchCommand(g_hwndMain, s_szHotCmd[i], NULL, SW_SHOWNORMAL);
 }
 
 /* (Re)installs the hooks according to the settings */
@@ -104,6 +212,13 @@ void HookApplySettings(void)
 
     if (!s_hHookDll)
         return;
+    LoadHotkeys();
+    if (s_lpfnHookSetHotkeys && s_nHotkeys) {
+        s_lpfnHookSetHotkeys(s_wHotkey, s_nHotkeys);
+        uFlags |= NSH_HOTKEYS;
+    }
+    if (g_cfg.bRightClose)
+        uFlags |= NSH_RCLOSE;
     if (g_cfg.bMaxClamp)
         uFlags |= NSH_MAXIMIZE;
     if (g_cfg.bDesktopMenu)
@@ -112,14 +227,17 @@ void HookApplySettings(void)
         uFlags |= NSH_WINKEY;
     if (g_cfg.bFileMonitor)
         uFlags |= NSH_FILES;
-    s_lpfnHookStart(g_hwndMain,
-                    GetSystemMetrics(SM_CYSCREEN) - TaskbarHeight(), uFlags);
+    uFlags = s_lpfnHookStart(g_hwndMain,
+                             GetSystemMetrics(SM_CYSCREEN) - TaskbarHeight(), uFlags);
+    /* File Manager drops onto the wallpaper reach the desktop subclass */
+    DragAcceptFiles(GetDesktopWindow(), (uFlags & NSH_DESKTOP) && g_cfg.bDesktopIcons);
 }
 
 static void UnloadHookDll(void)
 {
     if (!s_hHookDll)
         return;
+    DragAcceptFiles(GetDesktopWindow(), FALSE);
     s_lpfnHookStop();
     FreeLibrary(s_hHookDll);
     s_hHookDll = NULL;
@@ -172,12 +290,15 @@ static void OpenFromCommandLine(LPCSTR lpCmdLine)
     } else if (lpCmdLine[0] == '/' && (lpCmdLine[1] | 0x20) == 's') {
         if (g_hwndTaskbar)
             PostMessage(g_hwndTaskbar, WM_COMMAND, CMD_STARTMENU, 0L);
+    } else if (lpCmdLine[0] == '/' && (lpCmdLine[1] | 0x20) == 'd') {
+        TasksClearDesktop();
     } else if (*lpCmdLine)
         LaunchCommand(g_hwndMain, lpCmdLine, NULL, SW_SHOWNORMAL);
 }
 
 void CloseShell(void)
 {
+    SaveOpenWindows();
     FindClose();
     TaskManClose();
     BinClose();
@@ -190,22 +311,101 @@ void CloseShell(void)
         DestroyWindow(g_hwndMain);
 }
 
+static void ExitWith(DWORD dwCode)
+{
+    HWND hwndScreen;
+
+    PlayEventSound("Exit");
+    SaveOpenWindows();
+    hwndScreen = ShutdownScreenShow();
+    ExitWindows(dwCode, 0);
+    /* a program refused */
+    if (hwndScreen)
+        DestroyWindow(hwndScreen);
+}
+
+/* Log Off: everyone's windows close, the next user's settings come in */
+void LogOff(void)
+{
+    SaveOpenWindows();
+    FindClose();
+    TaskManClose();
+    BinClose();
+    ExplorerCloseAll();
+    FolderCloseAll();
+    DesktopDestroy();
+    LogonDialog();
+    CfgLoad();
+    NsColorsChanged();
+    StartMenuOptionsChanged();
+    DesktopCreate();
+    TaskbarApplySettings();
+    HookApplySettings();
+    if (g_hwndTaskbar)
+        InvalidateRect(g_hwndTaskbar, NULL, FALSE);
+    RestoreOpenWindows();
+}
+
 void DoShutdownDialog(void)
 {
     int nChoice = ShutdownDialog(g_hwndMain);
 
     switch (nChoice) {
     case IDC_EXITWIN:
-        ExitWindows(0L, 0);
+        ExitWith(0L);
         break;
     case IDC_RESTARTWIN:
-        ExitWindows(EW_RESTARTWINDOWS, 0);
+        ExitWith(EW_RESTARTWINDOWS);
         break;
     case IDC_REBOOT:
-        ExitWindows(EW_REBOOTSYSTEM, 0);
+        ExitWith(EW_REBOOTSYSTEM);
         break;
     case IDC_CLOSESHELL:
         CloseShell();
+        break;
+    case IDC_LOGOFF:
+        LogOff();
+        break;
+    }
+}
+
+/* Commands of the desktop and taskbar menus and of some macros */
+void ShellCommand(UINT id)
+{
+    HWND hwnds[48];
+    char szSaver[MAXPATHLEN + 4];
+    int n;
+
+    switch (id) {
+    case CMD_TOGGLETASKBAR:
+        CfgSetInt("Taskbar", "Enabled", !CfgGetInt("Taskbar", "Enabled", 1));
+        TaskbarApplySettings();
+        HookApplySettings();
+        break;
+    case CMD_CLEARDESKTOP:
+        TasksClearDesktop();
+        break;
+    case CMD_CLOSEFOLDERS:
+        FolderCloseAll();
+        ExplorerCloseAll();
+        break;
+    case CMD_CASCADEFOLDERS:
+        n = FolderGetWindows(hwnds, 48);
+        CascadeList(hwnds, n);
+        if (n)
+            BringWindowToTop(hwnds[0]);
+        break;
+    case CMD_SCREENSAVER:
+        GetPrivateProfileString("boot", "SCRNSAVE.EXE", "", szSaver, MAXPATHLEN,
+                                "SYSTEM.INI");
+        if (!szSaver[0]) {
+            MessageBox(NULL, "No screen saver is chosen (Control Panel, Desktop).",
+                       NS_APPNAME, MB_OK | MB_ICONINFORMATION);
+            break;
+        }
+        lstrcat(szSaver, " /s");
+        if (WinExec(szSaver, SW_SHOWNORMAL) < 32)
+            ShowLaunchError(NULL, 2, szSaver);
         break;
     }
 }
@@ -244,6 +444,16 @@ LRESULT CALLBACK NSEXPORT MainWndProc(HWND hwnd, UINT msg, WPARAM wParam,
         case CMD_ARRANGEICONS:
             DesktopArrange();
             break;
+        case CMD_LINEUPICONS:
+            DesktopLineUp();
+            break;
+        case CMD_TOGGLETASKBAR:
+        case CMD_CLEARDESKTOP:
+        case CMD_CLOSEFOLDERS:
+        case CMD_CASCADEFOLDERS:
+        case CMD_SCREENSAVER:
+            ShellCommand(wParam);
+            break;
         default:
             StartMenuCommand(hwnd, wParam);
         }
@@ -255,12 +465,24 @@ LRESULT CALLBACK NSEXPORT MainWndProc(HWND hwnd, UINT msg, WPARAM wParam,
         GlobalDeleteAtom((ATOM)wParam);
         return 0;
 
+    case WM_DDE_INITIATE:
+        DdeInitiate((HWND)wParam, (ATOM)LOWORD(lParam), (ATOM)HIWORD(lParam));
+        return 0;
+
     case WM_NS_SHELLHOOK:
         TaskbarRefresh();
         return 0;
 
     case WM_NS_DESKMENU:
         DesktopMenu((int)LOWORD(lParam), (int)HIWORD(lParam));
+        return 0;
+
+    case WM_NS_HOTKEY:
+        RunHotkey((int)wParam);
+        return 0;
+
+    case WM_NS_DESKDROP:
+        DesktopDropFiles((HDROP)wParam);
         return 0;
 
     case WM_NS_WINKEY:
@@ -282,8 +504,12 @@ LRESULT CALLBACK NSEXPORT MainWndProc(HWND hwnd, UINT msg, WPARAM wParam,
         return TRUE;
 
     case WM_ENDSESSION:
-        if (wParam)
+        if (wParam) {
+            SaveOpenWindows();
+            if (g_bIsShell)
+                BinExit();
             UnloadHookDll();
+        }
         return 0;
 
     case WM_CLOSE:
@@ -324,7 +550,7 @@ static BOOL RegisterClasses(void)
         return FALSE;
 
     return FolderRegister() && FViewRegister() && ExplorerRegister() && ToolbarRegister()
-        && TaskManRegister() && BinRegister() && FileOpRegister();
+        && TaskManRegister() && BinRegister() && FileOpRegister() && DdeRegister() && HintRegister() && ScreenRegister();
 }
 
 /*
@@ -373,8 +599,10 @@ int PASCAL WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 
     g_hInst = hInstance;
     GetWindowsDirectory(g_szWinDir, sizeof(g_szWinDir));
-    CfgLoad();
     g_bIsShell = DetectShell();
+    if (g_bIsShell)
+        LogonDialog();
+    CfgLoad();
 
     g_hfontUI = CreateUIFont(8, FALSE);
     g_hfontBold = CreateUIFont(8, TRUE);
@@ -388,6 +616,8 @@ int PASCAL WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     if (!g_hwndMain)
         return 1;
 
+    if (g_bIsShell)
+        SplashShow();
     if (!TaskbarCreate()) {
         DestroyWindow(g_hwndMain);
         return 1;
@@ -398,11 +628,19 @@ int PASCAL WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     LoadHookDll();
     HookApplySettings();
 
+    if (g_bIsShell) {
+        PlayEventSound("Startup");
+        RestoreOpenWindows();
+        if (CfgGetInt("Preferences", "OpenComputer", 0))
+            FolderOpen("");
+    }
     if (g_bIsShell && g_cfg.bRunStartup && !IsShiftDown()) {
         RunWinIniLoadRun();
         PmRunStartupGroup();
     }
     OpenFromCommandLine(lpCmdLine);
+    if (CfgGetInt("Preferences", "ShowTips", 0))
+        PostMessage(g_hwndMain, WM_COMMAND, CMD_TIPS, 0L);
 
     while (GetMessage(&msg, NULL, 0, 0)) {
         if (FindIsDialogMessage(&msg) || TaskManIsDialogMessage(&msg))

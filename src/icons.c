@@ -22,6 +22,7 @@
  * between all windows; document icons are cached by extension. USER heap
  * space is precious in Windows 3.1, so the caches are bounded.
  */
+#include <stdlib.h>
 #include <string.h>
 #include "newshell.h"
 
@@ -39,7 +40,7 @@ typedef struct {
     HICON hIcon;
 } EXTICON;
 
-static EXEICON s_exe[MAX_EXE_ICONS];
+static EXEICON *s_exe;          /* MAX_EXE_ICONS, on the far heap */
 static int     s_nExe;
 static EXTICON s_ext[MAX_EXT_ICONS];
 static int     s_nExt;
@@ -52,6 +53,7 @@ void IconsInit(void)
 
     for (i = IDI_NEWSHELL; i <= IDI_LAST; i++)
         s_hStock[i] = LoadIcon(g_hInst, MAKEINTRESOURCE(i));
+    s_exe = (EXEICON *)malloc(MAX_EXE_ICONS * sizeof(EXEICON));
 }
 
 void IconsFree(void)
@@ -62,6 +64,12 @@ void IconsFree(void)
         if (s_exe[i].hIcon)
             DestroyIcon(s_exe[i].hIcon);
     s_nExe = 0;
+    s_nExt = 0;
+}
+
+/* Associations changed: look document icons up again */
+void IconsForget(void)
+{
     s_nExt = 0;
 }
 
@@ -83,7 +91,7 @@ HICON IconFromFile(LPCSTR lpFile, int nIndex)
     for (i = 0; i < s_nExe; i++)
         if (s_exe[i].nIndex == nIndex && lstrcmpi(s_exe[i].szPath, lpFile) == 0)
             return s_exe[i].hIcon;
-    if (s_nExe >= MAX_EXE_ICONS)
+    if (!s_exe || s_nExe >= MAX_EXE_ICONS)
         return NULL;
 
     /* ExtractIcon needs a full path: search the PATH like WinExec does */
@@ -128,6 +136,15 @@ static BOOL IsProgramExt(LPCSTR lpExt)
         p += i;
     }
     return FALSE;
+}
+
+/* Whether a file is a program (WIN.INI [windows] Programs=) */
+BOOL IsProgramFile(LPCSTR lpPath)
+{
+    char szPath[MAXPATHLEN];
+
+    lstrcpyn(szPath, lpPath, sizeof(szPath));
+    return *PathExtension(szPath) && IsProgramExt(PathExtension(szPath));
 }
 
 HICON IconForFile(LPCSTR lpPath, BOOL bDir)

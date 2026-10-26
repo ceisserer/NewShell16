@@ -63,8 +63,12 @@ static const CFGENTRY s_entries[] = {
     { "Taskbar",     "MaxClamp",      &g_cfg.bMaxClamp,        TRUE  },
     { "Taskbar",     "CtrlEscStart",  &g_cfg.bCtrlEscStart,    FALSE },
     { "Taskbar",     "WinKey",        &g_cfg.bWinKey,          TRUE  },
+    { "Desktop",     "RightClose",    &g_cfg.bRightClose,      FALSE },
     { "Desktop",     "Icons",         &g_cfg.bDesktopIcons,    TRUE  },
     { "Desktop",     "Menu",          &g_cfg.bDesktopMenu,     TRUE  },
+    { "Desktop",     "SnapToGrid",    &g_cfg.bSnapToGrid,      TRUE  },
+    { "Desktop",     "SingleClick",   &g_cfg.bSingleClick,     FALSE },
+    { "Desktop",     "ShortcutArrows", &g_cfg.bShortcutArrows, TRUE  },
     { "Startup",     "Run",           &g_cfg.bRunStartup,      TRUE  },
     { "Preferences", "ConfirmExit",   &g_cfg.bConfirmExit,     TRUE  },
     { "Folders",     "NewWindow",     &g_cfg.bFolderNewWindow, TRUE  },
@@ -72,6 +76,15 @@ static const CFGENTRY s_entries[] = {
     { "Folders",     "DeleteToBin",   &g_cfg.bDeleteToBin,     TRUE  },
     { "Folders",     "ConfirmDelete", &g_cfg.bConfirmDelete,   TRUE  },
     { "Folders",     "FileMonitor",   &g_cfg.bFileMonitor,     TRUE  },
+    { "Folders",     "Toolbar",       &g_cfg.bFolderToolbar,   TRUE  },
+    { "Folders",     "StatusBar",     &g_cfg.bFolderStatusBar, TRUE  },
+    { "Folders",     "Capitalize",    &g_cfg.bCapitalize,      FALSE },
+    { "Folders",     "ShadeSelected", &g_cfg.bShadeSelected,   TRUE  },
+    { "Folders",     "FileHints",     &g_cfg.bFileHints,       TRUE  },
+    { "Folders",     "AskOnDrop",     &g_cfg.bAskDrop,         FALSE },
+    { "Folders",     "DragCopy",      &g_cfg.bDragCopy,        FALSE },
+    { "Folders",     "FlatToolbar",   &g_cfg.bFlatToolbar,     FALSE },
+    { "Folders",     "HideExtensions", &g_cfg.bHideExt,        FALSE },
 };
 
 void CfgLoad(void)

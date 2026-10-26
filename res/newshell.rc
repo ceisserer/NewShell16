@@ -58,11 +58,17 @@ BEGIN
     POPUP "&File"
     BEGIN
         MENUITEM "&Open\tEnter",                CMD_F_OPEN
+        MENUITEM "Open &With...",               CMD_F_OPENWITH
         MENUITEM "&Explore",                    CMD_F_EXPLORE
+        MENUITEM "&Inspect\tCtrl+I",            CMD_F_INSPECT
+        MENUITEM "&Print",                      CMD_F_PRINT
         MENUITEM SEPARATOR
         MENUITEM "New &Folder",                 CMD_F_NEWFOLDER
+        MENUITEM "Create &Alias",               CMD_F_NEWALIAS
         MENUITEM "&Delete\tDel",                CMD_F_DELETE
+        MENUITEM "&Undelete\tCtrl+U",           CMD_F_UNDELETE
         MENUITEM "Rena&me\tF2",                 CMD_F_RENAME
+        MENUITEM "De&scribe...",                CMD_F_DESCRIBE
         MENUITEM "P&roperties\tAlt+Enter",      CMD_F_PROPERTIES
         MENUITEM SEPARATOR
         MENUITEM "&Close",                      CMD_F_CLOSE
@@ -73,11 +79,17 @@ BEGIN
         MENUITEM "&Copy\tCtrl+C",               CMD_F_COPY
         MENUITEM "&Paste\tCtrl+V",              CMD_F_PASTE
         MENUITEM SEPARATOR
+        MENUITEM "Copy &File Names",            CMD_F_COPYNAMES
+        MENUITEM SEPARATOR
         MENUITEM "Select &All\tCtrl+A",         CMD_F_SELALL
+        MENUITEM "Select &Files...",            CMD_F_SELECTFILES
         MENUITEM "&Invert Selection",           CMD_F_INVERTSEL
     END
     POPUP "&View"
     BEGIN
+        MENUITEM "T&oolbar",                    CMD_F_TOOLBAR
+        MENUITEM "&Status Bar",                 CMD_F_STATUSBAR
+        MENUITEM SEPARATOR
         MENUITEM "Lar&ge Icons",                CMD_F_LARGEICONS
         MENUITEM "S&mall Icons",                CMD_F_SMALLICONS
         MENUITEM "&List",                       CMD_F_LIST
@@ -88,22 +100,56 @@ BEGIN
         MENUITEM "by Si&ze",                    CMD_F_SORTSIZE
         MENUITEM "by D&ate",                    CMD_F_SORTDATE
         MENUITEM SEPARATOR
+        MENUITEM "Set F&ilter...",              CMD_F_FILTER
+        MENUITEM "&Columns...",                 CMD_F_COLUMNS
+        MENUITEM SEPARATOR
         MENUITEM "&Up One Level\tBackspace",    CMD_F_UP
+        MENUITEM "&Go To...\tCtrl+G",           CMD_F_GOTO
         MENUITEM "&Refresh\tF5",                CMD_F_REFRESH
     END
     POPUP "&Tools"
     BEGIN
         MENUITEM "&Find...",                    CMD_FIND
+        MENUITEM "Bro&wse Folders",             CMD_BROWSEFOLDERS
         MENUITEM "&Run...",                     CMD_RUN
         MENUITEM "&Computer",                   CMD_F_COMPUTER
         MENUITEM "&Bin",                        CMD_BIN
         MENUITEM "&Task Manager",               CMD_TASKMAN
         MENUITEM SEPARATOR
+        MENUITEM "&Map Network Drive...",       CMD_F_MAPDRIVE
+        MENUITEM "&Disconnect Network Drive...", CMD_F_DISCONNECT
+        MENUITEM SEPARATOR
         MENUITEM "&Options...",                 CMD_OPTIONS
     END
     POPUP "&Help"
     BEGIN
+        MENUITEM "NewShell16 &Help",            CMD_HELP
+        MENUITEM "&Tip of the Day...",          CMD_TIPS
         MENUITEM "&About NewShell16...",          CMD_ABOUT
+    END
+END
+
+IDM_TREE MENU
+BEGIN
+    POPUP "&Folder"
+    BEGIN
+        MENUITEM "&Open\tEnter",                CMD_T_OPEN
+        MENUITEM "&Explore",                    CMD_T_EXPLORE
+        MENUITEM "&Find...",                    CMD_T_FIND
+        MENUITEM SEPARATOR
+        MENUITEM "New Fol&der",                 CMD_T_NEWFOLDER
+        MENUITEM "P&roperties",                 CMD_T_PROPERTIES
+        MENUITEM SEPARATOR
+        MENUITEM "&Close",                      CMD_F_CLOSE
+    END
+    POPUP "&Tree"
+    BEGIN
+        MENUITEM "Expand One &Level",           CMD_T_EXPAND
+        MENUITEM "Expand &Branch",              CMD_T_EXPANDBRANCH
+        MENUITEM "Expand &All",                 CMD_T_EXPANDALL
+        MENUITEM "&Collapse Branch",            CMD_T_COLLAPSE
+        MENUITEM SEPARATOR
+        MENUITEM "&Refresh",                    CMD_T_REFRESH
     END
 END
 
@@ -115,6 +161,7 @@ BEGIN
         MENUITEM "&Delete",                     CMD_BIN_DELETE
         MENUITEM SEPARATOR
         MENUITEM "&Empty Bin",                  CMD_BIN_EMPTY
+        MENUITEM "P&roperties...",              CMD_BIN_PROPS
         MENUITEM SEPARATOR
         MENUITEM "&Close",                      CMD_F_CLOSE
     END
@@ -158,15 +205,17 @@ BEGIN
     LTEXT           "Type the name of a program, folder or document, and NewShell16 will open it for you.",
                     -1, 36, 8, 176, 18
     LTEXT           "&Open:", -1, 8, 36, 24, 8
-    EDITTEXT        IDC_RUNCMD, 36, 34, 176, 12, ES_AUTOHSCROLL
+    COMBOBOX        IDC_RUNCMD, 36, 34, 176, 80, CBS_DROPDOWN | CBS_AUTOHSCROLL | WS_VSCROLL | WS_TABSTOP
     CONTROL         "Run &minimized", IDC_RUNMIN, "Button",
-                    BS_AUTOCHECKBOX | WS_TABSTOP, 36, 50, 80, 10
+                    BS_AUTOCHECKBOX | WS_TABSTOP, 36, 50, 70, 10
+    CONTROL         "In an MS-&DOS window", IDC_RUNDOS, "Button",
+                    BS_AUTOCHECKBOX | WS_TABSTOP, 108, 50, 100, 10
     DEFPUSHBUTTON   "OK", IDOK, 52, 66, 50, 14
     PUSHBUTTON      "Cancel", IDCANCEL, 107, 66, 50, 14
     PUSHBUTTON      "&Browse...", IDC_BROWSE, 162, 66, 50, 14
 END
 
-IDD_SHUTDOWN DIALOG 40, 40, 196, 92
+IDD_SHUTDOWN DIALOG 40, 40, 196, 104
 STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "Shut Down Windows"
 FONT 8, "MS Sans Serif"
@@ -181,8 +230,10 @@ BEGIN
                     BS_AUTORADIOBUTTON, 36, 44, 150, 10
     CONTROL         "Close &NewShell16 only", IDC_CLOSESHELL, "Button",
                     BS_AUTORADIOBUTTON, 36, 56, 150, 10
-    DEFPUSHBUTTON   "OK", IDOK, 82, 72, 50, 14, WS_GROUP
-    PUSHBUTTON      "Cancel", IDCANCEL, 138, 72, 50, 14
+    CONTROL         "&Log off", IDC_LOGOFF, "Button",
+                    BS_AUTORADIOBUTTON, 36, 68, 150, 10
+    DEFPUSHBUTTON   "OK", IDOK, 82, 84, 50, 14, WS_GROUP
+    PUSHBUTTON      "Cancel", IDCANCEL, 138, 84, 50, 14
 END
 
 IDD_ABOUT DIALOG 40, 40, 180, 106
@@ -209,20 +260,21 @@ BEGIN
     PUSHBUTTON      "Cancel", IDCANCEL, 85, 50, 50, 14
 END
 
-IDD_REPLACE DIALOG 50, 50, 230, 80
+IDD_REPLACE DIALOG 50, 50, 250, 80
 STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "Confirm File Replace"
 FONT 8, "MS Sans Serif"
 BEGIN
     ICON            IDI_DOCUMENT, -1, 8, 8, 18, 20
-    LTEXT           "", IDC_REPLACETEXT, 36, 8, 186, 40, SS_NOPREFIX
-    DEFPUSHBUTTON   "&Yes", IDYES, 8, 58, 50, 14
-    PUSHBUTTON      "Yes to &All", IDC_YESALL, 63, 58, 50, 14
-    PUSHBUTTON      "&No", IDNO, 118, 58, 50, 14
-    PUSHBUTTON      "Cancel", IDCANCEL, 173, 58, 50, 14
+    LTEXT           "", IDC_REPLACETEXT, 36, 8, 206, 40, SS_NOPREFIX
+    DEFPUSHBUTTON   "&Yes", IDYES, 8, 58, 44, 14
+    PUSHBUTTON      "Yes to &All", IDC_YESALL, 56, 58, 44, 14
+    PUSHBUTTON      "&No", IDNO, 104, 58, 44, 14
+    PUSHBUTTON      "N&o to All", IDC_NOALL, 152, 58, 44, 14
+    PUSHBUTTON      "Cancel", IDCANCEL, 200, 58, 44, 14
 END
 
-IDD_PROPERTIES DIALOG 40, 30, 210, 150
+IDD_PROPERTIES DIALOG 40, 30, 210, 170
 STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "Properties"
 FONT 8, "MS Sans Serif"
@@ -241,13 +293,18 @@ BEGIN
     LTEXT           "", IDC_PROPV1+3,  60, 76, 142, 8, SS_NOPREFIX
     LTEXT           "", IDC_PROPL1+4,   8, 88, 50, 8
     LTEXT           "", IDC_PROPV1+4,  60, 88, 142, 8, SS_NOPREFIX
-    GROUPBOX        "Attributes", -1, 8, 100, 194, 26
-    CONTROL         "&Read-only", IDC_ATTR_R, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 14, 111, 46, 10
-    CONTROL         "&Hidden", IDC_ATTR_H, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 62, 111, 40, 10
-    CONTROL         "&System", IDC_ATTR_S, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 104, 111, 40, 10
-    CONTROL         "&Archive", IDC_ATTR_A, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 148, 111, 46, 10
-    DEFPUSHBUTTON   "OK", IDOK, 96, 132, 50, 14
-    PUSHBUTTON      "Cancel", IDCANCEL, 152, 132, 50, 14
+    LTEXT           "", IDC_PROPL1+5,   8, 101, 50, 8
+    LTEXT           "", IDC_PROPV1+5,  60, 101, 92, 8, SS_NOPREFIX
+    PUSHBUTTON      "C&hange...", IDC_PROPASSOC, 156, 98, 46, 14
+    CONTROL         "", IDC_PROPPIE, "Static", SS_BLACKFRAME, 152, 40, 50, 50
+    GROUPBOX        "Attributes", -1, 8, 116, 194, 26
+    CONTROL         "&Read-only", IDC_ATTR_R, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 14, 127, 46, 10
+    CONTROL         "&Hidden", IDC_ATTR_H, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 62, 127, 40, 10
+    CONTROL         "&System", IDC_ATTR_S, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 104, 127, 40, 10
+    CONTROL         "&Archive", IDC_ATTR_A, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 148, 127, 46, 10
+    PUSHBUTTON      "&Version...", IDC_PROPVERSION, 8, 150, 50, 14
+    DEFPUSHBUTTON   "OK", IDOK, 96, 150, 50, 14
+    PUSHBUTTON      "Cancel", IDCANCEL, 152, 150, 50, 14
 END
 
 IDD_FIND DIALOG 30, 20, 260, 170
@@ -260,11 +317,15 @@ BEGIN
     EDITTEXT        IDC_FINDNAME, 80, 8, 116, 12, ES_AUTOHSCROLL
     LTEXT           "&Look in:", -1, 36, 26, 40, 8
     EDITTEXT        IDC_FINDDIR, 80, 24, 116, 12, ES_AUTOHSCROLL
+    LTEXT           "&Containing:", -1, 36, 42, 42, 8
+    EDITTEXT        IDC_FINDTEXT, 80, 40, 116, 12, ES_AUTOHSCROLL
     CONTROL         "Include &subfolders", IDC_FINDSUB, "Button",
-                    BS_AUTOCHECKBOX | WS_TABSTOP, 80, 40, 116, 10
+                    BS_AUTOCHECKBOX | WS_TABSTOP, 80, 56, 70, 10
+    CONTROL         "&Match case", IDC_FINDCASE, "Button",
+                    BS_AUTOCHECKBOX | WS_TABSTOP, 152, 56, 50, 10
     DEFPUSHBUTTON   "Find &Now", IDOK, 204, 8, 50, 14
     PUSHBUTTON      "S&top", IDC_FINDSTOP, 204, 26, 50, 14
-    LISTBOX         IDC_FINDLIST, 8, 56, 246, 82,
+    LISTBOX         IDC_FINDLIST, 8, 70, 246, 68,
                     LBS_OWNERDRAWFIXED | LBS_NOTIFY | LBS_NOINTEGRALHEIGHT | WS_VSCROLL | WS_TABSTOP
     PUSHBUTTON      "&Open", IDC_FINDOPEN, 8, 142, 50, 14
     PUSHBUTTON      "Open &Folder", IDC_FINDOPENDIR, 62, 142, 56, 14
@@ -272,29 +333,15 @@ BEGIN
     LTEXT           "", IDC_FINDSTATUS, 8, 160, 246, 8, SS_NOPREFIX
 END
 
-IDD_OPTIONS DIALOG 30, 20, 240, 196
+IDD_OPTIONS DIALOG 20, 10, 300, 214
 STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "NewShell16 Options"
 FONT 8, "MS Sans Serif"
 BEGIN
-    GROUPBOX        "Taskbar", -1, 6, 4, 228, 64
-    CONTROL         "Show &clock", IDC_OPT_CLOCK, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 12, 16, 100, 10
-    CONTROL         "&Hide minimized windows", IDC_OPT_HIDEMIN, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 120, 16, 110, 10
-    CONTROL         "Keep &maximized windows above the taskbar", IDC_OPT_MAXCLAMP, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 12, 28, 210, 10
-    CONTROL         "Ctrl+&Esc opens the Start menu (not the Task Manager)", IDC_OPT_CTRLESC, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 12, 40, 216, 10
-    CONTROL         "&Windows key opens the Start menu", IDC_OPT_WINKEY, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 12, 52, 210, 10
-    GROUPBOX        "Desktop", -1, 6, 72, 228, 28
-    CONTROL         "Show desktop &icons", IDC_OPT_DESKICONS, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 12, 84, 100, 10
-    CONTROL         "Desktop right-click &menu", IDC_OPT_DESKMENU, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 120, 84, 110, 10
-    GROUPBOX        "Folders and files", -1, 6, 104, 228, 52
-    CONTROL         "Open folders in &new windows", IDC_OPT_NEWWINDOW, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 12, 116, 110, 10
-    CONTROL         "Show hi&dden files", IDC_OPT_SHOWHIDDEN, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 130, 116, 100, 10
-    CONTROL         "Delete to the &Bin", IDC_OPT_TOBIN, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 12, 128, 110, 10
-    CONTROL         "Con&firm deleting", IDC_OPT_CONFIRMDEL, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 130, 128, 100, 10
-    CONTROL         "&Refresh folders on file changes", IDC_OPT_FILEMON, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 12, 140, 210, 10
-    CONTROL         "Run &StartUp programs (when NewShell16 is the shell)", IDC_OPT_STARTUP, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 6, 160, 228, 10
-    DEFPUSHBUTTON   "OK", IDOK, 128, 176, 50, 14
-    PUSHBUTTON      "Cancel", IDCANCEL, 184, 176, 50, 14
+    LISTBOX         IDC_OPTPAGES, 8, 8, 60, 178, LBS_NOTIFY | WS_VSCROLL | WS_BORDER | WS_TABSTOP
+    GROUPBOX        "", IDC_OPTFRAME, 74, 4, 218, 182
+    DEFPUSHBUTTON   "OK", IDOK, 188, 194, 50, 14
+    PUSHBUTTON      "Cancel", IDCANCEL, 242, 194, 50, 14
 END
 
 IDD_TASKMAN DIALOG 60, 30, 220, 150
@@ -312,6 +359,221 @@ BEGIN
     PUSHBUTTON      "&End Task", IDC_TMENDTASK, 104, 114, 54, 14, WS_TABSTOP
     PUSHBUTTON      "&New Task...", IDC_TMNEWTASK, 162, 114, 54, 14, WS_TABSTOP
     LTEXT           "", IDC_TMSTATUS, 4, 136, 212, 8, SS_NOPREFIX
+END
+
+IDD_SHORTCUT DIALOG 30, 20, 236, 124
+STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Shortcut Properties"
+FONT 8, "MS Sans Serif"
+BEGIN
+    ICON            IDI_APP, IDC_SCICON, 8, 8, 18, 20
+    LTEXT           "&Caption:", -1, 40, 14, 40, 8
+    EDITTEXT        IDC_SCCAPTION, 82, 12, 146, 12, ES_AUTOHSCROLL
+    CONTROL         "", -1, "Static", SS_GRAYRECT, 8, 32, 220, 1
+    CONTROL         "", -1, "Static", SS_WHITERECT, 8, 33, 220, 1
+    LTEXT           "Co&mmand line:", -1, 8, 42, 54, 8
+    EDITTEXT        IDC_SCCMD, 64, 40, 118, 12, ES_AUTOHSCROLL
+    PUSHBUTTON      "&Browse...", IDC_SCBROWSE, 186, 39, 42, 14
+    LTEXT           "&Working folder:", -1, 8, 60, 54, 8
+    EDITTEXT        IDC_SCDIR, 64, 58, 164, 12, ES_AUTOHSCROLL
+    LTEXT           "&Run:", -1, 8, 78, 54, 8
+    COMBOBOX        IDC_SCSHOW, 64, 76, 80, 50, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    PUSHBUTTON      "Change &Icon...", IDC_SCCHANGEICON, 160, 75, 68, 14
+    DEFPUSHBUTTON   "OK", IDOK, 122, 102, 50, 14
+    PUSHBUTTON      "Cancel", IDCANCEL, 178, 102, 50, 14
+END
+
+IDD_CHANGEICON DIALOG 40, 30, 220, 116
+STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Change Icon"
+FONT 8, "MS Sans Serif"
+BEGIN
+    LTEXT           "&File name:", -1, 8, 10, 40, 8
+    EDITTEXT        IDC_CIFILE, 50, 8, 116, 12, ES_AUTOHSCROLL
+    PUSHBUTTON      "&Browse...", IDC_CIBROWSE, 170, 7, 42, 14
+    LTEXT           "Current &icon:", -1, 8, 26, 80, 8
+    LISTBOX         IDC_CILIST, 8, 36, 204, 50,
+                    LBS_OWNERDRAWFIXED | LBS_MULTICOLUMN | LBS_NOTIFY | LBS_NOINTEGRALHEIGHT
+                    | WS_HSCROLL | WS_BORDER | WS_TABSTOP
+    LTEXT           "", IDC_CISTATUS, 8, 98, 100, 8
+    DEFPUSHBUTTON   "OK", IDOK, 106, 94, 50, 14
+    PUSHBUTTON      "Cancel", IDCANCEL, 162, 94, 50, 14
+END
+
+IDD_BINPROPS DIALOG 40, 30, 210, 112
+STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Bin Properties"
+FONT 8, "MS Sans Serif"
+BEGIN
+    ICON            IDI_BIN, -1, 8, 8, 18, 20
+    LTEXT           "&Caption:", -1, 36, 14, 34, 8
+    EDITTEXT        IDC_BINCAPTION, 72, 12, 130, 12, ES_AUTOHSCROLL
+    CONTROL         "", -1, "Static", SS_GRAYRECT, 8, 32, 194, 1
+    CONTROL         "", -1, "Static", SS_WHITERECT, 8, 33, 194, 1
+    LTEXT           "&Maximum size:", -1, 8, 42, 56, 8
+    EDITTEXT        IDC_BINCAPACITY, 66, 40, 30, 12
+    LTEXT           "MB (0 = no limit; the oldest items go first)", -1, 100, 42, 104, 16
+    CONTROL         "&Empty the Bin when Windows exits", IDC_BINEMPTYEXIT, "Button",
+                    BS_AUTOCHECKBOX | WS_TABSTOP, 8, 60, 194, 10
+    CONTROL         "&Delete files at once instead of keeping them in the Bin", IDC_BINDIRECT, "Button",
+                    BS_AUTOCHECKBOX | WS_TABSTOP, 8, 72, 198, 10
+    LTEXT           "", IDC_BINSTATUS, 8, 96, 90, 8
+    DEFPUSHBUTTON   "OK", IDOK, 98, 92, 50, 14
+    PUSHBUTTON      "Cancel", IDCANCEL, 152, 92, 50, 14
+END
+
+IDD_SELECT DIALOG 50, 40, 200, 62
+STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Select Files"
+FONT 8, "MS Sans Serif"
+BEGIN
+    LTEXT           "&Files (for example *.TXT; *.DOC):", -1, 8, 8, 184, 8
+    EDITTEXT        IDC_SELSPEC, 8, 20, 184, 12, ES_AUTOHSCROLL | ES_UPPERCASE
+    DEFPUSHBUTTON   "&Select", IDOK, 32, 40, 50, 14
+    PUSHBUTTON      "&Deselect", IDC_SELNONE, 87, 40, 50, 14
+    PUSHBUTTON      "Cancel", IDCANCEL, 142, 40, 50, 14
+END
+
+IDD_FILTER DIALOG 50, 40, 200, 76
+STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Set Filter"
+FONT 8, "MS Sans Serif"
+BEGIN
+    LTEXT           "&Show files matching (for example *.EXE; *.COM):", -1, 8, 8, 184, 8
+    EDITTEXT        IDC_FILTERSPEC, 8, 20, 140, 12, ES_AUTOHSCROLL | ES_UPPERCASE
+    PUSHBUTTON      "&All Files", IDC_FILTERALL, 152, 19, 40, 14
+    CONTROL         "Show &hidden and system files", IDC_FILTERHIDDEN, "Button",
+                    BS_AUTOCHECKBOX | WS_TABSTOP, 8, 38, 184, 10
+    DEFPUSHBUTTON   "OK", IDOK, 87, 56, 50, 14
+    PUSHBUTTON      "Cancel", IDCANCEL, 142, 56, 50, 14
+END
+
+IDD_GOTO DIALOG 50, 40, 200, 80
+STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Go To"
+FONT 8, "MS Sans Serif"
+BEGIN
+    LTEXT           "&Folder:", -1, 8, 8, 184, 8
+    COMBOBOX        IDC_GOTOPATH, 8, 20, 184, 70, CBS_DROPDOWN | CBS_AUTOHSCROLL | WS_VSCROLL | WS_TABSTOP
+    DEFPUSHBUTTON   "OK", IDOK, 87, 60, 50, 14
+    PUSHBUTTON      "Cancel", IDCANCEL, 142, 60, 50, 14
+END
+
+IDD_OPENWITH DIALOG 40, 30, 210, 150
+STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Open With"
+FONT 8, "MS Sans Serif"
+BEGIN
+    LTEXT           "", IDC_OWTEXT, 8, 8, 194, 8, SS_NOPREFIX
+    LISTBOX         IDC_OWLIST, 8, 20, 194, 60, LBS_SORT | LBS_NOTIFY | WS_VSCROLL | WS_BORDER | WS_TABSTOP
+    LTEXT           "&Program:", -1, 8, 88, 34, 8
+    EDITTEXT        IDC_OWPROG, 44, 86, 112, 12, ES_AUTOHSCROLL
+    PUSHBUTTON      "&Browse...", IDC_OWBROWSE, 160, 85, 42, 14
+    CONTROL         "", IDC_OWALWAYS, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 8, 106, 194, 10
+    DEFPUSHBUTTON   "OK", IDOK, 96, 128, 50, 14
+    PUSHBUTTON      "Cancel", IDCANCEL, 152, 128, 50, 14
+END
+
+IDD_DESCRIBE DIALOG 50, 40, 220, 62
+STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Describe"
+FONT 8, "MS Sans Serif"
+BEGIN
+    LTEXT           "", IDC_DESCTEXT, 8, 8, 204, 8, SS_NOPREFIX
+    EDITTEXT        IDC_DESCEDIT, 8, 20, 204, 12, ES_AUTOHSCROLL
+    DEFPUSHBUTTON   "OK", IDOK, 106, 40, 50, 14
+    PUSHBUTTON      "Cancel", IDCANCEL, 162, 40, 50, 14
+END
+
+IDD_COLUMNS DIALOG 50, 40, 150, 120
+STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Columns"
+FONT 8, "MS Sans Serif"
+BEGIN
+    LTEXT           "Details view shows:", -1, 8, 8, 134, 8
+    CONTROL         "&Size", IDC_COL_FIRST, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 16, 20, 120, 10
+    CONTROL         "&Type", IDC_COL_FIRST+1, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 16, 32, 120, 10
+    CONTROL         "&Date", IDC_COL_FIRST+2, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 16, 44, 120, 10
+    CONTROL         "T&ime", IDC_COL_FIRST+3, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 16, 56, 120, 10
+    CONTROL         "&Attributes", IDC_COL_FIRST+4, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 16, 68, 120, 10
+    CONTROL         "D&escription", IDC_COL_FIRST+5, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 16, 80, 120, 10
+    DEFPUSHBUTTON   "OK", IDOK, 36, 100, 50, 14
+    PUSHBUTTON      "Cancel", IDCANCEL, 92, 100, 50, 14
+END
+
+IDD_STARTPROPS DIALOG 20, 10, 264, 236
+STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Start Menu Properties"
+FONT 8, "MS Sans Serif"
+BEGIN
+    LTEXT           "&Menu items (double-click a submenu to open or close it):", -1, 8, 6, 190, 8
+    LISTBOX         IDC_SPTREE, 8, 16, 178, 128,
+                    LBS_OWNERDRAWFIXED | LBS_NOTIFY | LBS_NOINTEGRALHEIGHT | LBS_WANTKEYBOARDINPUT
+                    | WS_VSCROLL | WS_BORDER | WS_TABSTOP
+    PUSHBUTTON      "&New Item...", IDC_SPNEWITEM, 192, 16, 64, 14
+    PUSHBUTTON      "New &Submenu...", IDC_SPNEWSUB, 192, 33, 64, 14
+    PUSHBUTTON      "Se&parator", IDC_SPNEWSEP, 192, 50, 64, 14
+    PUSHBUTTON      "&Delete", IDC_SPDELETE, 192, 67, 64, 14
+    PUSHBUTTON      "P&roperties...", IDC_SPEDIT, 192, 84, 64, 14
+    PUSHBUTTON      "Move &Up", IDC_SPUP, 192, 101, 64, 14
+    PUSHBUTTON      "Move Do&wn", IDC_SPDOWN, 192, 118, 64, 14
+    PUSHBUTTON      "&Import Groups", IDC_SPIMPORT, 192, 135, 64, 14
+    GROUPBOX        "Look", -1, 8, 148, 248, 64
+    CONTROL         "Windows &95 look: banner and 3D frame", IDC_SP3D, "Button",
+                    BS_AUTOCHECKBOX | WS_TABSTOP, 14, 160, 150, 10
+    CONTROL         "&Coloured selection bar", IDC_SPCOLBAR, "Button",
+                    BS_AUTOCHECKBOX | WS_TABSTOP, 14, 172, 110, 10
+    CONTROL         "&Bold selected item", IDC_SPBOLD, "Button",
+                    BS_AUTOCHECKBOX | WS_TABSTOP, 130, 172, 120, 10
+    CONTROL         "&Large icons on the first level", IDC_SPLARGE, "Button",
+                    BS_AUTOCHECKBOX | WS_TABSTOP, 14, 184, 110, 10
+    LTEXT           "Item &height:", -1, 130, 185, 44, 8
+    EDITTEXT        IDC_SPHEIGHT, 176, 183, 24, 12
+    PUSHBUTTON      "&Font...", IDC_SPFONT, 206, 158, 44, 14
+    CONTROL         "Open when the mouse button is &released", IDC_SPMOUSEUP, "Button",
+                    BS_AUTOCHECKBOX | WS_TABSTOP, 14, 197, 236, 10
+    CONTROL         "Let setup programs add &groups (DDE)", IDC_SPDDE, "Button",
+                    BS_AUTOCHECKBOX | WS_TABSTOP, 8, 218, 150, 10
+    DEFPUSHBUTTON   "OK", IDOK, 160, 216, 46, 14
+    PUSHBUTTON      "Cancel", IDCANCEL, 210, 216, 46, 14
+END
+
+IDD_VERSION DIALOG 50, 40, 230, 130
+STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Version"
+FONT 8, "MS Sans Serif"
+BEGIN
+    EDITTEXT        IDC_VERTEXT, 8, 8, 214, 96, ES_MULTILINE | ES_READONLY | ES_AUTOVSCROLL | WS_VSCROLL
+    DEFPUSHBUTTON   "OK", IDOK, 172, 110, 50, 14
+END
+
+IDD_TIPS DIALOG 40, 30, 230, 100
+STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Tip of the Day"
+FONT 8, "MS Sans Serif"
+BEGIN
+    ICON            IDI_SM_HELP, -1, 8, 8, 18, 20
+    LTEXT           "Did you know...", -1, 36, 8, 186, 8
+    LTEXT           "", IDC_TIPTEXT, 36, 22, 186, 44
+    CONTROL         "&Show tips at start-up", IDC_TIPSHOW, "Button",
+                    BS_AUTOCHECKBOX | WS_TABSTOP, 8, 84, 118, 10
+    PUSHBUTTON      "&Next Tip", IDC_TIPNEXT, 130, 80, 44, 14
+    DEFPUSHBUTTON   "Close", IDOK, 178, 80, 44, 14
+END
+
+IDD_LOGON DIALOG 60, 50, 200, 76
+STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION
+CAPTION "Log On to NewShell16"
+FONT 8, "MS Sans Serif"
+BEGIN
+    ICON            IDI_NEWSHELL, -1, 8, 8, 18, 20
+    LTEXT           "&User name:", -1, 36, 10, 44, 8
+    COMBOBOX        IDC_LOGUSER, 82, 8, 110, 70, CBS_DROPDOWN | CBS_AUTOHSCROLL | WS_VSCROLL | WS_TABSTOP
+    LTEXT           "&Password:", -1, 36, 28, 44, 8
+    EDITTEXT        IDC_LOGPASSWORD, 82, 26, 110, 12, ES_PASSWORD | ES_AUTOHSCROLL
+    DEFPUSHBUTTON   "OK", IDOK, 34, 54, 50, 14
+    PUSHBUTTON      "&New User", IDC_LOGNEW, 88, 54, 50, 14
+    PUSHBUTTON      "Cancel", IDCANCEL, 142, 54, 50, 14
 END
 
 VS_VERSION_INFO VERSIONINFO

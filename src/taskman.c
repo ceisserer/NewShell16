@@ -24,6 +24,7 @@
  * It replaces the Windows Task List (Ctrl+Esc) when NEWSHELL.EXE is set
  * as taskman.exe= in SYSTEM.INI.
  */
+#include <stdlib.h>
 #include <string.h>
 #include "newshell.h"
 #include <toolhelp.h>
@@ -47,7 +48,7 @@ typedef struct tagTMTASK {
 
 static HWND   s_hwndTM;
 static HWND   s_hwndList;
-static TMTASK s_tasks[MAX_TM_TASKS];
+static TMTASK *s_tasks;         /* MAX_TM_TASKS, on the far heap */
 static int    s_nTasks;
 static HWND   s_hwndHidden[MAX_HIDDEN];     /* windows hidden by us */
 static int    s_nHidden;
@@ -305,27 +306,33 @@ static void EndTask(void)
     SetTimer(s_hwndTM, TIMER_REFRESH, 700, NULL);
 }
 
-static void Terminate(void)
+/* Ends a task the hard way, after asking */
+void TaskManTerminate(HWND hwnd, HWND hwndOwner)
 {
-    HWND hwnd = SelectedWnd();
     char szMsg[160], szTitle[80];
     HTASK hTask;
 
-    if (!hwnd)
+    if (!hwnd || !IsWindow(hwnd))
         return;
     hTask = GetWindowTask(hwnd);
     GetWindowText(hwnd, szTitle, sizeof(szTitle));
     wsprintf(szMsg, "Terminating '%s' discards any unsaved data and may leave "
                     "Windows unstable.\n\nTerminate it anyway?", (LPSTR)szTitle);
-    if (MessageBox(s_hwndTM, szMsg, "Terminate Task",
+    if (MessageBox(hwndOwner, szMsg, "Terminate Task",
                    MB_YESNO | MB_ICONSTOP | MB_DEFBUTTON2) != IDYES)
         return;
     if (hTask == GetCurrentTask()) {
-        MessageBox(s_hwndTM, "NewShell16 cannot terminate itself.", "Terminate Task",
+        MessageBox(hwndOwner, "NewShell16 cannot terminate itself.", "Terminate Task",
                    MB_OK | MB_ICONEXCLAMATION);
         return;
     }
     TerminateApp(hTask, NO_UAE_BOX);
+    TaskbarRefresh();
+}
+
+static void Terminate(void)
+{
+    TaskManTerminate(SelectedWnd(), s_hwndTM);
     SetTimer(s_hwndTM, TIMER_REFRESH, 700, NULL);
 }
 
@@ -523,6 +530,10 @@ void TaskManOpen(void)
     HWND hwndOwner;
     RECT rc;
 
+    if (!s_tasks)
+        s_tasks = (TMTASK *)malloc(MAX_TM_TASKS * sizeof(TMTASK));
+    if (!s_tasks)
+        return;
     s_hwndPrevActive = GetActiveWindow();
     while (s_hwndPrevActive
            && (hwndOwner = GetWindow(s_hwndPrevActive, GW_OWNER)) != NULL)

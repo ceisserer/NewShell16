@@ -19,11 +19,16 @@ OBJS    = $(OBJDIR)/main.obj     &
           $(OBJDIR)/util.obj     &
           $(OBJDIR)/icons.obj    &
           $(OBJDIR)/progman.obj  &
+          $(OBJDIR)/dde.obj      &
           $(OBJDIR)/taskbar.obj  &
           $(OBJDIR)/startmnu.obj &
+          $(OBJDIR)/startprop.obj &
           $(OBJDIR)/desktop.obj  &
+          $(OBJDIR)/shortcut.obj &
           $(OBJDIR)/folder.obj   &
           $(OBJDIR)/fview.obj    &
+          $(OBJDIR)/folddlg.obj  &
+          $(OBJDIR)/alias.obj    &
           $(OBJDIR)/explorer.obj &
           $(OBJDIR)/toolbar.obj  &
           $(OBJDIR)/fileops.obj  &
@@ -31,7 +36,10 @@ OBJS    = $(OBJDIR)/main.obj     &
           $(OBJDIR)/props.obj    &
           $(OBJDIR)/taskman.obj  &
           $(OBJDIR)/find.obj     &
-          $(OBJDIR)/dialogs.obj
+          $(OBJDIR)/dialogs.obj  &
+          $(OBJDIR)/system.obj   &
+          $(OBJDIR)/users.obj    &
+          $(OBJDIR)/options.obj
 
 RESFILES = $(RESDIR)/newshell.rc $(SRCDIR)/resource.h $(RESDIR)/*.ico &
            $(RESDIR)/*.cur $(RESDIR)/small.bmp
@@ -42,9 +50,11 @@ LD      = wlink
 
 # -bt=windows   target Windows 3.x       -ml    large memory model
 # -zWs          Windows prologs, smart callbacks (DS from SS)
+# -zc           string literals in the code segment, keeping the data
+#               segment (with the local heap and the stack) below 64 KB
 # -2            286 instructions         -s     no stack checks
 # -os           optimise for size        -w4    all warnings, -we as errors
-CFLAGS  = -q -bt=windows -ml -zWs -2 -s -os -w4 -we -zq &
+CFLAGS  = -q -bt=windows -ml -zWs -zc -2 -s -os -w4 -we -zq &
           -i="$(%WATCOM)/h" -i="$(%WATCOM)/h/win" -i=$(SRCDIR)
 
 # the hook DLL: DS != SS (-zu)
@@ -100,11 +110,16 @@ $(OBJDIR)/settings.obj : $(SRCDIR)/settings.c
 $(OBJDIR)/util.obj     : $(SRCDIR)/util.c
 $(OBJDIR)/icons.obj    : $(SRCDIR)/icons.c
 $(OBJDIR)/progman.obj  : $(SRCDIR)/progman.c
+$(OBJDIR)/dde.obj      : $(SRCDIR)/dde.c
 $(OBJDIR)/taskbar.obj  : $(SRCDIR)/taskbar.c
 $(OBJDIR)/startmnu.obj : $(SRCDIR)/startmnu.c
+$(OBJDIR)/startprop.obj : $(SRCDIR)/startprop.c
 $(OBJDIR)/desktop.obj  : $(SRCDIR)/desktop.c
+$(OBJDIR)/shortcut.obj : $(SRCDIR)/shortcut.c
 $(OBJDIR)/folder.obj   : $(SRCDIR)/folder.c
 $(OBJDIR)/fview.obj    : $(SRCDIR)/fview.c
+$(OBJDIR)/folddlg.obj  : $(SRCDIR)/folddlg.c
+$(OBJDIR)/alias.obj    : $(SRCDIR)/alias.c
 $(OBJDIR)/explorer.obj : $(SRCDIR)/explorer.c
 $(OBJDIR)/toolbar.obj  : $(SRCDIR)/toolbar.c
 $(OBJDIR)/fileops.obj  : $(SRCDIR)/fileops.c
@@ -113,6 +128,9 @@ $(OBJDIR)/props.obj    : $(SRCDIR)/props.c
 $(OBJDIR)/taskman.obj  : $(SRCDIR)/taskman.c
 $(OBJDIR)/find.obj     : $(SRCDIR)/find.c
 $(OBJDIR)/dialogs.obj  : $(SRCDIR)/dialogs.c
+$(OBJDIR)/system.obj   : $(SRCDIR)/system.c
+$(OBJDIR)/users.obj    : $(SRCDIR)/users.c
+$(OBJDIR)/options.obj  : $(SRCDIR)/options.c
 
 # the installer (needs the submodules: git submodule update --init)
 release : .SYMBOLIC

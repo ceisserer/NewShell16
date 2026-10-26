@@ -115,6 +115,36 @@ def dos(n):
     return img
 
 
+def folder_open(n):
+    """An open folder for the selected node of the folder tree (16x16), in
+    the colours of Calmira's closed folder."""
+    img, d = canvas(n)
+    rows = [
+        "................",
+        "...#####........",
+        "..#ababa#.......",
+        ".#abababa######.",
+        ".#ababababababa#",
+        ".#aba##########d",
+        ".#ab#cbcbcbcbcb#d"[:16],
+        ".#a#bcbcbcbcbc#d",
+        ".#a#cbcbcbcbcb#d",
+        ".##bcbcbcbcbc#d.",
+        ".##cbcbcbcbcb#d.",
+        ".#bcbcbcbcbc#d..",
+        ".############d..",
+        "..dddddddddddd..",
+        "................",
+        "................",
+    ]
+    colour = {"#": GRAY, "a": SILVER, "b": YELLOW, "c": WHITE, "d": BLACK}
+    for y, row in enumerate(rows):
+        for x, ch in enumerate(row):
+            if ch in colour:
+                img.putpixel((x, y), colour[ch])
+    return img
+
+
 def taskman_small(n):
     img, d = canvas(n)
     box(d, 0, 1, 15, 14, fill=SILVER)
@@ -302,6 +332,9 @@ SMALL = [
     ("tb_sorttype", calmira("sorttype")), ("tb_sortsize", calmira("sortsize")),
     ("tb_sortdate", calmira("sortdate")), ("favorites", calmira("sm_favorites")),
     ("internet", calmira("sm_internet")),
+    ("tb_rename", calmira("edit")), ("tb_goto", calmira("open")),
+    ("tb_insert", calmira("insert")), ("tb_newitem", calmira("newprg")),
+    ("folderopen", folder_open),
 ]
 
 # Order must match IDI_* in src/resource.h (newshell.rc names the files).
