@@ -92,7 +92,8 @@
 #define SMI_TB_GOTO         36
 #define SMI_TB_INSERT       37
 #define SMI_TB_NEWITEM      38
-#define SMI_COUNT           39
+#define SMI_FOLDEROPEN      39
+#define SMI_COUNT           40
 
 /* Cursors */
 #define IDC_DRAGMOVE        150
@@ -104,6 +105,7 @@
 #define IDM_FOLDER          200
 #define IDM_BIN             201
 #define IDM_TASKMAN         202
+#define IDM_TREE            203
 
 /* Dialogs */
 #define IDD_RUN             300
@@ -257,6 +259,7 @@
 #define CMD_CLOSEFOLDERS    628
 #define CMD_CASCADEFOLDERS  629
 #define CMD_SCREENSAVER     630
+#define CMD_BROWSEFOLDERS   631
 
 /* Folder view commands */
 #define CMD_F_OPEN          700
@@ -298,6 +301,22 @@
 #define CMD_F_DISCONNECT    736
 #define CMD_F_PARENTWIN     737
 #define CMD_F_COPYNAMES     738
+
+/* Folder tree commands */
+#define CMD_T_FIRST         740
+#define CMD_T_OPEN          740
+#define CMD_T_EXPLORE       741
+#define CMD_T_FIND          742
+#define CMD_T_EXPAND        743
+#define CMD_T_EXPANDBRANCH  744
+#define CMD_T_EXPANDALL     745
+#define CMD_T_COLLAPSE      746
+#define CMD_T_NEWFOLDER     747
+#define CMD_T_REFRESH       748
+#define CMD_T_SHARE         749
+#define CMD_T_STOPSHARE     739
+#define CMD_T_PROPERTIES    738
+#define CMD_T_LAST          749
 
 /* Bin and Task Manager commands */
 #define CMD_BIN_RESTORE     750

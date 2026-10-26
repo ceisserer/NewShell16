@@ -110,6 +110,7 @@ BEGIN
     POPUP "&Tools"
     BEGIN
         MENUITEM "&Find...",                    CMD_FIND
+        MENUITEM "Bro&wse Folders",             CMD_BROWSEFOLDERS
         MENUITEM "&Run...",                     CMD_RUN
         MENUITEM "&Computer",                   CMD_F_COMPUTER
         MENUITEM "&Bin",                        CMD_BIN
@@ -123,6 +124,30 @@ BEGIN
     POPUP "&Help"
     BEGIN
         MENUITEM "&About NewShell16...",          CMD_ABOUT
+    END
+END
+
+IDM_TREE MENU
+BEGIN
+    POPUP "&Folder"
+    BEGIN
+        MENUITEM "&Open\tEnter",                CMD_T_OPEN
+        MENUITEM "&Explore",                    CMD_T_EXPLORE
+        MENUITEM "&Find...",                    CMD_T_FIND
+        MENUITEM SEPARATOR
+        MENUITEM "New Fol&der",                 CMD_T_NEWFOLDER
+        MENUITEM "P&roperties",                 CMD_T_PROPERTIES
+        MENUITEM SEPARATOR
+        MENUITEM "&Close",                      CMD_F_CLOSE
+    END
+    POPUP "&Tree"
+    BEGIN
+        MENUITEM "Expand One &Level",           CMD_T_EXPAND
+        MENUITEM "Expand &Branch",              CMD_T_EXPANDBRANCH
+        MENUITEM "Expand &All",                 CMD_T_EXPANDALL
+        MENUITEM "&Collapse Branch",            CMD_T_COLLAPSE
+        MENUITEM SEPARATOR
+        MENUITEM "&Refresh",                    CMD_T_REFRESH
     END
 END
 

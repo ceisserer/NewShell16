@@ -139,6 +139,8 @@ BOOL LaunchCommand(HWND hwnd, LPCSTR lpCmdLine, LPCSTR lpDir, int nShow);
 BOOL OpenPath(HWND hwnd, LPCSTR lpPath);
 void ShowLaunchError(HWND hwnd, UINT uErr, LPCSTR lpWhat);
 BOOL IsShiftDown(void);
+BOOL NetShareAvailable(void);
+void NetShareDialog(HWND hwnd, LPCSTR lpPath, BOOL bShare);
 BOOL HintRegister(void);
 void HintShow(LPCSTR lpText, int x, int y);
 void HintHide(void);
@@ -320,6 +322,7 @@ extern const int g_nFolderButtons;
 /* ---- explorer.c ------------------------------------------------------ */
 BOOL ExplorerRegister(void);
 HWND ExplorerOpen(LPCSTR lpPath);
+HWND ExplorerOpenTree(LPCSTR lpPath);
 void ExplorerRefreshPath(LPCSTR lpDir);
 int  ExplorerDropTarget(HWND hwnd, POINT pt, LPSTR lpDir);
 void ExplorerCloseAll(void);

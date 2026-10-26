@@ -337,6 +337,34 @@ void FitText(HDC hdc, LPCSTR lpSrc, LPSTR lpDst, int cbDst, int cxMax)
 }
 
 /* -------------------------------------------------------------------- */
+/* Sharing (Windows for Workgroups)                                     */
+/* -------------------------------------------------------------------- */
+
+typedef WORD (FAR PASCAL *SHAREDLGPROC)(HWND, WORD, LPSTR);
+
+static SHAREDLGPROC ShareProc(BOOL bShare)
+{
+    return (SHAREDLGPROC)GetProcAddress(GetModuleHandle("USER"),
+                                        bShare ? "WNETSHAREASDIALOG" : "WNETSTOPSHAREDIALOG");
+}
+
+/* Whether the network (Windows for Workgroups) can share folders */
+BOOL NetShareAvailable(void)
+{
+    return ShareProc(TRUE) != NULL;
+}
+
+void NetShareDialog(HWND hwnd, LPCSTR lpPath, BOOL bShare)
+{
+    char szPath[MAXPATHLEN];
+    SHAREDLGPROC lpfn = ShareProc(bShare);
+
+    lstrcpyn(szPath, lpPath, sizeof(szPath));
+    if (lpfn)
+        lpfn(hwnd, 1 /* WNTYPE_DRIVE */, szPath);
+}
+
+/* -------------------------------------------------------------------- */
 /* Hints                                                                */
 /* -------------------------------------------------------------------- */
 

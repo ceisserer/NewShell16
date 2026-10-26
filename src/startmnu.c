@@ -916,6 +916,7 @@ BOOL ExecMacro(HWND hwnd, LPCSTR lpCmd)
     else if (!lstrcmpi(szName, "$ShutDown"))    DoShutdownDialog();
     else if (!lstrcmpi(szName, "$Find"))        FindOpen(lpArg);
     else if (!lstrcmpi(szName, "$Explore"))     ExplorerOpen(lpArg);
+    else if (!lstrcmpi(szName, "$BrowseFolders")) ExplorerOpenTree(lpArg);
     else if (!lstrcmpi(szName, "$System"))      FolderOpen("");
     else if (!lstrcmpi(szName, "$Bin"))         BinOpen();
     else if (!lstrcmpi(szName, "$TaskManager")) TaskManOpen();
@@ -971,6 +972,7 @@ BOOL StartMenuCommand(HWND hwnd, UINT id)
     case CMD_ABOUT:         AboutDialog(hwnd); break;
     case CMD_COMPUTER:      FolderOpen(""); break;
     case CMD_EXPLORER:      ExplorerOpen(NULL); break;
+    case CMD_BROWSEFOLDERS: ExplorerOpenTree(NULL); break;
     case CMD_BIN:           BinOpen(); break;
     case CMD_FIND:          FindOpen(NULL); break;
     case CMD_TASKMAN:       TaskManOpen(); break;
