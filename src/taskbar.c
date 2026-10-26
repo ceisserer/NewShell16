@@ -866,7 +866,9 @@ void TaskbarApplySettings(void)
     s_bHidden = CfgGetInt("Taskbar", "AutoHide", 0);
     SetWindowPos(g_hwndTaskbar, HWND_TOPMOST, 0, s_bHidden ? cyScreen - HIDDEN_CY
                                                            : cyScreen - s_cyBar,
-                 0, 0, SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
+                 0, 0, SWP_NOSIZE | SWP_NOACTIVATE);
+    if (!IsWindowVisible(g_hwndTaskbar))
+        ShowWindow(g_hwndTaskbar, SW_SHOWNOACTIVATE);
     UpdateTasks();
     InvalidateRect(g_hwndTaskbar, NULL, FALSE);
 }

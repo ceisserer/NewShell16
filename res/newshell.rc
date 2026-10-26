@@ -311,11 +311,15 @@ BEGIN
     EDITTEXT        IDC_FINDNAME, 80, 8, 116, 12, ES_AUTOHSCROLL
     LTEXT           "&Look in:", -1, 36, 26, 40, 8
     EDITTEXT        IDC_FINDDIR, 80, 24, 116, 12, ES_AUTOHSCROLL
+    LTEXT           "&Containing:", -1, 36, 42, 42, 8
+    EDITTEXT        IDC_FINDTEXT, 80, 40, 116, 12, ES_AUTOHSCROLL
     CONTROL         "Include &subfolders", IDC_FINDSUB, "Button",
-                    BS_AUTOCHECKBOX | WS_TABSTOP, 80, 40, 116, 10
+                    BS_AUTOCHECKBOX | WS_TABSTOP, 80, 56, 70, 10
+    CONTROL         "&Match case", IDC_FINDCASE, "Button",
+                    BS_AUTOCHECKBOX | WS_TABSTOP, 152, 56, 50, 10
     DEFPUSHBUTTON   "Find &Now", IDOK, 204, 8, 50, 14
     PUSHBUTTON      "S&top", IDC_FINDSTOP, 204, 26, 50, 14
-    LISTBOX         IDC_FINDLIST, 8, 56, 246, 82,
+    LISTBOX         IDC_FINDLIST, 8, 70, 246, 68,
                     LBS_OWNERDRAWFIXED | LBS_NOTIFY | LBS_NOINTEGRALHEIGHT | WS_VSCROLL | WS_TABSTOP
     PUSHBUTTON      "&Open", IDC_FINDOPEN, 8, 142, 50, 14
     PUSHBUTTON      "Open &Folder", IDC_FINDOPENDIR, 62, 142, 56, 14

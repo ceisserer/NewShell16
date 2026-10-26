@@ -20,7 +20,10 @@
  *
  * A modeless dialog that searches a folder (optionally with sub-folders)
  * for names matching a wildcard pattern, or containing the given text if
- * the pattern has no wildcards. Results can be opened or their folder
+ * the pattern has no wildcards, and optionally for files containing a
+ * text (ignoring case unless Match case is on). A right click on a
+ * result offers Open, Open With, Open Folder, Delete, copying the names
+ * or the details, and Properties. Results can be opened or their folder
  * shown.
  */
 #include <stdlib.h>
@@ -43,6 +46,54 @@ static BOOL    s_bSearching;
 static BOOL    s_bStop;
 static char    s_szPattern[64];
 static BOOL    s_bWild;
+static char    s_szText[64];        /* contents to look for, "" = any */
+static BOOL    s_bCase;
+static LPSTR   s_lpBuf;             /* file buffer for the contents search */
+static FARPROC s_lpfnListProc;
+static WNDPROC s_lpfnOldList;
+
+#define FIND_BUF        4096
+
+static BOOL PumpFind(void);
+
+/* Whether the file contains s_szText */
+static BOOL ContainsText(LPCSTR lpPath)
+{
+    HFILE hf;
+    int nText = lstrlen(s_szText), nKeep = 0, n, i;
+    BOOL bFound = FALSE;
+    UINT uOldMode;
+
+    if (!s_lpBuf)
+        s_lpBuf = (LPSTR)malloc(FIND_BUF + 1);
+    if (!s_lpBuf || nText == 0 || nText >= FIND_BUF / 2)
+        return FALSE;
+    uOldMode = SetErrorMode(1);
+    hf = _lopen(lpPath, OF_READ | OF_SHARE_DENY_NONE);
+    SetErrorMode(uOldMode);
+    if (hf == HFILE_ERROR)
+        return FALSE;
+    for (;;) {
+        n = _lread(hf, s_lpBuf + nKeep, FIND_BUF - nKeep);
+        if (n <= 0 || n == (int)HFILE_ERROR)
+            break;
+        n += nKeep;
+        if (!s_bCase)
+            AnsiUpperBuff(s_lpBuf + nKeep, n - nKeep);
+        for (i = 0; i + nText <= n; i++)
+            if (s_lpBuf[i] == s_szText[0] && _fmemcmp(s_lpBuf + i, s_szText, nText) == 0) {
+                bFound = TRUE;
+                break;
+            }
+        if (bFound || !PumpFind())
+            break;
+        /* keep the end, a match may span two reads */
+        nKeep = nText - 1;
+        _fmemmove(s_lpBuf, s_lpBuf + n - nKeep, nKeep);
+    }
+    _lclose(hf);
+    return bFound;
+}
 
 static BOOL Matches(LPCSTR lpName)
 {
@@ -110,8 +161,11 @@ static BOOL Search(LPCSTR lpDir, BOOL bSubdirs)
             continue;
         lstrcpy(szPath, lpDir);
         PathAppend(szPath, ft.name);
-        if (Matches(ft.name))
+        if (Matches(ft.name)
+            && (!s_szText[0] || (!(ft.attrib & _A_SUBDIR) && ContainsText(szPath))))
             AddResult(szPath);
+        if (!s_hwndFind)
+            return FALSE;
         if (s_nResults >= MAX_RESULTS)
             return FALSE;
         if ((ft.attrib & _A_SUBDIR) && bSubdirs) {
@@ -132,6 +186,11 @@ static void StartSearch(HWND hDlg)
         return;
     GetDlgItemText(hDlg, IDC_FINDNAME, s_szPattern, sizeof(s_szPattern));
     GetDlgItemText(hDlg, IDC_FINDDIR, szDir, sizeof(szDir));
+    GetDlgItemText(hDlg, IDC_FINDTEXT, s_szText, sizeof(s_szText));
+    s_bCase = IsDlgButtonChecked(hDlg, IDC_FINDCASE);
+    CfgSetInt("Find", "MatchCase", s_bCase);
+    if (!s_bCase)
+        AnsiUpper(s_szText);
     if (s_szPattern[0] == '\0')
         lstrcpy(s_szPattern, "*.*");
     s_bWild = FALSE;
@@ -174,6 +233,156 @@ static int SelectedResult(HWND hDlg)
     return (i >= 0 && i < s_nResults) ? i : -1;
 }
 
+/* -------------------------------------------------------------------- */
+/* Result menu                                                          */
+/* -------------------------------------------------------------------- */
+
+#define IDM_R_OPEN      901
+#define IDM_R_OPENWITH  902
+#define IDM_R_FOLDER    903
+#define IDM_R_DELETE    904
+#define IDM_R_NAMES     905
+#define IDM_R_DETAILS   906
+#define IDM_R_PROPS     907
+
+/* Right clicks on the results: select, then the menu */
+LRESULT CALLBACK NSEXPORT FindListProc(HWND hwnd, UINT msg, WPARAM wParam,
+                                       LPARAM lParam)
+{
+    if (msg == WM_RBUTTONDOWN) {
+        int i = (int)SendMessage(hwnd, LB_GETTOPINDEX, 0, 0L) + (int)HIWORD(lParam) / ITEM_CY;
+
+        SetFocus(hwnd);
+        if (i < s_nResults)
+            SendMessage(hwnd, LB_SETCURSEL, i, 0L);
+        return 0;
+    }
+    if (msg == WM_RBUTTONUP) {
+        POINT pt;
+        HMENU hMenu;
+        int i = (int)SendMessage(hwnd, LB_GETCURSEL, 0, 0L);
+
+        if (i < 0 || i >= s_nResults)
+            return 0;
+        hMenu = CreatePopupMenu();
+        AppendMenu(hMenu, MF_STRING, IDM_R_OPEN, "&Open");
+        AppendMenu(hMenu, MF_STRING, IDM_R_OPENWITH, "Open &With...");
+        AppendMenu(hMenu, MF_STRING, IDM_R_FOLDER, "Open &Folder");
+        AppendMenu(hMenu, MF_SEPARATOR, 0, NULL);
+        AppendMenu(hMenu, MF_STRING, IDM_R_DELETE, "&Delete");
+        AppendMenu(hMenu, MF_SEPARATOR, 0, NULL);
+        AppendMenu(hMenu, MF_STRING, IDM_R_NAMES, "&Copy File Names");
+        AppendMenu(hMenu, MF_STRING, IDM_R_DETAILS, "Copy D&etails");
+        AppendMenu(hMenu, MF_SEPARATOR, 0, NULL);
+        AppendMenu(hMenu, MF_STRING, IDM_R_PROPS, "P&roperties");
+        pt.x = LOWORD(lParam);
+        pt.y = HIWORD(lParam);
+        ClientToScreen(hwnd, &pt);
+        TrackPopupMenu(hMenu, 0, pt.x, pt.y, 0, GetParent(hwnd), NULL);
+        DestroyMenu(hMenu);
+        return 0;
+    }
+    return CallWindowProc(s_lpfnOldList, hwnd, msg, wParam, lParam);
+}
+
+/* All results (bDetails: with size, date and folder) to the clipboard */
+static void CopyResults(HWND hDlg, BOOL bDetails)
+{
+    struct find_t ft;
+    char szPath[RESULT_LEN], szLine[RESULT_LEN + 64], szSize[24];
+    HGLOBAL h;
+    LPSTR lp;
+    DWORD cb = 1;
+    int i;
+
+    cb += (DWORD)s_nResults * (RESULT_LEN + 64);
+    if (cb > 60000L)
+        cb = 60000L;
+    h = GlobalAlloc(GMEM_MOVEABLE | GMEM_DDESHARE, cb);
+    if (!h)
+        return;
+    lp = (LPSTR)GlobalLock(h);
+    lp[0] = '\0';
+    for (i = 0; i < s_nResults; i++) {
+        lstrcpy(szPath, s_lpResults[i]);
+        if (bDetails && _dos_findfirst(szPath, _A_NORMAL | _A_RDONLY | _A_HIDDEN | _A_SYSTEM
+                                       | _A_SUBDIR | _A_ARCH, &ft) == 0) {
+            char szDir[RESULT_LEN];
+
+            lstrcpy(szDir, szPath);
+            PathParent(szDir);
+            FormatBytes(ft.size, szSize);
+            wsprintf(szLine, "%s\t%s\t%02u.%02u.%04u %02u:%02u\t%s\r\n", (LPSTR)ft.name,
+                     (LPSTR)((ft.attrib & _A_SUBDIR) ? "Folder" : szSize),
+                     ft.wr_date & 31, (ft.wr_date >> 5) & 15, (ft.wr_date >> 9) + 1980,
+                     ft.wr_time >> 11, (ft.wr_time >> 5) & 63, (LPSTR)szDir);
+        } else
+            wsprintf(szLine, "%s\r\n", (LPSTR)szPath);
+        if ((DWORD)lstrlen(lp) + lstrlen(szLine) + 1 >= cb)
+            break;
+        lstrcat(lp, szLine);
+    }
+    GlobalUnlock(h);
+    if (OpenClipboard(hDlg)) {
+        EmptyClipboard();
+        SetClipboardData(CF_TEXT, h);
+        CloseClipboard();
+    } else
+        GlobalFree(h);
+}
+
+static void ResultCommand(HWND hDlg, UINT id)
+{
+    char szPath[RESULT_LEN];
+    HGLOBAL hList = NULL;
+    int i = (int)SendDlgItemMessage(hDlg, IDC_FINDLIST, LB_GETCURSEL, 0, 0L);
+
+    if (i < 0 || i >= s_nResults)
+        return;
+    lstrcpy(szPath, s_lpResults[i]);
+    switch (id) {
+    case IDM_R_OPEN:
+        OpenPath(hDlg, szPath);
+        break;
+    case IDM_R_OPENWITH:
+        if (!PathIsDirectory(szPath))
+            OpenWithDialog(hDlg, szPath);
+        break;
+    case IDM_R_FOLDER:
+        PathParent(szPath);
+        FolderOpen(szPath);
+        break;
+    case IDM_R_DELETE:
+        PathListAdd(&hList, szPath);
+        if (hList && FileOpDelete(hDlg, hList, g_cfg.bDeleteToBin)) {
+            OFSTRUCT of;
+
+            /* gone: take it out of the results */
+            if (!PathIsDirectory(szPath) && OpenFile(szPath, &of, OF_EXIST) == HFILE_ERROR) {
+                _fmemmove(&s_lpResults[i], &s_lpResults[i + 1],
+                          (s_nResults - i - 1) * sizeof(RESULT));
+                s_nResults--;
+                SendDlgItemMessage(hDlg, IDC_FINDLIST, LB_DELETESTRING, s_nResults, 0L);
+                InvalidateRect(GetDlgItem(hDlg, IDC_FINDLIST), NULL, TRUE);
+            }
+        }
+        break;
+    case IDM_R_NAMES:
+        CopyResults(hDlg, FALSE);
+        break;
+    case IDM_R_DETAILS:
+        CopyResults(hDlg, TRUE);
+        break;
+    case IDM_R_PROPS:
+        PathListAdd(&hList, szPath);
+        if (hList)
+            PropertiesDialog(hDlg, hList);
+        break;
+    }
+    if (hList)
+        GlobalFree(hList);
+}
+
 static void DrawResult(DRAWITEMSTRUCT FAR *lpdis)
 {
     HDC hdc = lpdis->hDC;
@@ -186,7 +395,8 @@ static void DrawResult(DRAWITEMSTRUCT FAR *lpdis)
     if ((int)lpdis->itemID < 0 || (int)lpdis->itemID >= s_nResults)
         return;
     lstrcpy(szPath, s_lpResults[lpdis->itemID]);
-    DrawIconSmall(hdc, rc.left + 2, rc.top + 1,
+    if (CfgGetInt("Find", "Icons", 1))
+        DrawIconSmall(hdc, rc.left + 2, rc.top + 1,
                   IconForFile(szPath, PathIsDirectory(szPath)),
                   GetSysColor(COLOR_WINDOW));
     hfOld = SelectObject(hdc, g_hfontUI);
@@ -216,7 +426,12 @@ BOOL CALLBACK NSEXPORT FindDlgProc(HWND hDlg, UINT msg, WPARAM wParam,
     case WM_INITDIALOG:
         SetDlgItemText(hDlg, IDC_FINDNAME, s_szPattern);
         CheckDlgButton(hDlg, IDC_FINDSUB, TRUE);
+        CheckDlgButton(hDlg, IDC_FINDCASE, CfgGetInt("Find", "MatchCase", 0));
         EnableWindow(GetDlgItem(hDlg, IDC_FINDSTOP), FALSE);
+        if (!s_lpfnListProc)
+            s_lpfnListProc = MakeProcInstance((FARPROC)FindListProc, g_hInst);
+        s_lpfnOldList = (WNDPROC)SetWindowLong(GetDlgItem(hDlg, IDC_FINDLIST), GWL_WNDPROC,
+                                               (LONG)s_lpfnListProc);
         SendDlgItemMessage(hDlg, IDC_FINDICON, STM_SETICON,
                            (WPARAM)IconStock(IDI_FIND), 0L);
         return TRUE;
@@ -233,6 +448,10 @@ BOOL CALLBACK NSEXPORT FindDlgProc(HWND hDlg, UINT msg, WPARAM wParam,
         return TRUE;
 
     case WM_COMMAND:
+        if (wParam >= IDM_R_OPEN && wParam <= IDM_R_PROPS) {
+            ResultCommand(hDlg, wParam);
+            return TRUE;
+        }
         switch (wParam) {
         case IDOK:
             StartSearch(hDlg);

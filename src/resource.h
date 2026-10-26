@@ -165,6 +165,7 @@
 #define IDC_FINDOPENDIR     486
 #define IDC_FINDSTATUS      487
 #define IDC_FINDICON        488
+#define IDC_FINDTEXT        489
 #define IDC_OPT_FIRST       490
 #define IDC_OPT_CLOCK       490
 #define IDC_OPT_HIDEMIN     491
@@ -214,6 +215,7 @@
 #define IDC_DESCTEXT        561
 #define IDC_DESCEDIT        562
 #define IDC_COL_FIRST       570     /* .. +5: Size .. Description */
+#define IDC_FINDCASE        597
 #define IDC_SPTREE          580
 #define IDC_SPNEWITEM       581
 #define IDC_SPNEWSUB        582
