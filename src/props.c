@@ -249,7 +249,8 @@ BOOL CALLBACK NSEXPORT VersionDlgProc(HWND hDlg, UINT msg, WPARAM wParam,
             int nTabs = 64;
             SendDlgItemMessage(hDlg, IDC_VERTEXT, EM_SETTABSTOPS, 1, (LPARAM)(int FAR *)&nTabs);
         }
-        return TRUE;
+        SetFocus(GetDlgItem(hDlg, IDOK));
+        return FALSE;
     case WM_COMMAND:
         if (wParam == IDOK || wParam == IDCANCEL) {
             EndDialog(hDlg, IDOK);
@@ -346,6 +347,7 @@ static void FillItem(HWND hDlg)
         HGLOBAL hVer = ReadVersion(s_pd.szPath);
 
         ShowAssociation(hDlg);
+        lstrcpy(szDir, s_pd.szPath);
         EnableWindow(GetDlgItem(hDlg, IDC_PROPASSOC), !IsProgramFile(s_pd.szPath)
                      && *PathExtension(szDir));
         EnableWindow(GetDlgItem(hDlg, IDC_PROPVERSION), hVer != NULL);
