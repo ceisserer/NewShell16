@@ -128,6 +128,7 @@
 #define IDD_COLUMNS         317
 #define IDD_STARTPROPS      318
 #define IDD_VERSION         319
+#define IDD_TIPS            320
 
 /* Dialog controls */
 #define IDC_RUNCMD          400
@@ -216,6 +217,10 @@
 #define IDC_DESCEDIT        562
 #define IDC_COL_FIRST       570     /* .. +5: Size .. Description */
 #define IDC_FINDCASE        597
+#define IDC_TIPTEXT         598
+#define IDC_TIPSHOW         599
+#define IDC_TIPNEXT         600
+#define IDC_RUNDOS          403
 #define IDC_SPTREE          580
 #define IDC_SPNEWITEM       581
 #define IDC_SPNEWSUB        582
@@ -268,6 +273,7 @@
 #define CMD_CASCADEFOLDERS  629
 #define CMD_SCREENSAVER     630
 #define CMD_BROWSEFOLDERS   631
+#define CMD_TIPS            632
 
 /* Folder view commands */
 #define CMD_F_OPEN          700

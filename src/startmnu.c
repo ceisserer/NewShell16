@@ -522,6 +522,7 @@ void StartMenuShow(HWND hwndOwner, int x, int y)
         }
     }
     StartMenuEnsure();
+    PlayEventSound("StartMenu");
 
     s_nItems = 0;
     CreateBannerFont();
@@ -924,6 +925,7 @@ BOOL ExecMacro(HWND hwnd, LPCSTR lpCmd)
     else if (!lstrcmpi(szName, "$ClearDesktop"))  ShellCommand(CMD_CLEARDESKTOP);
     else if (!lstrcmpi(szName, "$CascadeBrowsers")) ShellCommand(CMD_CASCADEFOLDERS);
     else if (!lstrcmpi(szName, "$CloseBrowsers")) ShellCommand(CMD_CLOSEFOLDERS);
+    else if (!lstrcmpi(szName, "$Tips"))         TipsDialog(hwnd);
     else if (!lstrcmpi(szName, "$ScreenSaver"))   ShellCommand(CMD_SCREENSAVER);
     else if (!lstrcmpi(szName, "$ToggleTaskbar")) ShellCommand(CMD_TOGGLETASKBAR);
     else if (!lstrcmpi(szName, "$ArrangeIcons"))
@@ -970,6 +972,7 @@ BOOL StartMenuCommand(HWND hwnd, UINT id)
     case CMD_RUN:           RunDialog(hwnd); break;
     case CMD_SHUTDOWN:      DoShutdownDialog(); break;
     case CMD_ABOUT:         AboutDialog(hwnd); break;
+    case CMD_TIPS:          TipsDialog(hwnd); break;
     case CMD_COMPUTER:      FolderOpen(""); break;
     case CMD_EXPLORER:      ExplorerOpen(NULL); break;
     case CMD_BROWSEFOLDERS: ExplorerOpenTree(NULL); break;

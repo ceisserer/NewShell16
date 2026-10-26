@@ -632,6 +632,8 @@ BOOL LaunchCommand(HWND hwnd, LPCSTR lpCmdLine, LPCSTR lpDir, int nShow)
 
     while (*lpCmdLine == ' ')
         lpCmdLine++;
+    if (IsUrl(lpCmdLine))
+        return OpenUrl(hwnd, lpCmdLine);
     while (*lpCmdLine && *lpCmdLine != ' ' && i < sizeof(szFile) - 1)
         szFile[i++] = *lpCmdLine++;
     szFile[i] = '\0';

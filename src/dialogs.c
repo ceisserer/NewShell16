@@ -48,25 +48,54 @@ static void BrowseForProgram(HWND hDlg)
     }
 }
 
+#define RUN_HISTORY     12
+
+/* The command goes to the top of the history ([Run] 1= ... 12=) */
+static void AddRunHistory(LPCSTR lpCmd)
+{
+    char szKey[8], szOld[256], szCarry[256];
+    int i;
+
+    CfgSetStr("Run", "Last", lpCmd);
+    lstrcpyn(szCarry, lpCmd, sizeof(szCarry));
+    for (i = 1; i <= RUN_HISTORY; i++) {
+        wsprintf(szKey, "%d", i);
+        CfgGetStr("Run", szKey, "", szOld, sizeof(szOld));
+        CfgSetStr("Run", szKey, szCarry);
+        if (!szOld[0] || lstrcmpi(szOld, lpCmd) == 0)
+            break;
+        lstrcpy(szCarry, szOld);
+    }
+}
+
 BOOL CALLBACK NSEXPORT RunDlgProc(HWND hDlg, UINT msg, WPARAM wParam,
                                   LPARAM lParam)
 {
-    char szCmd[256];
+    char szCmd[256], szDos[280], szKey[8];
+    int i;
 
     (void)lParam;
     switch (msg) {
     case WM_INITDIALOG:
+        for (i = 1; i <= RUN_HISTORY; i++) {
+            wsprintf(szKey, "%d", i);
+            CfgGetStr("Run", szKey, "", szCmd, sizeof(szCmd));
+            if (szCmd[0])
+                SendDlgItemMessage(hDlg, IDC_RUNCMD, CB_ADDSTRING, 0, (LPARAM)(LPSTR)szCmd);
+        }
         CfgGetStr("Run", "Last", "", szCmd, sizeof(szCmd));
         SetDlgItemText(hDlg, IDC_RUNCMD, szCmd);
-        SendDlgItemMessage(hDlg, IDC_RUNCMD, EM_LIMITTEXT, sizeof(szCmd) - 1, 0L);
-        SendDlgItemMessage(hDlg, IDC_RUNCMD, EM_SETSEL, 0, MAKELONG(0, -1));
+        SendDlgItemMessage(hDlg, IDC_RUNCMD, CB_LIMITTEXT, sizeof(szCmd) - 1, 0L);
+        SendDlgItemMessage(hDlg, IDC_RUNCMD, CB_SETEDITSEL, 0, MAKELPARAM(0, -1));
         EnableWindow(GetDlgItem(hDlg, IDOK), szCmd[0] != '\0');
         return TRUE;
 
     case WM_COMMAND:
         switch (wParam) {
         case IDC_RUNCMD:
-            if (HIWORD(lParam) == EN_CHANGE)
+            if (HIWORD(lParam) == CBN_EDITCHANGE || HIWORD(lParam) == CBN_SELCHANGE)
+                PostMessage(hDlg, WM_COMMAND, IDC_RUNCMD, MAKELPARAM(0, 0xFFFF));
+            else if (HIWORD(lParam) == 0xFFFF)
                 EnableWindow(GetDlgItem(hDlg, IDOK),
                              GetWindowTextLength(GetDlgItem(hDlg, IDC_RUNCMD)) > 0);
             return TRUE;
@@ -75,10 +104,17 @@ BOOL CALLBACK NSEXPORT RunDlgProc(HWND hDlg, UINT msg, WPARAM wParam,
             return TRUE;
         case IDOK:
             GetDlgItemText(hDlg, IDC_RUNCMD, szCmd, sizeof(szCmd));
-            if (LaunchCommand(hDlg, szCmd, NULL,
+            if (!szCmd[0])
+                return TRUE;
+            if (IsDlgButtonChecked(hDlg, IDC_RUNDOS))
+                /* a DOS command or program, in a DOS window that stays */
+                wsprintf(szDos, "COMMAND.COM /K %s", (LPSTR)szCmd);
+            else
+                lstrcpy(szDos, szCmd);
+            if (LaunchCommand(hDlg, szDos, NULL,
                               IsDlgButtonChecked(hDlg, IDC_RUNMIN)
                                   ? SW_SHOWMINNOACTIVE : SW_SHOWNORMAL)) {
-                CfgSetStr("Run", "Last", szCmd);
+                AddRunHistory(szCmd);
                 EndDialog(hDlg, IDOK);
             }
             return TRUE;

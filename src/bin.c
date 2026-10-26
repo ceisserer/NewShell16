@@ -336,6 +336,7 @@ static void EmptyBin(HWND hwnd)
         return;
     for (i = 0; i < s_nItems; i++)
         Destroy(hwnd, &s_lpItems[i]);
+    PlayEventSound("EmptyBin");
     BinChanged();
 }
 

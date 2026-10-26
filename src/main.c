@@ -298,6 +298,7 @@ static void OpenFromCommandLine(LPCSTR lpCmdLine)
 
 void CloseShell(void)
 {
+    SaveOpenWindows();
     FindClose();
     TaskManClose();
     BinClose();
@@ -310,19 +311,32 @@ void CloseShell(void)
         DestroyWindow(g_hwndMain);
 }
 
+static void ExitWith(DWORD dwCode)
+{
+    HWND hwndScreen;
+
+    PlayEventSound("Exit");
+    SaveOpenWindows();
+    hwndScreen = ShutdownScreenShow();
+    ExitWindows(dwCode, 0);
+    /* a program refused */
+    if (hwndScreen)
+        DestroyWindow(hwndScreen);
+}
+
 void DoShutdownDialog(void)
 {
     int nChoice = ShutdownDialog(g_hwndMain);
 
     switch (nChoice) {
     case IDC_EXITWIN:
-        ExitWindows(0L, 0);
+        ExitWith(0L);
         break;
     case IDC_RESTARTWIN:
-        ExitWindows(EW_RESTARTWINDOWS, 0);
+        ExitWith(EW_RESTARTWINDOWS);
         break;
     case IDC_REBOOT:
-        ExitWindows(EW_REBOOTSYSTEM, 0);
+        ExitWith(EW_REBOOTSYSTEM);
         break;
     case IDC_CLOSESHELL:
         CloseShell();
@@ -466,6 +480,7 @@ LRESULT CALLBACK NSEXPORT MainWndProc(HWND hwnd, UINT msg, WPARAM wParam,
 
     case WM_ENDSESSION:
         if (wParam) {
+            SaveOpenWindows();
             if (g_bIsShell)
                 BinExit();
             UnloadHookDll();
@@ -510,7 +525,7 @@ static BOOL RegisterClasses(void)
         return FALSE;
 
     return FolderRegister() && FViewRegister() && ExplorerRegister() && ToolbarRegister()
-        && TaskManRegister() && BinRegister() && FileOpRegister() && DdeRegister() && HintRegister();
+        && TaskManRegister() && BinRegister() && FileOpRegister() && DdeRegister() && HintRegister() && ScreenRegister();
 }
 
 /*
@@ -574,6 +589,8 @@ int PASCAL WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     if (!g_hwndMain)
         return 1;
 
+    if (g_bIsShell)
+        SplashShow();
     if (!TaskbarCreate()) {
         DestroyWindow(g_hwndMain);
         return 1;
@@ -584,11 +601,19 @@ int PASCAL WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     LoadHookDll();
     HookApplySettings();
 
+    if (g_bIsShell) {
+        PlayEventSound("Startup");
+        RestoreOpenWindows();
+        if (CfgGetInt("Preferences", "OpenComputer", 0))
+            FolderOpen("");
+    }
     if (g_bIsShell && g_cfg.bRunStartup && !IsShiftDown()) {
         RunWinIniLoadRun();
         PmRunStartupGroup();
     }
     OpenFromCommandLine(lpCmdLine);
+    if (CfgGetInt("Preferences", "ShowTips", 0))
+        PostMessage(g_hwndMain, WM_COMMAND, CMD_TIPS, 0L);
 
     while (GetMessage(&msg, NULL, 0, 0)) {
         if (FindIsDialogMessage(&msg) || TaskManIsDialogMessage(&msg))

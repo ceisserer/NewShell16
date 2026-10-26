@@ -300,6 +300,7 @@ HWND FolderOpen(LPCSTR lpPath);     /* "" opens the Computer window */
 void FolderCloseAll(void);
 void FolderBarsChanged(void);
 int  FolderGetWindows(HWND FAR *lpOut, int nMax);
+LPSTR FolderWindowPath(HWND hwnd, LPSTR lpBuf);
 void PaintStatusBar(HWND hwnd, HDC hdc, int cyStatus, LPCSTR lpText, int xPane);
 int  StatusBarHeight(void);
 LRESULT CALLBACK NSEXPORT FolderWndProc(HWND, UINT, WPARAM, LPARAM);
@@ -365,6 +366,17 @@ BOOL OpenWithDialogEx(HWND hwndOwner, LPCSTR lpFile, BOOL bAssocOnly);
 BOOL DescribeDialog(HWND hwndOwner, LPCSTR lpName, LPSTR lpDesc, int cbDesc);
 BOOL DescriptionSet(LPCSTR lpDir, LPCSTR lpName, LPCSTR lpDesc);
 BOOL ColumnsDialog(HWND hwndOwner, UINT FAR *puHidden);
+
+/* ---- system.c -------------------------------------------------------- */
+void PlayEventSound(LPCSTR lpEvent);
+BOOL IsUrl(LPCSTR lpCmd);
+BOOL OpenUrl(HWND hwnd, LPCSTR lpUrl);
+BOOL ScreenRegister(void);
+void SplashShow(void);
+HWND ShutdownScreenShow(void);
+void TipsDialog(HWND hwndOwner);
+void SaveOpenWindows(void);
+void RestoreOpenWindows(void);
 
 /* ---- bin.c ----------------------------------------------------------- */
 BOOL BinRegister(void);

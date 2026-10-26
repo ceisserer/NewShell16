@@ -34,6 +34,8 @@ static int  s_cyStatus;
 
 #define ID_TOOLBAR      2
 
+static void NewWindowRect(RECT FAR *lprc);
+
 static HWND ViewOf(HWND hwnd)
 {
     return GetDlgItem(hwnd, 1);
@@ -310,7 +312,28 @@ LRESULT CALLBACK NSEXPORT FolderWndProc(HWND hwnd, UINT msg, WPARAM wParam,
             return 0;
         break;
 
+    case WM_CLOSE:
+        /* the Computer window can stand for the whole shell */
+        if (!FViewGetPath(ViewOf(hwnd))[0] && CfgGetInt("Preferences", "ComputerQuits", 0)) {
+            DoShutdownDialog();
+            return 0;
+        }
+        break;
+
     case WM_DESTROY:
+        {
+            WINDOWPLACEMENT wp;
+            char szPos[40];
+
+            wp.length = sizeof(wp);
+            if (GetWindowPlacement(hwnd, &wp)) {
+                wsprintf(szPos, "%d,%d,%d,%d", wp.rcNormalPosition.left,
+                         wp.rcNormalPosition.top,
+                         wp.rcNormalPosition.right - wp.rcNormalPosition.left,
+                         wp.rcNormalPosition.bottom - wp.rcNormalPosition.top);
+                CfgSetStr("Folders", "LastWindow", szPos);
+            }
+        }
         RemoveFolder(hwnd);
         return 0;
     }
@@ -354,15 +377,62 @@ HWND FolderOpen(LPCSTR lpPath)
         }
     }
 
-    hwnd = CreateWindow(CLS_FOLDER, "", WS_OVERLAPPEDWINDOW,
-                        CW_USEDEFAULT, 0, 440, 300, NULL, NULL, g_hInst,
-                        (LPVOID)szPath);
+    {
+        RECT rc;
+
+        NewWindowRect(&rc);
+        hwnd = CreateWindow(CLS_FOLDER, "", WS_OVERLAPPEDWINDOW,
+                            rc.left, rc.top, rc.right, rc.bottom, NULL, NULL, g_hInst,
+                            (LPVOID)szPath);
+    }
     if (!hwnd)
         return NULL;
+    PlayEventSound("OpenFolder");
     ShowWindow(hwnd, SW_SHOWNORMAL);
     UpdateWindow(hwnd);
     TaskbarRefresh();
     return hwnd;
+}
+
+/* The folder a folder window shows ("" for the Computer) */
+LPSTR FolderWindowPath(HWND hwnd, LPSTR lpBuf)
+{
+    lstrcpy(lpBuf, FViewGetPath(ViewOf(hwnd)));
+    return lpBuf;
+}
+
+/*
+ * Where a new folder window goes ([Folders] WindowPos=): 0 where Windows
+ * puts it, 1 cascaded from the last one opened, 2 where the last one
+ * closed was.
+ */
+static void NewWindowRect(RECT FAR *lprc)
+{
+    static int s_nCascade;
+    char szPos[40];
+    LPSTR p;
+    int v[4], i, nStep = GetSystemMetrics(SM_CYCAPTION) + GetSystemMetrics(SM_CYFRAME);
+
+    SetRect(lprc, CW_USEDEFAULT, 0, 440, 300);
+    switch (CfgGetInt("Folders", "WindowPos", 0)) {
+    case 1:
+        lprc->left = 40 + (s_nCascade % 8) * nStep;
+        lprc->top = 20 + (s_nCascade % 8) * nStep;
+        s_nCascade++;
+        break;
+    case 2:
+        CfgGetStr("Folders", "LastWindow", "", szPos, sizeof(szPos));
+        for (p = szPos, i = 0; *p && i < 4; i++) {
+            v[i] = 0;
+            while (*p >= '0' && *p <= '9')
+                v[i] = v[i] * 10 + (*p++ - '0');
+            if (*p == ',')
+                p++;
+        }
+        if (i == 4 && v[2] >= 100 && v[3] >= 60)
+            SetRect(lprc, v[0], v[1], v[2], v[3]);
+        break;
+    }
 }
 
 /* The folder windows (and File System windows) into lpOut */
