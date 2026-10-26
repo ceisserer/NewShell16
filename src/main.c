@@ -31,6 +31,7 @@
  */
 #include <string.h>
 #include "newshell.h"
+#include <dde.h>
 #include "nshook.h"
 
 #define TIMER_FILECHANGE    1
@@ -255,6 +256,10 @@ LRESULT CALLBACK NSEXPORT MainWndProc(HWND hwnd, UINT msg, WPARAM wParam,
         GlobalDeleteAtom((ATOM)wParam);
         return 0;
 
+    case WM_DDE_INITIATE:
+        DdeInitiate((HWND)wParam, (ATOM)LOWORD(lParam), (ATOM)HIWORD(lParam));
+        return 0;
+
     case WM_NS_SHELLHOOK:
         TaskbarRefresh();
         return 0;
@@ -324,7 +329,7 @@ static BOOL RegisterClasses(void)
         return FALSE;
 
     return FolderRegister() && FViewRegister() && ExplorerRegister() && ToolbarRegister()
-        && TaskManRegister() && BinRegister() && FileOpRegister();
+        && TaskManRegister() && BinRegister() && FileOpRegister() && DdeRegister();
 }
 
 /*

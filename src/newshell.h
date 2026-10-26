@@ -32,6 +32,7 @@
 #define NS_VERSION      "0.2"
 #define NS_APPNAME      "NewShell16"
 #define NS_INIFILE      "NEWSHELL.INI"
+#define NS_STARTINI     "NSSTART.INI"
 
 /* Window procedures and callbacks must be exported in Win16 */
 #define NSEXPORT        __export
@@ -161,6 +162,10 @@ LRESULT CALLBACK NSEXPORT TaskbarWndProc(HWND, UINT, WPARAM, LPARAM);
 
 /* ---- startmnu.c ------------------------------------------------------ */
 #define CMD_SM_SEPARATOR    0x7000  /* ids of owner-drawn separators */
+#define SM_KEYBUF           4096    /* buffer for the keys of a section */
+void StartMenuEnsure(void);
+void StartMenuProgramsSection(LPSTR lpBuf, int cbBuf);
+BOOL StartMenuRunGroup(LPCSTR lpGroup);
 void StartMenuShow(HWND hwndOwner, int x, int y);
 BOOL StartMenuCommand(HWND hwnd, UINT id);
 void StartMenuSelect(HWND hwnd, UINT id, UINT uFlags);
@@ -169,6 +174,11 @@ BOOL StartMenuMeasureItem(MEASUREITEMSTRUCT FAR *lpmis);
 BOOL StartMenuDrawItem(DRAWITEMSTRUCT FAR *lpdis);
 BOOL ExecMacro(HWND hwnd, LPCSTR lpCmd);
 void StartMenuFree(void);
+
+/* ---- dde.c ---------------------------------------------------------- */
+BOOL DdeRegister(void);
+BOOL DdeEnabled(void);
+void DdeInitiate(HWND hwndClient, ATOM aApp, ATOM aTopic);
 
 /* ---- desktop.c ------------------------------------------------------- */
 void DesktopDefaultColor(void);

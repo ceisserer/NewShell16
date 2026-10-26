@@ -38,9 +38,9 @@
 #include <string.h>
 #include "newshell.h"
 
-#define START_INI       "NSSTART.INI"
+#define START_INI       NS_STARTINI
 #define SM_MAXITEMS     240
-#define SM_MAXKEYS      4096
+#define SM_MAXKEYS      SM_KEYBUF
 #define SM_GROUPMAX     64
 
 #define TOP_MIN_H       34      /* item heights: at least this, or font + gap */
@@ -61,9 +61,7 @@
 
 typedef struct tagSMITEM {
     char   szText[40];
-    char   szCmd[80];
-    char   szDir[48];
-    char   szIcon[48];
+    char   szIcon[80];
     BYTE   bShow;
     BYTE   bIconIndex;
     BYTE   bFlags;
@@ -74,7 +72,14 @@ typedef struct tagSMITEM {
     int    yTop;                /* top-level items: offset from menu top */
 } SMITEM, FAR *LPSMITEM;
 
+/* what an item runs, kept apart to stay within 64 KB per array */
+typedef struct tagSMCMD {
+    char   szCmd[128];
+    char   szDir[80];
+} SMCMD, FAR *LPSMCMD;
+
 static LPSMITEM s_lpItems;
+static LPSMCMD  s_lpCmds;
 static int      s_nItems;
 static int      s_cyMenu;
 static int      s_cyTop, s_cySub;   /* item heights for the current font */
@@ -151,6 +156,98 @@ static void CreateDefaultMenu(void)
     WritePrivateProfileString(NULL, NULL, NULL, START_INI);    /* flush */
 }
 
+/* Creates NSSTART.INI from the Program Manager groups if it is missing */
+void StartMenuEnsure(void)
+{
+    char szTest[8];
+
+    if (GetPrivateProfileString("Start", NULL, "", szTest, sizeof(szTest),
+                                START_INI) == 0)
+        CreateDefaultMenu();
+}
+
+/*
+ * The section of the Programs submenu, where Program Manager groups go:
+ * "Start\" and the first top-level submenu named Programs (ignoring '&'),
+ * or [Start Menu] ProgramsGroup= in NEWSHELL.INI.
+ */
+void StartMenuProgramsSection(LPSTR lpBuf, int cbBuf)
+{
+    char szName[48], szPlain[48];
+    char *pKeys, *p;
+    int i, n;
+
+    CfgGetStr("Start Menu", "ProgramsGroup", "", szName, sizeof(szName));
+    if (!szName[0]) {
+        lstrcpy(szName, "&Programs");
+        pKeys = (char *)malloc(SM_MAXKEYS);
+        if (pKeys) {
+            GetPrivateProfileString("Start", NULL, "", pKeys, SM_MAXKEYS, START_INI);
+            for (p = pKeys; *p; p += lstrlen(p) + 1) {
+                for (i = n = 0; p[i] && n < sizeof(szPlain) - 1; i++)
+                    if (p[i] != '&')
+                        szPlain[n++] = p[i];
+                szPlain[n] = '\0';
+                if (lstrcmpi(szPlain, "Programs*") == 0) {
+                    lstrcpyn(szName, p, sizeof(szName));
+                    szName[lstrlen(szName) - 1] = '\0';
+                    break;
+                }
+            }
+            free(pKeys);
+        }
+    }
+    if (lstrlen(szName) + 7 > cbBuf)
+        szName[cbBuf - 7] = '\0';
+    wsprintf(lpBuf, "Start\\%s", (LPSTR)szName);
+}
+
+/*
+ * Runs the items of group lpGroup of the Programs menu (the StartUp
+ * group). Returns FALSE if NSSTART.INI has no such group.
+ */
+BOOL StartMenuRunGroup(LPCSTR lpGroup)
+{
+    char szSection[128], szValue[300], szProbe[8];
+    char *pKeys, *p;
+    LPSTR f[5], q;
+    int i, n;
+
+    if (GetPrivateProfileString("Start", NULL, "", szProbe, sizeof(szProbe),
+                                START_INI) == 0)
+        return FALSE;
+    StartMenuProgramsSection(szSection, sizeof(szSection) - 48);
+    lstrcat(szSection, "\\");
+    lstrcat(szSection, lpGroup);
+    pKeys = (char *)malloc(SM_MAXKEYS);
+    if (!pKeys)
+        return FALSE;
+    if (GetPrivateProfileString(szSection, NULL, "", pKeys, SM_MAXKEYS, START_INI) == 0) {
+        free(pKeys);
+        return FALSE;
+    }
+    for (p = pKeys; *p; p += lstrlen(p) + 1) {
+        if (*p == '-')
+            continue;
+        GetPrivateProfileString(szSection, p, "", szValue, sizeof(szValue), START_INI);
+        f[0] = szValue;
+        for (i = 1; i < 5; i++)
+            f[i] = "";
+        for (q = szValue, n = 0; *q && n < 4; q++)
+            if (*q == ';') {
+                *q = '\0';
+                f[++n] = q + 1;
+            }
+        if (f[0][0] == '$')
+            ExecMacro(g_hwndMain, f[0]);
+        else if (f[0][0])
+            LaunchCommand(NULL, f[0], f[1], f[2][0] == '1' ? SW_SHOWMINNOACTIVE
+                                                         : SW_SHOWNORMAL);
+    }
+    free(pKeys);
+    return TRUE;
+}
+
 /* -------------------------------------------------------------------- */
 /* Building                                                             */
 /* -------------------------------------------------------------------- */
@@ -168,6 +265,7 @@ static int ImageByName(LPCSTR lpName)
 /* Splits "a;b;n;c;m" into the item's fields */
 static void ParseValue(LPSMITEM p, LPSTR lpValue)
 {
+    LPSMCMD c = &s_lpCmds[p - s_lpItems];
     LPSTR f[5];
     int i, n = 0;
 
@@ -179,8 +277,8 @@ static void ParseValue(LPSMITEM p, LPSTR lpValue)
             *lpValue = '\0';
             f[++n] = lpValue + 1;
         }
-    lstrcpyn(p->szCmd, f[0], sizeof(p->szCmd));
-    lstrcpyn(p->szDir, f[1], sizeof(p->szDir));
+    lstrcpyn(c->szCmd, f[0], sizeof(c->szCmd));
+    lstrcpyn(c->szDir, f[1], sizeof(c->szDir));
     p->bShow = (BYTE)atoi(f[2]);
     lstrcpyn(p->szIcon, f[3], sizeof(p->szIcon));
     p->bIconIndex = (BYTE)atoi(f[4]);
@@ -195,6 +293,7 @@ static LPSMITEM NewItem(HMENU hMenu, BOOL bTop)
         return NULL;
     p = &s_lpItems[s_nItems];
     _fmemset(p, 0, sizeof(SMITEM));
+    _fmemset(&s_lpCmds[s_nItems], 0, sizeof(SMCMD));
     p->hMenu = hMenu;
     p->nPos = GetMenuItemCount(hMenu);
     p->nImage = -1;
@@ -314,16 +413,16 @@ static void LayoutTop(void)
 void StartMenuShow(HWND hwndOwner, int x, int y)
 {
     HMENU hMenu;
-    char szTest[8];
 
     if (!s_lpItems) {
         s_lpItems = (LPSMITEM)malloc(SM_MAXITEMS * sizeof(SMITEM));
-        if (!s_lpItems)
+        s_lpCmds = (LPSMCMD)malloc(SM_MAXITEMS * sizeof(SMCMD));
+        if (!s_lpItems || !s_lpCmds) {
+            StartMenuFree();
             return;
+        }
     }
-    if (GetPrivateProfileString("Start", NULL, "", szTest, sizeof(szTest),
-                                START_INI) == 0)
-        CreateDefaultMenu();
+    StartMenuEnsure();
 
     s_nItems = 0;
     CreateBannerFont();
@@ -360,6 +459,7 @@ static LPSMITEM ItemFromData(DWORD dwData)
 
 static void LoadItemIcon(LPSMITEM p)
 {
+    LPSMCMD c = &s_lpCmds[p - s_lpItems];
     char szFile[MAXPATHLEN];
     OFSTRUCT of;
     int i;
@@ -372,14 +472,14 @@ static void LoadItemIcon(LPSMITEM p)
         if (p->hIcon)
             return;
     }
-    if (p->szCmd[0] == '$') {
-        p->nImage = (_fstrnicmp(p->szCmd, "$Folder", 7) == 0
-                     || _fstrnicmp(p->szCmd + 1, "LargeIconFolder", 15) == 0)
+    if (c->szCmd[0] == '$') {
+        p->nImage = (_fstrnicmp(c->szCmd, "$Folder", 7) == 0
+                     || _fstrnicmp(c->szCmd + 1, "LargeIconFolder", 15) == 0)
                     ? SMI_FOLDER : SMI_APP;
         return;
     }
-    for (i = 0; p->szCmd[i] && p->szCmd[i] != ' ' && i < sizeof(szFile) - 1; i++)
-        szFile[i] = p->szCmd[i];
+    for (i = 0; c->szCmd[i] && c->szCmd[i] != ' ' && i < sizeof(szFile) - 1; i++)
+        szFile[i] = c->szCmd[i];
     szFile[i] = '\0';
     if (szFile[0] == '\0') {
         p->nImage = SMI_APP;
@@ -735,15 +835,15 @@ BOOL StartMenuCommand(HWND hwnd, UINT id)
 {
     if (id >= CMD_SM_FIRST && id < CMD_SM_FIRST + SM_MAXITEMS) {
         int k = id - CMD_SM_FIRST;
-        LPSMITEM p;
+        LPSMCMD c;
 
         if (!s_lpItems || k >= s_nItems)
             return TRUE;
-        p = &s_lpItems[k];
-        if (p->szCmd[0] == '$')
-            ExecMacro(hwnd, p->szCmd);
-        else if (p->szCmd[0])
-            LaunchCommand(hwnd, p->szCmd, p->szDir, ShowMode(p->bShow));
+        c = &s_lpCmds[k];
+        if (c->szCmd[0] == '$')
+            ExecMacro(hwnd, c->szCmd);
+        else if (c->szCmd[0])
+            LaunchCommand(hwnd, c->szCmd, c->szDir, ShowMode(s_lpItems[k].bShow));
         return TRUE;
     }
 
@@ -771,6 +871,10 @@ void StartMenuFree(void)
     if (s_lpItems) {
         free(s_lpItems);
         s_lpItems = NULL;
+    }
+    if (s_lpCmds) {
+        free(s_lpCmds);
+        s_lpCmds = NULL;
     }
     if (s_hfBanner) {
         DeleteObject(s_hfBanner);
