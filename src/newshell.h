@@ -360,6 +360,7 @@ int  SelectFilesDialog(HWND hwndOwner, LPSTR lpSpec, int cbSpec);
 BOOL FilterDialog(HWND hwndOwner, LPSTR lpSpec, int cbSpec, BOOL FAR *pbHidden);
 BOOL GotoDialog(HWND hwndOwner, LPSTR lpPath, int cbPath);
 BOOL OpenWithDialog(HWND hwndOwner, LPCSTR lpFile);
+BOOL OpenWithDialogEx(HWND hwndOwner, LPCSTR lpFile, BOOL bAssocOnly);
 BOOL DescribeDialog(HWND hwndOwner, LPCSTR lpName, LPSTR lpDesc, int cbDesc);
 BOOL DescriptionSet(LPCSTR lpDir, LPCSTR lpName, LPCSTR lpDesc);
 BOOL ColumnsDialog(HWND hwndOwner, UINT FAR *puHidden);

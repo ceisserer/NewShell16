@@ -34,6 +34,7 @@ static LPSTR s_lpBuf;           /* the text a dialog edits */
 static int   s_cbBuf;
 static UINT  s_uFlags;          /* dialog specific */
 static LPCSTR s_lpFile;         /* Open With: the document */
+static BOOL   s_bAssocOnly;     /* Open With: only choose the association */
 
 static int DoDialog(int idd, FARPROC lpfnProc, HWND hwndOwner, LPARAM lParam)
 {
@@ -246,6 +247,11 @@ BOOL CALLBACK NSEXPORT OpenWithDlgProc(HWND hDlg, UINT msg, WPARAM wParam,
         FillPrograms(GetDlgItem(hDlg, IDC_OWLIST));
         CfgGetStr("Open With", "Last", "notepad.exe", szProg, sizeof(szProg));
         SetDlgItemText(hDlg, IDC_OWPROG, szProg);
+        if (s_bAssocOnly) {
+            SetWindowText(hDlg, "Associate");
+            CheckDlgButton(hDlg, IDC_OWALWAYS, TRUE);
+            EnableWindow(GetDlgItem(hDlg, IDC_OWALWAYS), FALSE);
+        }
         return TRUE;
     case WM_COMMAND:
         switch (wParam) {
@@ -271,7 +277,7 @@ BOOL CALLBACK NSEXPORT OpenWithDlgProc(HWND hDlg, UINT msg, WPARAM wParam,
             lstrcpyn(szDir, s_lpFile, sizeof(szDir));
             PathParent(szDir);
             wsprintf(szCmd, "%s %s", (LPSTR)szProg, s_lpFile);
-            if (!LaunchCommand(hDlg, szCmd, szDir, SW_SHOWNORMAL))
+            if (!s_bAssocOnly && !LaunchCommand(hDlg, szCmd, szDir, SW_SHOWNORMAL))
                 return TRUE;
             CfgSetStr("Open With", "Last", szProg);
             if (IsDlgButtonChecked(hDlg, IDC_OWALWAYS)) {
@@ -297,7 +303,14 @@ BOOL CALLBACK NSEXPORT OpenWithDlgProc(HWND hDlg, UINT msg, WPARAM wParam,
 /* Opens lpFile with a program the user picks */
 BOOL OpenWithDialog(HWND hwndOwner, LPCSTR lpFile)
 {
+    return OpenWithDialogEx(hwndOwner, lpFile, FALSE);
+}
+
+/* bAssocOnly: only choose the program that opens files of this kind */
+BOOL OpenWithDialogEx(HWND hwndOwner, LPCSTR lpFile, BOOL bAssocOnly)
+{
     s_lpFile = lpFile;
+    s_bAssocOnly = bAssocOnly;
     return DoDialog(IDD_OPENWITH, (FARPROC)OpenWithDlgProc, hwndOwner, 0L) == IDOK;
 }
 

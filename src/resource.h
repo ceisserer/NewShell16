@@ -127,6 +127,7 @@
 #define IDD_DESCRIBE        316
 #define IDD_COLUMNS         317
 #define IDD_STARTPROPS      318
+#define IDD_VERSION         319
 
 /* Dialog controls */
 #define IDC_RUNCMD          400
@@ -142,10 +143,15 @@
 #define IDC_PROGBAR         432
 #define IDC_REPLACETEXT     440
 #define IDC_YESALL          441
+#define IDC_NOALL           442
 #define IDC_PROPICON        450
 #define IDC_PROPNAME        451
 #define IDC_PROPL1          452     /* IDC_PROPL1..+4: labels */
 #define IDC_PROPV1          460     /* IDC_PROPV1..+4: values */
+#define IDC_PROPASSOC       466
+#define IDC_PROPPIE         467
+#define IDC_PROPVERSION     468
+#define IDC_VERTEXT         469
 #define IDC_ATTR_R          470
 #define IDC_ATTR_H          471
 #define IDC_ATTR_S          472

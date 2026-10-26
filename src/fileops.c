@@ -119,7 +119,10 @@ typedef struct tagOPSTATE {
     FARPROC lpfnDlg;
     DWORD   dwStart;
     BOOL    bCancel;
-    BOOL    bYesAll;
+    BOOL    bYesAll;            /* replace: Yes to All, No to All */
+    BOOL    bNoAll;
+    BOOL    bFolderAll;         /* existing folders: copy into all */
+    BOOL    bProtAll;           /* protected files: Yes to All */
     int     nDone;
     int     nTotal;
     LPSTR   lpBuf;
@@ -237,21 +240,22 @@ static void OpError(LPCSTR lpFormat, LPCSTR lpPath)
 /* Replace confirmation                                                 */
 /* -------------------------------------------------------------------- */
 
+static LPCSTR s_lpAskTitle;
+static BOOL   s_bAskNoAll;          /* offer No to All */
+
 BOOL CALLBACK NSEXPORT ReplaceDlgProc(HWND hDlg, UINT msg, WPARAM wParam,
                                       LPARAM lParam)
 {
-    char szText[MAXPATHLEN + 100];
-
     switch (msg) {
     case WM_INITDIALOG:
-        wsprintf(szText, "This folder already contains a file called '%s'.\n\n"
-                         "Would you like to replace the existing file?",
-                 (LPSTR)lParam);
-        SetDlgItemText(hDlg, IDC_REPLACETEXT, szText);
+        SetWindowText(hDlg, s_lpAskTitle);
+        SetDlgItemText(hDlg, IDC_REPLACETEXT, (LPCSTR)lParam);
+        if (!s_bAskNoAll)
+            ShowWindow(GetDlgItem(hDlg, IDC_NOALL), SW_HIDE);
         return TRUE;
     case WM_COMMAND:
         if (wParam == IDYES || wParam == IDNO || wParam == IDCANCEL
-            || wParam == IDC_YESALL) {
+            || wParam == IDC_YESALL || wParam == IDC_NOALL) {
             EndDialog(hDlg, wParam);
             return TRUE;
         }
@@ -260,26 +264,67 @@ BOOL CALLBACK NSEXPORT ReplaceDlgProc(HWND hDlg, UINT msg, WPARAM wParam,
     return FALSE;
 }
 
-/* Returns IDYES, IDNO or IDCANCEL */
-static int AskReplace(LPCSTR lpPath)
+/*
+ * Asks with Yes, Yes to All, No, No to All and Cancel; the "to All"
+ * answers are remembered in *pbYesAll and *pbNoAll (which may be NULL to
+ * offer no No to All). Returns IDYES, IDNO or IDCANCEL.
+ */
+static int AskAll(LPCSTR lpTitle, LPCSTR lpText, BOOL *pbYesAll, BOOL *pbNoAll)
 {
-    char szName[MAXPATHLEN];
     FARPROC lpfn;
     int n;
 
-    if (s_op.bYesAll)
+    if (*pbYesAll)
         return IDYES;
-    lstrcpy(szName, lpPath);
+    if (pbNoAll && *pbNoAll)
+        return IDNO;
+    s_lpAskTitle = lpTitle;
+    s_bAskNoAll = pbNoAll != NULL;
     lpfn = MakeProcInstance((FARPROC)ReplaceDlgProc, g_hInst);
     n = DialogBoxParam(g_hInst, MAKEINTRESOURCE(IDD_REPLACE),
                        s_op.hwndProgress ? s_op.hwndProgress : s_op.hwndOwner,
-                       (DLGPROC)lpfn, (LPARAM)(LPSTR)PathFileName(szName));
+                       (DLGPROC)lpfn, (LPARAM)lpText);
     FreeProcInstance(lpfn);
     if (n == IDC_YESALL) {
-        s_op.bYesAll = TRUE;
+        *pbYesAll = TRUE;
         n = IDYES;
+    } else if (n == IDC_NOALL) {
+        if (pbNoAll)
+            *pbNoAll = TRUE;
+        n = IDNO;
     }
     return n;
+}
+
+/* Returns IDYES, IDNO or IDCANCEL */
+static int AskReplace(LPCSTR lpPath)
+{
+    char szName[MAXPATHLEN], szText[MAXPATHLEN + 100];
+
+    if (!CfgGetInt("Folders", "ConfirmReplace", 1))
+        return IDYES;
+    lstrcpy(szName, lpPath);
+    wsprintf(szText, "This folder already contains a file called '%s'.\n\n"
+                     "Would you like to replace the existing file?",
+             (LPSTR)PathFileName(szName));
+    return AskAll("Confirm File Replace", szText, &s_op.bYesAll, &s_op.bNoAll);
+}
+
+/* Read-only, hidden or system files: delete or move them? */
+static int AskProtected(LPCSTR lpPath, unsigned uAttr, BOOL bMove)
+{
+    char szName[MAXPATHLEN], szText[MAXPATHLEN + 120];
+
+    if (!(uAttr & (_A_RDONLY | _A_HIDDEN | _A_SYSTEM))
+        || !CfgGetInt("Folders", "ConfirmProtected", 1))
+        return IDYES;
+    lstrcpy(szName, lpPath);
+    wsprintf(szText, "'%s' is a %s file.\n\nAre you sure you want to %s it?",
+             (LPSTR)PathFileName(szName),
+             (LPSTR)((uAttr & _A_SYSTEM) ? "system" : (uAttr & _A_HIDDEN) ? "hidden"
+                                                                          : "read-only"),
+             (LPSTR)(bMove ? "move" : "delete"));
+    return AskAll("Confirm", szText, &s_op.bProtAll, NULL);
 }
 
 /* -------------------------------------------------------------------- */
@@ -465,6 +510,13 @@ static BOOL DeleteTree(LPCSTR lpPath)
     if (!GetAttr(lpPath, &uAttr))
         return TRUE;                    /* already gone */
     if (!(uAttr & _A_SUBDIR)) {
+        switch (AskProtected(lpPath, uAttr, FALSE)) {
+        case IDNO:
+            return TRUE;
+        case IDCANCEL:
+            s_op.bCancel = TRUE;
+            return FALSE;
+        }
         if (!DeleteFile(lpPath)) {
             OpError("Cannot delete '%s'. It may be in use or write-protected.", lpPath);
             return FALSE;
@@ -514,6 +566,14 @@ static BOOL CopyTree(LPCSTR lpFrom, LPCSTR lpTo, BOOL bMove)
             OpError("Cannot copy '%s' onto itself.", lpFrom);
             return FALSE;
         }
+        if (bMove)
+            switch (AskProtected(lpFrom, uAttr, TRUE)) {
+            case IDNO:
+                return TRUE;
+            case IDCANCEL:
+                s_op.bCancel = TRUE;
+                return FALSE;
+            }
         if (Exists(lpTo)) {
             switch (AskReplace(lpTo)) {
             case IDNO:
@@ -540,6 +600,21 @@ static BOOL CopyTree(LPCSTR lpFrom, LPCSTR lpTo, BOOL bMove)
         return FALSE;
     }
     Step(lpFrom, lpTo);
+    if (Exists(lpTo) && CfgGetInt("Folders", "ConfirmFolders", 1)) {
+        char szName[MAXPATHLEN], szText[MAXPATHLEN + 120];
+
+        lstrcpy(szName, lpTo);
+        wsprintf(szText, "There already is a folder called '%s'.\n\n"
+                         "Would you like to %s the files into it?",
+                 (LPSTR)PathFileName(szName), (LPSTR)(bMove ? "move" : "copy"));
+        switch (AskAll("Confirm Folder Replace", szText, &s_op.bFolderAll, NULL)) {
+        case IDNO:
+            return TRUE;
+        case IDCANCEL:
+            s_op.bCancel = TRUE;
+            return FALSE;
+        }
+    }
     if (bMove && SameDrive(lpFrom, lpTo) && !Exists(lpTo)
         && DosRename(lpFrom, lpTo))
         return TRUE;
@@ -590,6 +665,23 @@ BOOL FileOpCopyMove(HWND hwndOwner, HGLOBAL hList, LPCSTR lpDestDir, BOOL bMove)
     LPCSTR lp;
     BOOL bOK = TRUE;
 
+    if (CfgGetInt("Folders", "ConfirmCopy", 0)) {
+        char szMsg[MAXPATHLEN + 80];
+        int n = PathListCount(hList);
+
+        lp = PathListFirst(hList);
+        lstrcpyn(szFrom, lp ? lp : "", sizeof(szFrom));
+        PathListUnlock(hList);
+        if (n == 1)
+            wsprintf(szMsg, "%s '%s' to %s?", (LPSTR)(bMove ? "Move" : "Copy"),
+                     (LPSTR)PathFileName(szFrom), lpDestDir);
+        else
+            wsprintf(szMsg, "%s these %d items to %s?", (LPSTR)(bMove ? "Move" : "Copy"),
+                     n, lpDestDir);
+        if (MessageBox(hwndOwner, szMsg, bMove ? "Confirm Move" : "Confirm Copy",
+                       MB_YESNO | MB_ICONQUESTION) != IDYES)
+            return FALSE;
+    }
     if (!BeginOp(hwndOwner, bMove ? "Moving" : "Copying", CountList(hList), TRUE))
         return FALSE;
     for (lp = PathListFirst(hList); lp && bOK; lp = PathListNext(lp)) {
