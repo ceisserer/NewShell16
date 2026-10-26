@@ -63,4 +63,5 @@ LICENSE
 NewShell16, Retheme16 and Win16Setup are free software under the GNU
 General Public License, version 3 or (at your option) any later version;
 see COPYING.TXT. NewShell16 is a re-implementation of Calmira (Copyright
-Li-Hsin Huang and the Calmira contributors, GPL 2 or later).
+Li-Hsin Huang and the Calmira contributors, GPL 2 or later), and uses most
+of Calmira's icons.

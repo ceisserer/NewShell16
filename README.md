@@ -41,7 +41,8 @@ It looks consistent both on a plain Windows 3.1 and with the
 theme engine.
 
 See [docs/design.md](docs/design.md) for internals, configuration and the
-roadmap.
+roadmap, and [docs/calmira-parity.md](docs/calmira-parity.md) for what
+Calmira has that NewShell16 does not have yet.
 
 ## Building
 
@@ -140,4 +141,5 @@ NewShell16 is free software, licensed under the
 It is a re-implementation of Calmira (Copyright © Li-Hsin Huang and the
 Calmira contributors), which is licensed under the GNU GPL version 2 or (at
 your option) any later version. Calmira's sources were used as a reference
-for behaviour and file formats.
+for behaviour and file formats, and most icons and small images are
+Calmira's (`res/calmira/`).

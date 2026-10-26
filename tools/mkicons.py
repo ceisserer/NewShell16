@@ -3,7 +3,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Generate NewShell16's icons (.ico, 32x32x16) and small-image strip (.bmp).
 
-All artwork is drawn procedurally so it can be tweaked and regenerated:
+Most artwork is Calmira's, taken from res/calmira/ (see
+tools/import-calmira.py); the rest is drawn procedurally here. To regenerate:
 
     python3 tools/mkicons.py            # writes into res/
 
@@ -38,103 +39,38 @@ def box(d, x0, y0, x1, y1, fill, outline=BLACK):
 
 
 # --------------------------------------------------------------------------
-# Artwork. Each function takes the image size (32 or 16) and returns an image
-# whose pixels are palette indices or T.
+# Calmira's artwork
 # --------------------------------------------------------------------------
 
-def folder(n, open_=False):
-    img, d = canvas(n)
-    s = n / 32
-    tab = [round(2 * s), round(6 * s), round(13 * s), round(10 * s)]
-    box(d, *tab, fill=YELLOW)
-    box(d, round(2 * s), round(9 * s), round(29 * s), round(27 * s), fill=YELLOW)
-    d.line([round(3 * s), round(10 * s), round(28 * s), round(10 * s)], fill=WHITE)
-    d.line([round(3 * s), round(26 * s), round(28 * s), round(26 * s)], fill=OLIVE)
-    d.line([round(28 * s), round(10 * s), round(28 * s), round(26 * s)], fill=OLIVE)
-    return img
+CALMIRA = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "res", "calmira")
 
 
-def document(n):
-    img, d = canvas(n)
-    s = n / 32
-    x0, y0, x1, y1 = round(6 * s), round(2 * s), round(25 * s), round(29 * s)
-    fold = round(6 * s)
-    d.polygon([(x0, y0), (x1 - fold, y0), (x1, y0 + fold), (x1, y1), (x0, y1)],
-              fill=WHITE, outline=BLACK)
-    d.line([(x1 - fold, y0), (x1 - fold, y0 + fold), (x1, y0 + fold)], fill=BLACK)
-    step = max(2, round(3 * s))
-    for y in range(y0 + fold + step, y1 - 2, step):
-        d.line([x0 + 3, y, x1 - 3, y], fill=GRAY)
-    return img
-
-
-def application(n):
-    img, d = canvas(n)
-    s = n / 32
-    box(d, round(2 * s), round(5 * s), round(29 * s), round(26 * s), fill=WHITE)
-    d.rectangle([round(3 * s), round(6 * s), round(28 * s), round(9 * s)], fill=NAVY)
-    if n >= 32:
-        box(d, 5, 13, 13, 22, fill=SILVER, outline=GRAY)
-        box(d, 16, 13, 26, 16, fill=SILVER, outline=GRAY)
-        box(d, 16, 19, 26, 22, fill=SILVER, outline=GRAY)
-    return img
-
-
-def computer(n):
-    img, d = canvas(n)
-    s = n / 32
-    # monitor
-    box(d, round(4 * s), round(2 * s), round(27 * s), round(20 * s), fill=SILVER)
-    box(d, round(7 * s), round(5 * s), round(24 * s), round(17 * s), fill=TEAL)
-    d.line([round(8 * s), round(6 * s), round(14 * s), round(6 * s)], fill=CYAN)
-    # stand
-    d.rectangle([round(12 * s), round(21 * s), round(19 * s), round(22 * s)], fill=GRAY)
-    # base unit
-    box(d, round(2 * s), round(23 * s), round(29 * s), round(29 * s), fill=SILVER)
-    d.line([round(18 * s), round(26 * s), round(26 * s), round(26 * s)], fill=BLACK)
-    d.point([round(5 * s), round(26 * s)], fill=GREEN)
-    return img
-
-
-def drive(n, kind):
-    img, d = canvas(n)
-    s = n / 32
-    if kind == "floppy":
-        box(d, round(6 * s), round(4 * s), round(25 * s), round(27 * s), fill=NAVY)
-        box(d, round(10 * s), round(4 * s), round(21 * s), round(11 * s), fill=SILVER)
-        box(d, round(9 * s), round(16 * s), round(22 * s), round(27 * s), fill=WHITE)
+def calmira(name, blank=None):
+    """An image from res/calmira: name.ico for size 32, name.bmp for 16 (the
+    colour of its bottom-left pixel is transparent, as in Calmira). blank is
+    a rectangle to paint white."""
+    def load(n):
+        img, d = canvas(n)
+        src = Image.open(os.path.join(CALMIRA, name + (".ico" if n == 32 else ".bmp")))
+        src = src.convert("RGBA")
+        key = None if src.format == "ICO" else src.getpixel((0, src.height - 1))
+        x0, y0 = (n - src.width) // 2, (n - src.height) // 2
+        for y in range(src.height):
+            for x in range(src.width):
+                p = src.getpixel((x, y))
+                if p[3] and p != key:
+                    img.putpixel((x0 + x, y0 + y), PAL.index(p[:3]))
+        if blank:
+            d.rectangle(blank, fill=WHITE)
         return img
-    # hard / cd / net: a drive box in perspective-free style
-    box(d, round(2 * s), round(12 * s), round(29 * s), round(23 * s), fill=SILVER)
-    d.line([round(3 * s), round(13 * s), round(28 * s), round(13 * s)], fill=WHITE)
-    d.line([round(3 * s), round(22 * s), round(28 * s), round(22 * s)], fill=GRAY)
-    d.point([round(25 * s), round(19 * s)], fill=GREEN)
-    if n >= 32:
-        d.point([round(26 * s), round(19 * s)], fill=GREEN)
-    if kind == "cdrom":
-        d.ellipse([round(6 * s), round(2 * s), round(22 * s), round(18 * s)],
-                  fill=SILVER, outline=BLACK)
-        d.ellipse([round(12 * s), round(8 * s), round(16 * s), round(12 * s)],
-                  fill=T, outline=GRAY)
-        d.arc([round(8 * s), round(4 * s), round(20 * s), round(16 * s)], 200, 250, fill=WHITE)
-    elif kind == "net":
-        d.line([round(15 * s), round(23 * s), round(15 * s), round(28 * s)], fill=BLACK)
-        d.line([round(4 * s), round(28 * s), round(27 * s), round(28 * s)], fill=BLACK)
-    return img
+    return load
 
 
-def bin_(n):
-    img, d = canvas(n)
-    s = n / 32
-    d.polygon([(round(7 * s), round(8 * s)), (round(24 * s), round(8 * s)),
-               (round(22 * s), round(29 * s)), (round(9 * s), round(29 * s))],
-              fill=SILVER, outline=BLACK)
-    box(d, round(5 * s), round(5 * s), round(26 * s), round(8 * s), fill=SILVER)
-    box(d, round(13 * s), round(2 * s), round(18 * s), round(5 * s), fill=SILVER)
-    for x in (12, 16, 20):
-        d.line([round(x * s), round(11 * s), round(x * s), round(26 * s)], fill=GRAY)
-    return img
-
+# --------------------------------------------------------------------------
+# NewShell16's own artwork, for images Calmira has no counterpart for. Each
+# function takes the image size (32 or 16) and returns an image whose pixels
+# are palette indices or T.
+# --------------------------------------------------------------------------
 
 def appicon(n):
     """NewShell16's own icon: a desktop with a taskbar and start button."""
@@ -162,76 +98,6 @@ def start_logo(n):
     return img
 
 
-def programs(n):
-    img = folder(n)
-    d = ImageDraw.Draw(img)
-    d.rectangle([7, 7, 14, 13], fill=WHITE, outline=BLACK)
-    d.line([8, 8, 13, 8], fill=NAVY)
-    return img
-
-
-def settings(n):
-    img, d = canvas(n)
-    box(d, 1, 2, 14, 13, fill=SILVER)
-    d.line([4, 4, 4, 11], fill=BLACK)
-    d.line([8, 4, 8, 11], fill=BLACK)
-    d.line([12, 4, 12, 11], fill=BLACK)
-    d.rectangle([3, 8, 5, 9], fill=RED)
-    d.rectangle([7, 5, 9, 6], fill=BLUE)
-    d.rectangle([11, 9, 13, 10], fill=DGREEN)
-    return img
-
-
-def find(n):
-    img, d = canvas(n)
-    d.ellipse([1, 1, 10, 10], fill=CYAN, outline=BLACK)
-    d.point([4, 4], fill=WHITE)
-    d.line([9, 9, 14, 14], fill=BLACK, width=2)
-    return img
-
-
-def run(n):
-    img = application(n)
-    d = ImageDraw.Draw(img)
-    d.polygon([(5, 8), (11, 11), (5, 14)], fill=RED, outline=BLACK)
-    return img
-
-
-def shutdown(n):
-    img = computer(n)
-    d = ImageDraw.Draw(img)
-    d.rectangle([4, 3, 11, 8], fill=NAVY)
-    d.ellipse([6, 3, 9, 6], fill=YELLOW)
-    return img
-
-
-def help_(n):
-    img, d = canvas(n)
-    box(d, 2, 1, 13, 14, fill=NAVY)
-    d.line([4, 2, 4, 13], fill=BLUE)
-    d.text((6, 2), "?", fill=YELLOW)
-    return img
-
-
-def printer(n):
-    img, d = canvas(n)
-    box(d, 4, 1, 11, 6, fill=WHITE)
-    box(d, 1, 6, 14, 12, fill=SILVER)
-    box(d, 4, 10, 11, 14, fill=WHITE)
-    d.point([12, 8], fill=GREEN)
-    return img
-
-
-def control(n):
-    img, d = canvas(n)
-    box(d, 1, 1, 14, 14, fill=SILVER)
-    d.rectangle([3, 3, 7, 7], fill=YELLOW, outline=BLACK)
-    d.rectangle([9, 3, 12, 7], fill=BLUE, outline=BLACK)
-    d.rectangle([3, 9, 7, 12], fill=RED, outline=BLACK)
-    d.rectangle([9, 9, 12, 12], fill=GREEN, outline=BLACK)
-    return img
-
-
 def about(n):
     img, d = canvas(n)
     d.ellipse([1, 1, 14, 14], fill=WHITE, outline=NAVY)
@@ -247,239 +113,6 @@ def dos(n):
     d.line([5, 7, 3, 9], fill=WHITE)
     d.line([7, 10, 11, 10], fill=WHITE)
     return img
-
-
-def bin_full(n):
-    img = bin_(n)
-    d = ImageDraw.Draw(img)
-    s = n / 32
-    d.polygon([(round(8 * s), round(8 * s)), (round(13 * s), round(1 * s)),
-               (round(22 * s), round(4 * s)), (round(23 * s), round(8 * s))],
-              fill=WHITE, outline=BLACK)
-    d.line([round(12 * s), round(4 * s), round(19 * s), round(6 * s)], fill=GRAY)
-    return img
-
-
-def explorer(n):
-    """A folder with a magnifying tree: folder plus a small tree diagram."""
-    img, d = canvas(n)
-    s = n / 32
-    box(d, round(1 * s), round(2 * s), round(30 * s), round(29 * s), fill=WHITE)
-    d.rectangle([round(2 * s), round(3 * s), round(29 * s), round(6 * s)], fill=NAVY)
-    d.line([round(11 * s), round(7 * s), round(11 * s), round(28 * s)], fill=GRAY)
-    for y in (10, 15, 20):
-        d.rectangle([round(3 * s), round(y * s), round(8 * s), round((y + 3) * s)],
-                    fill=YELLOW, outline=OLIVE)
-    for y in (10, 14, 18, 22):
-        d.rectangle([round(14 * s), round(y * s), round(17 * s), round((y + 2) * s)],
-                    fill=YELLOW, outline=OLIVE)
-        d.line([round(19 * s), round((y + 1) * s), round(27 * s), round((y + 1) * s)],
-               fill=BLACK)
-    return img
-
-
-def taskman(n):
-    img, d = canvas(n)
-    s = n / 32
-    box(d, round(2 * s), round(4 * s), round(29 * s), round(27 * s), fill=SILVER)
-    d.rectangle([round(3 * s), round(5 * s), round(28 * s), round(8 * s)], fill=NAVY)
-    box(d, round(5 * s), round(11 * s), round(26 * s), round(23 * s), fill=WHITE)
-    for i, y in enumerate((13, 17, 21)):
-        d.rectangle([round(7 * s), round(y * s), round(9 * s), round((y + 1) * s)],
-                    fill=(RED, GREEN, BLUE)[i])
-        d.line([round(12 * s), round(y * s), round(24 * s), round(y * s)], fill=BLACK)
-    return img
-
-
-def find_icon(n):
-    img = document(n)
-    d = ImageDraw.Draw(img)
-    s = n / 32
-    d.ellipse([round(9 * s), round(9 * s), round(23 * s), round(23 * s)],
-              fill=CYAN, outline=BLACK, width=max(1, round(2 * s)))
-    d.line([round(21 * s), round(21 * s), round(29 * s), round(29 * s)],
-           fill=BLACK, width=max(2, round(3 * s)))
-    return img
-
-
-def bin_small(n):
-    return bin_(n)
-
-
-def explorer_small(n):
-    img, d = canvas(n)
-    box(d, 0, 1, 15, 14, fill=WHITE)
-    d.rectangle([1, 2, 14, 3], fill=NAVY)
-    d.line([5, 4, 5, 13], fill=GRAY)
-    d.rectangle([1, 5, 3, 7], fill=YELLOW, outline=OLIVE)
-    d.rectangle([7, 6, 9, 8], fill=YELLOW, outline=OLIVE)
-    d.rectangle([7, 10, 9, 12], fill=YELLOW, outline=OLIVE)
-    d.line([11, 7, 13, 7], fill=BLACK)
-    d.line([11, 11, 13, 11], fill=BLACK)
-    return img
-
-
-# ---- toolbar glyphs (16x16, drawn smaller, on the button face) ----------
-
-def tb_folder(d, x, y):
-    """A 10x8 folder at x, y."""
-    box(d, x, y, x + 4, y + 2, fill=YELLOW)
-    box(d, x, y + 2, x + 10, y + 9, fill=YELLOW)
-    d.line([x + 1, y + 3, x + 9, y + 3], fill=WHITE)
-
-
-def tb_arrow_down(d, x, y, colour=BLACK):
-    """A 5-pixel wide arrow pointing down, top at x, y."""
-    d.line([x + 2, y, x + 2, y + 5], fill=colour)
-    d.line([x, y + 4, x + 4, y + 4], fill=colour)
-    d.line([x + 1, y + 5, x + 3, y + 5], fill=colour)
-    d.point([x + 2, y + 6], fill=colour)
-
-
-def tb_up(n):
-    img, d = canvas(16)
-    tb_folder(d, 1, 5)
-    # an arrow pointing up, right of the folder
-    d.line([13, 1, 13, 8], fill=BLACK)
-    d.line([12, 2, 14, 2], fill=BLACK)
-    d.line([11, 3, 15, 3], fill=BLACK)
-    return img
-
-
-def tb_newfolder(n):
-    img, d = canvas(16)
-    tb_folder(d, 1, 5)
-    for x, y in [(12, 0), (12, 1), (12, 3), (12, 4), (10, 2), (11, 2), (13, 2), (14, 2),
-                 (10, 0), (14, 0), (10, 4), (14, 4)]:
-        d.point([x, y], fill=YELLOW if (x, y) not in [(12, 2)] else BLACK)
-    d.point([12, 2], fill=WHITE)
-    return img
-
-
-def tb_cut(n):
-    img, d = canvas(16)
-    d.line([5, 1, 9, 9], fill=GRAY)
-    d.line([10, 1, 6, 9], fill=GRAY)
-    d.line([6, 1, 9, 8], fill=BLACK)
-    d.line([9, 1, 6, 8], fill=BLACK)
-    d.ellipse([2, 9, 6, 13], outline=NAVY)
-    d.ellipse([9, 9, 13, 13], outline=NAVY)
-    return img
-
-
-def tb_doc(d, x, y, w=7, h=9):
-    d.polygon([(x, y), (x + w - 2, y), (x + w, y + 2), (x + w, y + h), (x, y + h)],
-              fill=WHITE, outline=BLACK)
-    for yy in range(y + 3, y + h - 1, 2):
-        d.line([x + 2, yy, x + w - 2, yy], fill=GRAY)
-
-
-def tb_copy(n):
-    img, d = canvas(16)
-    tb_doc(d, 1, 1)
-    tb_doc(d, 7, 5)
-    return img
-
-
-def tb_paste(n):
-    img, d = canvas(16)
-    box(d, 1, 2, 11, 14, fill=OLIVE)
-    box(d, 4, 1, 8, 3, fill=SILVER)
-    tb_doc(d, 7, 5, 7, 9)
-    return img
-
-
-def tb_delete(n):
-    img, d = canvas(16)
-    for o in (0, 1):
-        d.line([3 + o, 3, 11 + o, 12], fill=RED)
-        d.line([11 + o, 3, 3 + o, 12], fill=RED)
-    return img
-
-
-def tb_props(n):
-    img, d = canvas(16)
-    box(d, 1, 1, 13, 13, fill=WHITE)
-    d.rectangle([2, 2, 12, 3], fill=NAVY)
-    for y in (6, 8, 10):
-        d.line([4, y, 10, y], fill=BLACK)
-    d.point([3, 6], fill=RED)
-    d.point([3, 8], fill=RED)
-    d.point([3, 10], fill=RED)
-    return img
-
-
-def tb_large(n):
-    img, d = canvas(16)
-    for x, y in [(1, 1), (8, 1), (1, 8), (8, 8)]:
-        box(d, x, y, x + 5, y + 5, fill=CYAN, outline=NAVY)
-    return img
-
-
-def tb_small(n):
-    img, d = canvas(16)
-    for y in (2, 7, 12):
-        for x in (1, 8):
-            box(d, x, y, x + 2, y + 2, fill=CYAN, outline=NAVY)
-            d.line([x + 4, y + 1, x + 5, y + 1], fill=BLACK)
-    return img
-
-
-def tb_list(n):
-    img, d = canvas(16)
-    for y in (1, 5, 9, 13):
-        box(d, 1, y, 3, y + 2, fill=CYAN, outline=NAVY)
-        d.line([5, y + 1, 13, y + 1], fill=BLACK)
-    return img
-
-
-def tb_details(n):
-    img, d = canvas(16)
-    box(d, 0, 1, 15, 14, fill=WHITE)
-    d.line([1, 2, 14, 2], fill=SILVER)
-    d.line([1, 3, 14, 3], fill=GRAY)
-    for y in (5, 8, 11):
-        d.point([2, y], fill=NAVY)
-        d.line([4, y, 8, y], fill=BLACK)
-        d.line([10, y, 13, y], fill=BLACK)
-    d.line([9, 2, 9, 13], fill=SILVER)
-    return img
-
-
-def tb_sort(fn):
-    def draw(n):
-        img, d = canvas(16)
-        fn(d)
-        tb_arrow_down(d, 10, 4, colour=RED)
-        return img
-    return draw
-
-
-def _sort_name(d):
-    # "a" over "z"
-    for x, y in [(2, 1), (3, 1), (4, 2), (2, 3), (3, 3), (4, 3), (1, 4), (4, 4), (2, 5), (3, 5), (4, 5)]:
-        d.point([x, y], fill=BLACK)
-    d.line([1, 9, 5, 9], fill=BLACK)
-    d.line([5, 10, 1, 13], fill=BLACK)
-    d.line([1, 13, 5, 13], fill=BLACK)
-
-
-def _sort_type(d):
-    box(d, 1, 1, 5, 5, fill=YELLOW, outline=OLIVE)
-    tb_doc(d, 1, 8, 5, 6)
-
-
-def _sort_size(d):
-    for i, y in enumerate((2, 6, 10)):
-        d.rectangle([1, y, 2 + 2 * i, y + 2], fill=NAVY)
-
-
-def _sort_date(d):
-    box(d, 1, 3, 8, 12, fill=WHITE)
-    d.rectangle([2, 4, 7, 5], fill=RED)
-    for y in (7, 9):
-        for x in (2, 4, 6):
-            d.point([x, y], fill=BLACK)
 
 
 def taskman_small(n):
@@ -651,26 +284,43 @@ def write_bmp(path, img, key=MAGENTA):
 
 # Order must match the SMI_* constants in src/resource.h.
 SMALL = [
-    ("programs", programs), ("document", document), ("settings", settings),
-    ("find", find), ("run", run), ("shutdown", shutdown), ("computer", computer),
-    ("folder", folder), ("help", help_), ("printer", printer), ("control", control),
-    ("about", about), ("dos", dos), ("application", application), ("start", start_logo),
-    ("explorer", explorer_small), ("bin", bin_small), ("taskman", taskman_small),
-    ("tb_up", tb_up), ("tb_newfolder", tb_newfolder), ("tb_cut", tb_cut), ("tb_copy", tb_copy),
-    ("tb_paste", tb_paste), ("tb_delete", tb_delete), ("tb_props", tb_props),
-    ("tb_large", tb_large), ("tb_small", tb_small), ("tb_list", tb_list),
-    ("tb_details", tb_details), ("tb_sortname", tb_sort(_sort_name)),
-    ("tb_sorttype", tb_sort(_sort_type)), ("tb_sortsize", tb_sort(_sort_size)),
-    ("tb_sortdate", tb_sort(_sort_date)),
+    ("programs", calmira("sm_programs")), ("document", calmira("sm_documents")),
+    ("settings", calmira("sm_settings")), ("find", calmira("sm_find")),
+    ("run", calmira("sm_run")), ("shutdown", calmira("sm_shutdown")),
+    ("computer", calmira("sm_system")), ("folder", calmira("sm_folder")),
+    ("help", calmira("sm_help")), ("printer", calmira("print")),
+    ("control", calmira("sm_control")), ("about", about), ("dos", dos),
+    ("application", calmira("spleaf")), ("start", start_logo),
+    ("explorer", calmira("sm_explorer")), ("bin", calmira("sm_bin")),
+    ("taskman", taskman_small),
+    ("tb_up", calmira("parent")), ("tb_newfolder", calmira("mkdir")),
+    ("tb_cut", calmira("cut")), ("tb_copy", calmira("copy")),
+    ("tb_paste", calmira("paste")), ("tb_delete", calmira("delete")),
+    ("tb_props", calmira("prop")), ("tb_large", calmira("large")),
+    ("tb_small", calmira("small")), ("tb_list", calmira("list")),
+    ("tb_details", calmira("details")), ("tb_sortname", calmira("sortname")),
+    ("tb_sorttype", calmira("sorttype")), ("tb_sortsize", calmira("sortsize")),
+    ("tb_sortdate", calmira("sortdate")), ("favorites", calmira("sm_favorites")),
+    ("internet", calmira("sm_internet")),
 ]
 
+# Order must match IDI_* in src/resource.h (newshell.rc names the files).
 ICONS = [
-    ("newshell", appicon), ("folder", folder), ("document", document),
-    ("app", application), ("computer", computer),
-    ("floppy", lambda n: drive(n, "floppy")), ("hdd", lambda n: drive(n, "hard")),
-    ("cdrom", lambda n: drive(n, "cdrom")), ("netdrv", lambda n: drive(n, "net")),
-    ("bin", bin_), ("binfull", bin_full), ("explorer", explorer),
-    ("taskman", taskman), ("find", find_icon),
+    ("newshell", appicon), ("folder", calmira("folder")),
+    # Calmira's file icon without the logo on it
+    ("document", calmira("document", blank=(7, 10, 24, 23))),
+    ("app", calmira("app")), ("computer", calmira("computer")),
+    ("floppy", calmira("floppy")), ("hdd", calmira("hdd")),
+    ("cdrom", calmira("cdrom")), ("netdrv", calmira("netdrv")),
+    ("bin", calmira("bin")), ("binfull", calmira("binfull")),
+    ("explorer", calmira("explorer")), ("taskman", calmira("taskman")),
+    ("find", calmira("find")),
+    # large Start menu images
+    ("sm_programs", calmira("sm_programs")), ("sm_documents", calmira("sm_documents")),
+    ("sm_settings", calmira("sm_settings")), ("sm_find", calmira("sm_find")),
+    ("sm_run", calmira("sm_run")), ("sm_shutdown", calmira("sm_shutdown")),
+    ("sm_help", calmira("sm_help")), ("sm_favorites", calmira("sm_favorites")),
+    ("sm_internet", calmira("sm_internet")),
 ]
 
 CURSORS = [

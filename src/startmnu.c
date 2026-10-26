@@ -30,8 +30,9 @@
  * built-in images such as <programs>. When NSSTART.INI does not exist it
  * is created from the Program Manager groups.
  *
- * All items are owner-drawn; the top level gets large rows and a vertical
- * banner like Calmira / Windows 95.
+ * All items are owner-drawn, after Calmira's 3D Start menu: large icons
+ * and a vertical banner on the top level, button-face colours, and without
+ * a theme engine a raised frame painted over the Windows 3.1 menu border.
  */
 #include <stdlib.h>
 #include <string.h>
@@ -42,10 +43,14 @@
 #define SM_MAXKEYS      4096
 #define SM_GROUPMAX     64
 
-#define TOP_MIN_H       24      /* item heights: at least this, or font + gap */
+#define TOP_MIN_H       34      /* item heights: at least this, or font + gap */
 #define SUB_MIN_H       20
 #define SEP_H           8
-#define BANNER_W        22
+#define BANNER_W        24
+#define TOP_ICON_X      8       /* offsets from the left of an item (top */
+#define TOP_TEXT_X      48      /* level: from the right of the banner) */
+#define SUB_ICON_X      6
+#define SUB_TEXT_X      28
 
 /* item flags */
 #define SF_TOP          0x01
@@ -75,19 +80,20 @@ static int      s_cyMenu;
 static int      s_cyTop, s_cySub;   /* item heights for the current font */
 static HFONT    s_hfMenu;           /* GetMenuFont() when the menu opened */
 static BOOL     s_bThemed;          /* the theme engine draws the menus */
-static HFONT    s_hfBanner;
+static HFONT    s_hfBanner, s_hfBannerLight;
+static int      s_cyBannerFont;
 
 static const char *s_szImageNames[] = {
     "<programs>", "<documents>", "<settings>", "<find>", "<run>", "<shutdown>",
     "<system>", "<folder>", "<help>", "<printer>", "<control>", "<about>",
     "<dos>", "<application>", "<start>", "<explorer>", "<bin>", "<taskman>",
-    "<favorites>", "<desktop>", "<taskbar>"
+    "<favorites>", "<desktop>", "<taskbar>", "<internet>"
 };
 static const signed char s_nImageMap[] = {
     SMI_PROGRAMS, SMI_DOCUMENT, SMI_SETTINGS, SMI_FIND, SMI_RUN, SMI_SHUTDOWN,
     SMI_COMPUTER, SMI_FOLDER, SMI_HELP, SMI_PRINTER, SMI_CONTROL, SMI_ABOUT,
     SMI_DOS, SMI_APP, SMI_START, SMI_EXPLORER, SMI_BIN, SMI_TASKMAN,
-    SMI_FOLDER, SMI_COMPUTER, SMI_SETTINGS
+    SMI_FAVORITES, SMI_COMPUTER, SMI_SETTINGS, SMI_INTERNET
 };
 
 /* -------------------------------------------------------------------- */
@@ -262,6 +268,7 @@ static HMENU BuildMenu(LPCSTR lpSection, BOOL bTop)
     return hMenu;
 }
 
+/* The banner reads "NewShell16" upwards, with a light "16" */
 static void CreateBannerFont(void)
 {
     LOGFONT lf;
@@ -269,7 +276,7 @@ static void CreateBannerFont(void)
     if (s_hfBanner)
         return;
     _fmemset(&lf, 0, sizeof(lf));
-    lf.lfHeight = -16;
+    lf.lfHeight = -20;
     lf.lfWeight = FW_BOLD;
     lf.lfEscapement = 900;
     lf.lfOrientation = 900;
@@ -278,6 +285,18 @@ static void CreateBannerFont(void)
     lf.lfPitchAndFamily = VARIABLE_PITCH | FF_SWISS;
     lstrcpy(lf.lfFaceName, "Arial");
     s_hfBanner = CreateFontIndirect(&lf);
+    lf.lfWeight = FW_NORMAL;
+    s_hfBannerLight = CreateFontIndirect(&lf);
+    if (s_hfBanner) {
+        TEXTMETRIC tm;
+        HDC hdc = GetDC(NULL);
+        HFONT hfOld = SelectObject(hdc, s_hfBanner);
+
+        GetTextMetrics(hdc, &tm);
+        s_cyBannerFont = tm.tmHeight - tm.tmInternalLeading;
+        SelectObject(hdc, hfOld);
+        ReleaseDC(NULL, hdc);
+    }
 }
 
 static void LayoutTop(void)
@@ -397,78 +416,186 @@ BOOL StartMenuMeasureItem(MEASUREITEMSTRUCT FAR *lpmis)
         lpmis->itemHeight = SEP_H;
     else
         lpmis->itemHeight = (p->bFlags & SF_TOP) ? s_cyTop : s_cySub;
-    lpmis->itemWidth = ((p->bFlags & SF_TOP) ? BANNER_W : 0) + 6 + 16 + 8 + cx + 20;
+    lpmis->itemWidth = ((p->bFlags & SF_TOP) ? BANNER_W + TOP_TEXT_X : SUB_TEXT_X) + cx + 20;
     return TRUE;
 }
 
+/* The 32x32 icon for a built-in image, or 0 */
+static int LargeIcon(int nImage)
+{
+    switch (nImage) {
+    case SMI_PROGRAMS:  return IDI_SM_PROGRAMS;
+    case SMI_DOCUMENT:  return IDI_SM_DOCUMENTS;
+    case SMI_SETTINGS:  return IDI_SM_SETTINGS;
+    case SMI_FIND:      return IDI_SM_FIND;
+    case SMI_RUN:       return IDI_SM_RUN;
+    case SMI_SHUTDOWN:  return IDI_SM_SHUTDOWN;
+    case SMI_HELP:      return IDI_SM_HELP;
+    case SMI_FAVORITES: return IDI_SM_FAVORITES;
+    case SMI_INTERNET:  return IDI_SM_INTERNET;
+    case SMI_COMPUTER:  return IDI_COMPUTER;
+    case SMI_FOLDER:    return IDI_FOLDER;
+    case SMI_EXPLORER:  return IDI_EXPLORER;
+    case SMI_BIN:       return IDI_BIN;
+    case SMI_TASKMAN:   return IDI_TASKMAN;
+    case SMI_APP:       return IDI_APP;
+    }
+    return 0;
+}
+
+/*
+ * The banner: a gradient from black at the top to the active caption colour
+ * at the bottom (dithered by GDI on 16-colour displays), in bands of 4
+ * pixels counted from the top of the menu, so the items' parts join up.
+ */
 static void DrawBanner(HDC hdc, const RECT FAR *lprcItem, LPSMITEM p)
 {
-    RECT rcBanner;
+    COLORREF clr = GetSysColor(COLOR_ACTIVECAPTION);
+    RECT rc;
+    int y, yMenu, yEnd;
 
-    SetRect(&rcBanner, lprcItem->left, lprcItem->top,
-            lprcItem->left + BANNER_W, lprcItem->bottom);
-    FillSolid(hdc, &rcBanner, GetSysColor(COLOR_BTNSHADOW));
-    if (s_hfBanner) {
+    yMenu = lprcItem->top - p->yTop;    /* the top of the menu in hdc */
+    for (y = p->yTop & ~3; y < p->yTop + (lprcItem->bottom - lprcItem->top); y += 4) {
+        long f = s_cyMenu > 0 ? (long)y * 256 / s_cyMenu : 256;
+        HBRUSH hbr = CreateSolidBrush(RGB(GetRValue(clr) * f / 256,
+                                          GetGValue(clr) * f / 256,
+                                          GetBValue(clr) * f / 256));
+
+        yEnd = yMenu + y + 4;
+        SetRect(&rc, lprcItem->left, max(yMenu + y, lprcItem->top),
+                lprcItem->left + BANNER_W, min(yEnd, lprcItem->bottom));
+        FillRect(hdc, &rc, hbr);
+        DeleteObject(hbr);
+    }
+    if (s_hfBanner && s_hfBannerLight) {
+        static const char szBold[] = "NewShell", szLight[] = "16";
         HFONT hfOld = SelectObject(hdc, s_hfBanner);
         int nOldMode = SetBkMode(hdc, TRANSPARENT);
-        COLORREF clrOld = SetTextColor(hdc, GetSysColor(COLOR_BTNFACE));
-        int yBase = lprcItem->top - p->yTop + s_cyMenu - 4;
+        COLORREF clrOld = SetTextColor(hdc, GetSysColor(COLOR_CAPTIONTEXT));
+        int x = lprcItem->left + (BANNER_W - s_cyBannerFont) / 2 - 1;
+        int yBase = yMenu + s_cyMenu - 6;
 
-        ExtTextOut(hdc, lprcItem->left + 2, yBase, ETO_CLIPPED, &rcBanner,
-                   NS_APPNAME, lstrlen(NS_APPNAME), NULL);
+        SetRect(&rc, lprcItem->left, lprcItem->top, lprcItem->left + BANNER_W,
+                lprcItem->bottom);
+        ExtTextOut(hdc, x, yBase, ETO_CLIPPED, &rc, szBold, sizeof(szBold) - 1, NULL);
+        yBase -= LOWORD(GetTextExtent(hdc, szBold, sizeof(szBold) - 1));
+        SelectObject(hdc, s_hfBannerLight);
+        ExtTextOut(hdc, x, yBase, ETO_CLIPPED, &rc, szLight, sizeof(szLight) - 1, NULL);
         SetTextColor(hdc, clrOld);
         SetBkMode(hdc, nOldMode);
         SelectObject(hdc, hfOld);
     }
 }
 
-/* Paints one item into hdc (rc in hdc coordinates) */
+static BOOL IsLastItem(LPSMITEM p)
+{
+    return p->nPos == GetMenuItemCount(p->hMenu) - 1;
+}
+
+/*
+ * Paints one item into hdc (rc in hdc coordinates). Without a theme engine
+ * the inner half of a raised frame is part of the items: a highlight on the
+ * left (the banner on the top level) and top, a shadow on the right and
+ * bottom. DrawOuterFrame adds the outer half.
+ */
 static void PaintItem(HDC hdc, RECT rc, LPSMITEM p, BOOL bSel)
 {
-    RECT rcText;
+    BOOL bTop = (p->bFlags & SF_TOP) != 0;
+    COLORREF clrFace = GetSysColor(COLOR_BTNFACE);
+    RECT rcIn, rcText;
     int cy;
-    COLORREF clrBk = GetSysColor(bSel ? COLOR_HIGHLIGHT : COLOR_MENU);
 
-    if (p->bFlags & SF_TOP) {
+    FillSolid(hdc, &rc, clrFace);
+    if (bTop) {
         DrawBanner(hdc, &rc, p);
         rc.left += BANNER_W;
     }
-    if (p->bFlags & SF_SEP) {
-        FillSolid(hdc, &rc, GetSysColor(COLOR_MENU));
-        cy = rc.top + (rc.bottom - rc.top) / 2 - 1;
-        if (s_bThemed) {
-            /* etched, like the engine's separators */
-            SetRect(&rcText, rc.left + 2, cy, rc.right - 2, cy + 2);
-            Draw3DEdge(hdc, &rcText, TRUE, FALSE);
-        } else {
-            /* a plain line, like Windows 3.1 */
-            SetRect(&rcText, rc.left, cy, rc.right, cy + 1);
-            FillSolid(hdc, &rcText, GetSysColor(COLOR_MENUTEXT));
+    rcIn = rc;
+    if (!s_bThemed) {
+        RECT rcLine;
+
+        if (!bTop) {
+            SetRect(&rcLine, rc.left, rc.top, rc.left + 1, rc.bottom);
+            FillSolid(hdc, &rcLine, GetSysColor(COLOR_BTNHIGHLIGHT));
+            rcIn.left++;
         }
+        if (p->nPos == 0) {
+            SetRect(&rcLine, rc.left - (bTop ? BANNER_W : 0), rc.top, rc.right, rc.top + 1);
+            FillSolid(hdc, &rcLine, GetSysColor(COLOR_BTNHIGHLIGHT));
+            rcIn.top++;
+        }
+        SetRect(&rcLine, rc.right - 1, rc.top, rc.right, rc.bottom);
+        FillSolid(hdc, &rcLine, GetSysColor(COLOR_BTNSHADOW));
+        rcIn.right--;
+        if (IsLastItem(p)) {
+            SetRect(&rcLine, rc.left - (bTop ? BANNER_W : 0), rc.bottom - 1, rc.right, rc.bottom);
+            FillSolid(hdc, &rcLine, GetSysColor(COLOR_BTNSHADOW));
+            rcIn.bottom--;
+        }
+    }
+
+    if (p->bFlags & SF_SEP) {
+        cy = rc.top + (rc.bottom - rc.top) / 2 - 1;
+        SetRect(&rcText, rcIn.left + 2, cy, rcIn.right - 2, cy + 2);
+        Draw3DEdge(hdc, &rcText, TRUE, FALSE);
         return;
     }
 
-    FillSolid(hdc, &rc, clrBk);
+    if (bSel)
+        FillSolid(hdc, &rcIn, GetSysColor(COLOR_HIGHLIGHT));
     if (!(p->bFlags & SF_ICONDONE))
         LoadItemIcon(p);
-    cy = rc.top + (rc.bottom - rc.top - 16) / 2;
-    if (p->nImage >= 0)
-        DrawSmallImage(hdc, rc.left + 4, cy, p->nImage);
-    else if (p->hIcon)
-        DrawIconSmall(hdc, rc.left + 4, cy, p->hIcon, clrBk);
+    if (bTop) {
+        int x = rc.left + TOP_ICON_X, idi = LargeIcon(p->nImage);
+
+        cy = rc.top + (rc.bottom - rc.top - 32) / 2;
+        if (p->hIcon)
+            DrawIcon(hdc, x, cy, p->hIcon);
+        else if (idi)
+            DrawIcon(hdc, x, cy, IconStock(idi));
+        else if (p->nImage >= 0)
+            DrawSmallImage(hdc, x + 8, cy + 8, p->nImage);
+    } else {
+        cy = rc.top + (rc.bottom - rc.top - 16) / 2;
+        if (p->nImage >= 0)
+            DrawSmallImage(hdc, rc.left + SUB_ICON_X, cy, p->nImage);
+        else if (p->hIcon)
+            DrawIconSmall(hdc, rc.left + SUB_ICON_X, cy, p->hIcon,
+                          bSel ? GetSysColor(COLOR_HIGHLIGHT) : clrFace);
+    }
 
     {
         HFONT hfOld = SelectObject(hdc, s_hfMenu);
         int nOldMode = SetBkMode(hdc, TRANSPARENT);
         COLORREF clrOld = SetTextColor(hdc,
             GetSysColor(bSel ? COLOR_HIGHLIGHTTEXT
-                             : (p->bFlags & SF_EMPTY) ? COLOR_GRAYTEXT : COLOR_MENUTEXT));
+                             : (p->bFlags & SF_EMPTY) ? COLOR_GRAYTEXT : COLOR_BTNTEXT));
 
-        SetRect(&rcText, rc.left + 4 + 16 + 8, rc.top, rc.right, rc.bottom);
+        SetRect(&rcText, rc.left + (bTop ? TOP_TEXT_X : SUB_TEXT_X), rc.top,
+                rc.right, rc.bottom);
         DrawText(hdc, p->szText, -1, &rcText, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
         SetTextColor(hdc, clrOld);
         SetBkMode(hdc, nOldMode);
         SelectObject(hdc, hfOld);
+    }
+}
+
+/*
+ * The outer half of the raised frame, painted over the black border Windows
+ * 3.1 draws around menus: the button face on the left and at the top (the
+ * black remains on the right and at the bottom, as in Windows 95 menus).
+ */
+static void DrawOuterFrame(HDC hdc, const RECT FAR *lprc, LPSMITEM p)
+{
+    RECT rc;
+
+    SetRect(&rc, lprc->left - 1, lprc->top, lprc->left, lprc->bottom);
+    if (p->nPos == 0)
+        rc.top--;
+    FillSolid(hdc, &rc, GetSysColor(COLOR_BTNFACE));
+    if (p->nPos == 0) {
+        SetRect(&rc, lprc->left - 1, lprc->top - 1, lprc->right, lprc->top);
+        FillSolid(hdc, &rc, GetSysColor(COLOR_BTNFACE));
     }
 }
 
@@ -496,6 +623,8 @@ BOOL StartMenuDrawItem(DRAWITEMSTRUCT FAR *lpdis)
         if (hdcMem)
             DeleteDC(hdcMem);
         PaintItem(lpdis->hDC, rc, p, bSel);
+        if (!s_bThemed)
+            DrawOuterFrame(lpdis->hDC, &rc, p);
         return TRUE;
     }
     hbmOld = SelectObject(hdcMem, hbm);
@@ -506,6 +635,8 @@ BOOL StartMenuDrawItem(DRAWITEMSTRUCT FAR *lpdis)
     SelectObject(hdcMem, hbmOld);
     DeleteObject(hbm);
     DeleteDC(hdcMem);
+    if (!s_bThemed)
+        DrawOuterFrame(lpdis->hDC, &rc, p);
     return TRUE;
 }
 
@@ -644,5 +775,9 @@ void StartMenuFree(void)
     if (s_hfBanner) {
         DeleteObject(s_hfBanner);
         s_hfBanner = NULL;
+    }
+    if (s_hfBannerLight) {
+        DeleteObject(s_hfBannerLight);
+        s_hfBannerLight = NULL;
     }
 }
