@@ -259,7 +259,7 @@ void ShadeArea(HDC hdc, int x, int y, int cx, int cy, COLORREF clrBk)
     /* the highlight where the mask is 0 */
     SetBkColor(hdc, RGB(255, 255, 255));
     clrTextOld = SetTextColor(hdc, RGB(0, 0, 0));
-    hbrHi = CreateSolidBrush(GetSysColor(COLOR_HIGHLIGHT));
+    hbrHi = CreateSolidBrush(NsColor(NSC_SELECTION));
     hbrOld = SelectObject(hdc, hbrHi);
     BitBlt(hdc, x, y, cx, cy, hdcMask, 0, 0, 0x00B8074AL);  /* PSDPxax */
     SelectObject(hdc, hbrOld);
@@ -334,6 +334,50 @@ void FitText(HDC hdc, LPCSTR lpSrc, LPSTR lpDst, int cbDst, int cxMax)
         lpDst[n] = '\0';
     }
     lstrcpyn(lpDst, "...", cbDst);
+}
+
+/* -------------------------------------------------------------------- */
+/* Colours                                                              */
+/* -------------------------------------------------------------------- */
+
+/*
+ * NewShell16's own colours, [Colors] in NEWSHELL.INI ("Taskbar=192 192
+ * 192"); the system colour where none is set.
+ */
+static const char *s_szColorKey[NSC_COUNT] = { "Taskbar", "StartMenu", "Selection" };
+static const int   s_nColorSys[NSC_COUNT] = { COLOR_BTNFACE, COLOR_BTNFACE, COLOR_HIGHLIGHT };
+static COLORREF    s_clrCustom[NSC_COUNT];
+static BOOL        s_bColorSet[NSC_COUNT], s_bColorsRead;
+
+void NsColorsChanged(void)
+{
+    char szValue[24];
+    LPSTR p;
+    int i, k, v[3];
+
+    s_bColorsRead = TRUE;
+    for (i = 0; i < NSC_COUNT; i++) {
+        CfgGetStr("Colors", s_szColorKey[i], "", szValue, sizeof(szValue));
+        s_bColorSet[i] = FALSE;
+        for (p = szValue, k = 0; *p && k < 3; k++) {
+            v[k] = 0;
+            while (*p == ' ' || *p == ',')
+                p++;
+            while (*p >= '0' && *p <= '9')
+                v[k] = v[k] * 10 + (*p++ - '0');
+        }
+        if (k == 3) {
+            s_clrCustom[i] = RGB(v[0], v[1], v[2]);
+            s_bColorSet[i] = TRUE;
+        }
+    }
+}
+
+COLORREF NsColor(int nWhich)
+{
+    if (!s_bColorsRead)
+        NsColorsChanged();
+    return s_bColorSet[nWhich] ? s_clrCustom[nWhich] : GetSysColor(s_nColorSys[nWhich]);
 }
 
 /* -------------------------------------------------------------------- */

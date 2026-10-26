@@ -129,6 +129,7 @@
 #define IDD_STARTPROPS      318
 #define IDD_VERSION         319
 #define IDD_TIPS            320
+#define IDD_LOGON           321
 
 /* Dialog controls */
 #define IDC_RUNCMD          400
@@ -138,6 +139,10 @@
 #define IDC_RESTARTWIN      411
 #define IDC_REBOOT          412
 #define IDC_CLOSESHELL      413
+#define IDC_LOGOFF          414
+#define IDC_LOGUSER         415
+#define IDC_LOGPASSWORD     416
+#define IDC_LOGNEW          417
 #define IDC_VERSION         420
 #define IDC_PROGTEXT1       430
 #define IDC_PROGTEXT2       431

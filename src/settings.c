@@ -83,6 +83,8 @@ static const CFGENTRY s_entries[] = {
     { "Folders",     "FileHints",     &g_cfg.bFileHints,       TRUE  },
     { "Folders",     "AskOnDrop",     &g_cfg.bAskDrop,         FALSE },
     { "Folders",     "DragCopy",      &g_cfg.bDragCopy,        FALSE },
+    { "Folders",     "FlatToolbar",   &g_cfg.bFlatToolbar,     FALSE },
+    { "Folders",     "HideExtensions", &g_cfg.bHideExt,        FALSE },
 };
 
 void CfgLoad(void)

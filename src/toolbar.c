@@ -20,7 +20,8 @@
  *
  * The buttons send WM_COMMAND to the parent; the toolbar never takes the
  * focus. The parent sets which buttons are checked (sunken: the current
- * view and sort order) or disabled with ToolbarSetState.
+ * view and sort order) or disabled with ToolbarSetState. With [Folders]
+ * FlatToolbar=1 the buttons are flat until the mouse is over them.
  */
 #include <stdlib.h>
 #include <string.h>
@@ -30,6 +31,7 @@
 #define BTN_CY      22
 #define SEP_CX      8
 #define TOP         3           /* etched line and gap above the buttons */
+#define TIMER_HOT   1
 
 typedef struct tagTOOLBAR {
     int        nButtons;
@@ -37,6 +39,7 @@ typedef struct tagTOOLBAR {
     BYTE       aState[TB_MAXBUTTONS];
     int        nPressed;        /* button held down with the mouse, -1 */
     BOOL       bInside;         /* the mouse is over the held button */
+    int        nHot;            /* flat buttons: the one under the mouse, -1 */
 } TOOLBAR, FAR *LPTOOLBAR;
 
 #define TBS_CHECKED     0x01
@@ -100,7 +103,8 @@ static void PaintToolbar(HWND hwnd, HDC hdc, LPTOOLBAR t)
             continue;
         bDisabled = (t->aState[i] & TBS_DISABLED) != 0;
         bDown = (i == t->nPressed && t->bInside) || (t->aState[i] & TBS_CHECKED);
-        Draw3DEdge(hdc, &rc, bDown, FALSE);
+        if (!g_cfg.bFlatToolbar || bDown || (i == t->nHot && !bDisabled))
+            Draw3DEdge(hdc, &rc, bDown, FALSE);
         off = bDown ? 1 : 0;
         if (bDisabled)
             DrawSmallImageDisabled(hdc, rc.left + 3 + off, rc.top + 3 + off,
@@ -125,6 +129,7 @@ LRESULT CALLBACK NSEXPORT ToolbarWndProc(HWND hwnd, UINT msg, WPARAM wParam,
             return -1;
         _fmemset(t, 0, sizeof(TOOLBAR));
         t->nPressed = -1;
+        t->nHot = -1;
         SetWindowLong(hwnd, 0, (LONG)t);
         return 0;
 
@@ -151,7 +156,34 @@ LRESULT CALLBACK NSEXPORT ToolbarWndProc(HWND hwnd, UINT msg, WPARAM wParam,
         }
         return 0;
 
+    case WM_TIMER:
+        /* flat buttons: has the mouse left? */
+        if (t && t->nHot >= 0) {
+            POINT pt;
+
+            GetCursorPos(&pt);
+            ScreenToClient(hwnd, &pt);
+            if (HitButton(t, pt.x, pt.y) != t->nHot) {
+                InvalidateButton(hwnd, t, t->nHot);
+                t->nHot = -1;
+                KillTimer(hwnd, TIMER_HOT);
+            }
+        }
+        return 0;
+
     case WM_MOUSEMOVE:
+        if (t && g_cfg.bFlatToolbar && t->nPressed < 0) {
+            i = HitButton(t, (int)LOWORD(lParam), (int)HIWORD(lParam));
+            if (i != t->nHot) {
+                if (t->nHot >= 0)
+                    InvalidateButton(hwnd, t, t->nHot);
+                t->nHot = i;
+                if (i >= 0) {
+                    InvalidateButton(hwnd, t, i);
+                    SetTimer(hwnd, TIMER_HOT, 100, NULL);
+                }
+            }
+        }
         if (t && t->nPressed >= 0) {
             BOOL bInside = HitButton(t, (int)LOWORD(lParam), (int)HIWORD(lParam)) == t->nPressed;
 

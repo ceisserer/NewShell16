@@ -324,6 +324,28 @@ static void ExitWith(DWORD dwCode)
         DestroyWindow(hwndScreen);
 }
 
+/* Log Off: everyone's windows close, the next user's settings come in */
+void LogOff(void)
+{
+    SaveOpenWindows();
+    FindClose();
+    TaskManClose();
+    BinClose();
+    ExplorerCloseAll();
+    FolderCloseAll();
+    DesktopDestroy();
+    LogonDialog();
+    CfgLoad();
+    NsColorsChanged();
+    StartMenuOptionsChanged();
+    DesktopCreate();
+    TaskbarApplySettings();
+    HookApplySettings();
+    if (g_hwndTaskbar)
+        InvalidateRect(g_hwndTaskbar, NULL, FALSE);
+    RestoreOpenWindows();
+}
+
 void DoShutdownDialog(void)
 {
     int nChoice = ShutdownDialog(g_hwndMain);
@@ -340,6 +362,9 @@ void DoShutdownDialog(void)
         break;
     case IDC_CLOSESHELL:
         CloseShell();
+        break;
+    case IDC_LOGOFF:
+        LogOff();
         break;
     }
 }
@@ -574,8 +599,10 @@ int PASCAL WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 
     g_hInst = hInstance;
     GetWindowsDirectory(g_szWinDir, sizeof(g_szWinDir));
-    CfgLoad();
     g_bIsShell = DetectShell();
+    if (g_bIsShell)
+        LogonDialog();
+    CfgLoad();
 
     g_hfontUI = CreateUIFont(8, FALSE);
     g_hfontBold = CreateUIFont(8, TRUE);

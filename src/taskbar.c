@@ -445,13 +445,13 @@ static void DrawButton(HDC hdc, const RECT FAR *lprc, BOOL bDown, BOOL bChecked)
 
     InflateRect(&rc, -2, -2);
     if (bChecked && s_hbrChecker) {
-        COLORREF clrText = SetTextColor(hdc, GetSysColor(COLOR_BTNFACE));
+        COLORREF clrText = SetTextColor(hdc, NsColor(NSC_TASKBAR));
         COLORREF clrBk = SetBkColor(hdc, GetSysColor(COLOR_BTNHIGHLIGHT));
         FillRect(hdc, &rc, s_hbrChecker);
         SetTextColor(hdc, clrText);
         SetBkColor(hdc, clrBk);
     } else
-        FillSolid(hdc, &rc, GetSysColor(COLOR_BTNFACE));
+        FillSolid(hdc, &rc, NsColor(NSC_TASKBAR));
     Draw3DEdge(hdc, lprc, bDown, TRUE);
 }
 
@@ -470,7 +470,7 @@ static void PaintTaskbar(HWND hwnd, HDC hdcWin)
     hbmOld = SelectObject(hdc, hbm);
     Layout(hwnd, hdc);
 
-    FillSolid(hdc, &rc, GetSysColor(COLOR_BTNFACE));
+    FillSolid(hdc, &rc, NsColor(NSC_TASKBAR));
     SetRect(&rcEdge, -2, 0, rc.right + 2, rc.bottom + 2);
     Draw3DEdge(hdc, &rcEdge, FALSE, TRUE);
 
@@ -503,7 +503,7 @@ static void PaintTaskbar(HWND hwnd, HDC hdcWin)
         if (rcB.right - rcB.left >= 48) {
             DrawIconSmall(hdc, rcB.left + 5 + off,
                           rcB.top + (rcB.bottom - rcB.top - 16) / 2 + off,
-                          hIcon, GetSysColor(COLOR_BTNFACE));
+                          hIcon, NsColor(NSC_TASKBAR));
             xText += 19;
         }
         SelectObject(hdc, bActive ? g_hfontBold : g_hfontUI);
@@ -523,7 +523,7 @@ static void PaintTaskbar(HWND hwnd, HDC hdcWin)
         for (i = 0; i < s_nTray; i++)
             DrawIconSmall(hdc, s_rcTray.left + i * TRAY_CX + 2,
                           s_rcTray.top + (s_rcTray.bottom - s_rcTray.top - 16) / 2,
-                          s_hTrayIcon[i], GetSysColor(COLOR_BTNFACE));
+                          s_hTrayIcon[i], NsColor(NSC_TASKBAR));
         rcTime.left = s_rcTray.right;
         if (g_cfg.bClock)
             DrawText(hdc, s_szClock, -1, &rcTime,

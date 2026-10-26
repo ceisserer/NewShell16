@@ -141,11 +141,17 @@ static LPFVIEW GetView(HWND hwnd)
 static LPCSTR ShownName(LPFITEM p)
 {
     static char szName[16];
+    LPSTR lpDot;
 
-    if (!g_cfg.bCapitalize || p->bKind == FK_DRIVE)
+    if ((!g_cfg.bCapitalize && !g_cfg.bHideExt) || p->bKind == FK_DRIVE)
         return p->szName;
     lstrcpy(szName, p->szName);
-    AnsiLower(szName + 1);
+    if (g_cfg.bCapitalize)
+        AnsiLower(szName + 1);
+    /* programs that show their own icon are recognised without .EXE */
+    if (g_cfg.bHideExt && p->bKind == FK_FILE && p->hIcon != IconStock(IDI_APP)
+        && (lpDot = _fstrrchr(szName, '.')) != NULL && lstrcmpi(lpDot, ".EXE") == 0)
+        *lpDot = '\0';
     return szName;
 }
 
@@ -636,7 +642,7 @@ static void DrawLabel(HWND hwnd, HDC hdc, LPFVIEW v, int i, RECT FAR *lprc,
     LPFITEM p = &v->lpItems[i];
 
     if (p->bSel) {
-        FillSolid(hdc, lprc, GetSysColor(COLOR_HIGHLIGHT));
+        FillSolid(hdc, lprc, NsColor(NSC_SELECTION));
         SetTextColor(hdc, GetSysColor(COLOR_HIGHLIGHTTEXT));
     } else
         SetTextColor(hdc, GetSysColor(COLOR_WINDOWTEXT));

@@ -31,8 +31,12 @@
 
 #define NS_VERSION      "0.2"
 #define NS_APPNAME      "NewShell16"
-#define NS_INIFILE      "NEWSHELL.INI"
-#define NS_STARTINI     "NSSTART.INI"
+/* the settings and the Start menu: per user when there are users */
+extern char g_szIniFile[16];
+extern char g_szStartIni[16];
+extern char g_szUser[24];
+#define NS_INIFILE      g_szIniFile
+#define NS_STARTINI     g_szStartIni
 
 /* Window procedures and callbacks must be exported in Win16 */
 #define NSEXPORT        __export
@@ -99,6 +103,8 @@ typedef struct tagNSCONFIG {
     BOOL bAskDrop;          /* ask Copy/Move/Alias after a drag */
     BOOL bDragCopy;         /* drags copy unless Shift is held */
     BOOL bRightClose;       /* right click on minimise/maximise boxes closes */
+    BOOL bFlatToolbar;      /* toolbar buttons flat until pointed at */
+    BOOL bHideExt;          /* no extension for programs with their own icon */
 } NSCONFIG;
 
 extern NSCONFIG g_cfg;
@@ -113,6 +119,12 @@ void CfgSetStr(LPCSTR lpSection, LPCSTR lpKey, LPCSTR lpValue);
 
 /* ---- util.c ---------------------------------------------------------- */
 void FillSolid(HDC hdc, const RECT FAR *lprc, COLORREF clr);
+#define NSC_TASKBAR     0
+#define NSC_STARTMENU   1
+#define NSC_SELECTION   2
+#define NSC_COUNT       3
+COLORREF NsColor(int nWhich);
+void NsColorsChanged(void);
 void DrawItemFocus(HDC hdc, const RECT FAR *lprc, BOOL bSel);
 void DrawSmallImageDisabled(HDC hdc, int x, int y, int nIndex);
 void Draw3DEdge(HDC hdc, const RECT FAR *lprc, BOOL bSunken, BOOL bThick);
@@ -377,6 +389,11 @@ HWND ShutdownScreenShow(void);
 void TipsDialog(HWND hwndOwner);
 void SaveOpenWindows(void);
 void RestoreOpenWindows(void);
+
+/* ---- users.c --------------------------------------------------------- */
+BOOL UsersEnabled(void);
+BOOL LogonDialog(void);
+void LogOff(void);
 
 /* ---- bin.c ----------------------------------------------------------- */
 BOOL BinRegister(void);

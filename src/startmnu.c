@@ -702,7 +702,7 @@ static BOOL IsLastItem(LPSMITEM p)
 static void PaintItem(HDC hdc, RECT rc, LPSMITEM p, BOOL bSel)
 {
     BOOL bTop = HasBanner(p), bLarge = IsLarge(p);
-    COLORREF clrFace = GetSysColor(s_b3D ? COLOR_BTNFACE : COLOR_MENU);
+    COLORREF clrFace = s_b3D ? NsColor(NSC_STARTMENU) : GetSysColor(COLOR_MENU);
     RECT rcIn, rcText;
     int cy;
 
@@ -743,7 +743,7 @@ static void PaintItem(HDC hdc, RECT rc, LPSMITEM p, BOOL bSel)
     }
 
     if (bSel && s_bColBar)
-        FillSolid(hdc, &rcIn, GetSysColor(COLOR_HIGHLIGHT));
+        FillSolid(hdc, &rcIn, NsColor(NSC_SELECTION));
     else if (bSel) {
         /* a plain bar: a sunken frame around the item */
         RECT rcBar = rcIn;
@@ -769,7 +769,7 @@ static void PaintItem(HDC hdc, RECT rc, LPSMITEM p, BOOL bSel)
             DrawSmallImage(hdc, rc.left + SUB_ICON_X, cy, p->nImage);
         else if (p->hIcon)
             DrawIconSmall(hdc, rc.left + SUB_ICON_X, cy, p->hIcon,
-                          bSel && s_bColBar ? GetSysColor(COLOR_HIGHLIGHT) : clrFace);
+                          bSel && s_bColBar ? NsColor(NSC_SELECTION) : clrFace);
     }
 
     {
@@ -801,10 +801,10 @@ static void DrawOuterFrame(HDC hdc, const RECT FAR *lprc, LPSMITEM p)
     SetRect(&rc, lprc->left - 1, lprc->top, lprc->left, lprc->bottom);
     if (p->nPos == 0)
         rc.top--;
-    FillSolid(hdc, &rc, GetSysColor(COLOR_BTNFACE));
+    FillSolid(hdc, &rc, NsColor(NSC_STARTMENU));
     if (p->nPos == 0) {
         SetRect(&rc, lprc->left - 1, lprc->top - 1, lprc->right, lprc->top);
-        FillSolid(hdc, &rc, GetSysColor(COLOR_BTNFACE));
+        FillSolid(hdc, &rc, NsColor(NSC_STARTMENU));
     }
 }
 

@@ -149,15 +149,24 @@ BOOL CALLBACK NSEXPORT ShutdownDlgProc(HWND hDlg, UINT msg, WPARAM wParam,
     case WM_INITDIALOG:
         if (g_bIsShell)
             EnableWindow(GetDlgItem(hDlg, IDC_CLOSESHELL), FALSE);
-        CheckRadioButton(hDlg, IDC_EXITWIN, IDC_CLOSESHELL, IDC_EXITWIN);
+        if (UsersEnabled() && g_szUser[0]) {
+            char szText[48];
+
+            wsprintf(szText, "&Log off %s", (LPSTR)g_szUser);
+            SetDlgItemText(hDlg, IDC_LOGOFF, szText);
+        } else if (UsersEnabled())
+            SetDlgItemText(hDlg, IDC_LOGOFF, "&Log on as another user");
+        else
+            EnableWindow(GetDlgItem(hDlg, IDC_LOGOFF), FALSE);
+        CheckRadioButton(hDlg, IDC_EXITWIN, IDC_LOGOFF, IDC_EXITWIN);
         return TRUE;
 
     case WM_COMMAND:
         if (wParam == IDOK) {
-            for (id = IDC_EXITWIN; id <= IDC_CLOSESHELL; id++)
+            for (id = IDC_EXITWIN; id <= IDC_LOGOFF; id++)
                 if (IsDlgButtonChecked(hDlg, id))
                     break;
-            EndDialog(hDlg, id <= IDC_CLOSESHELL ? id : 0);
+            EndDialog(hDlg, id <= IDC_LOGOFF ? id : 0);
             return TRUE;
         }
         if (wParam == IDCANCEL) {
