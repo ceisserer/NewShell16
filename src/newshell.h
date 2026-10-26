@@ -387,6 +387,7 @@ BOOL ScreenRegister(void);
 void SplashShow(void);
 HWND ShutdownScreenShow(void);
 void TipsDialog(HWND hwndOwner);
+void ShellHelp(HWND hwnd);
 void SaveOpenWindows(void);
 void RestoreOpenWindows(void);
 

@@ -944,7 +944,7 @@ BOOL ExecMacro(HWND hwnd, LPCSTR lpCmd)
     else if (!lstrcmpi(szName, "$FileSystemProp"))  OptionsDialogPage(hwnd, 2);
     else if (!lstrcmpi(szName, "$SystemProp"))      OptionsDialogPage(hwnd, 4);
     else if (!lstrcmpi(szName, "$Help"))
-        WinHelp(hwnd, "WINHELP.HLP", HELP_CONTENTS, 0L);
+        ShellHelp(hwnd);
     else {
         wsprintf(szMsg, "The command %s is not supported.", (LPSTR)szName);
         MessageBox(hwnd, szMsg, NS_APPNAME, MB_OK | MB_ICONINFORMATION);
@@ -974,6 +974,7 @@ BOOL StartMenuCommand(HWND hwnd, UINT id)
     case CMD_SHUTDOWN:      DoShutdownDialog(); break;
     case CMD_ABOUT:         AboutDialog(hwnd); break;
     case CMD_TIPS:          TipsDialog(hwnd); break;
+    case CMD_HELP:          ShellHelp(hwnd); break;
     case CMD_COMPUTER:      FolderOpen(""); break;
     case CMD_EXPLORER:      ExplorerOpen(NULL); break;
     case CMD_BROWSEFOLDERS: ExplorerOpenTree(NULL); break;

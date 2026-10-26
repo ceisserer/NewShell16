@@ -123,6 +123,7 @@ BEGIN
     END
     POPUP "&Help"
     BEGIN
+        MENUITEM "NewShell16 &Help",            CMD_HELP
         MENUITEM "&Tip of the Day...",          CMD_TIPS
         MENUITEM "&About NewShell16...",          CMD_ABOUT
     END

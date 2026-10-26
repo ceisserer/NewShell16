@@ -266,6 +266,7 @@
 #define CMD_SCREENSAVER     630
 #define CMD_BROWSEFOLDERS   631
 #define CMD_TIPS            632
+#define CMD_HELP            633
 
 /* Folder view commands */
 #define CMD_F_OPEN          700

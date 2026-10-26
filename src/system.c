@@ -253,6 +253,31 @@ HWND ShutdownScreenShow(void)
 }
 
 /* -------------------------------------------------------------------- */
+/* Help                                                                 */
+/* -------------------------------------------------------------------- */
+
+/* NEWSHELL.HLP beside NEWSHELL.EXE if there is one, else README.TXT */
+void ShellHelp(HWND hwnd)
+{
+    char szPath[MAXPATHLEN], szCmd[MAXPATHLEN + 16];
+    OFSTRUCT of;
+
+    GetModuleFileName(g_hInst, szPath, sizeof(szPath));
+    lstrcpy(PathFileName(szPath), "NEWSHELL.HLP");
+    if (OpenFile(szPath, &of, OF_EXIST) != HFILE_ERROR) {
+        WinHelp(hwnd, szPath, HELP_CONTENTS, 0L);
+        return;
+    }
+    lstrcpy(PathFileName(szPath), "README.TXT");
+    if (OpenFile(szPath, &of, OF_EXIST) != HFILE_ERROR) {
+        wsprintf(szCmd, "NOTEPAD.EXE %s", (LPSTR)szPath);
+        LaunchCommand(hwnd, szCmd, NULL, SW_SHOWNORMAL);
+        return;
+    }
+    WinHelp(hwnd, "WINHELP.HLP", HELP_CONTENTS, 0L);
+}
+
+/* -------------------------------------------------------------------- */
 /* Tip of the Day                                                       */
 /* -------------------------------------------------------------------- */
 
