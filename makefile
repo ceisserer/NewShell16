@@ -26,6 +26,8 @@ OBJS    = $(OBJDIR)/main.obj     &
           $(OBJDIR)/shortcut.obj &
           $(OBJDIR)/folder.obj   &
           $(OBJDIR)/fview.obj    &
+          $(OBJDIR)/folddlg.obj  &
+          $(OBJDIR)/alias.obj    &
           $(OBJDIR)/explorer.obj &
           $(OBJDIR)/toolbar.obj  &
           $(OBJDIR)/fileops.obj  &
@@ -109,6 +111,8 @@ $(OBJDIR)/desktop.obj  : $(SRCDIR)/desktop.c
 $(OBJDIR)/shortcut.obj : $(SRCDIR)/shortcut.c
 $(OBJDIR)/folder.obj   : $(SRCDIR)/folder.c
 $(OBJDIR)/fview.obj    : $(SRCDIR)/fview.c
+$(OBJDIR)/folddlg.obj  : $(SRCDIR)/folddlg.c
+$(OBJDIR)/alias.obj    : $(SRCDIR)/alias.c
 $(OBJDIR)/explorer.obj : $(SRCDIR)/explorer.c
 $(OBJDIR)/toolbar.obj  : $(SRCDIR)/toolbar.c
 $(OBJDIR)/fileops.obj  : $(SRCDIR)/fileops.c

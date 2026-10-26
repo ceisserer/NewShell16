@@ -152,6 +152,26 @@ void DrawShortcutArrow(HDC hdc, int x, int y)
     DeleteDC(hdcMem);
 }
 
+/* The arrow for 16x16 icons, shrunk to 7x7 */
+void DrawShortcutArrowSmall(HDC hdc, int x, int y)
+{
+    HDC hdcMem;
+    HBITMAP hbmOld;
+    int nOldMode;
+
+    if (!s_hbmArrow)
+        CreateArrow();
+    if (!s_hbmArrow)
+        return;
+    hdcMem = CreateCompatibleDC(hdc);
+    hbmOld = SelectObject(hdcMem, s_hbmArrow);
+    nOldMode = SetStretchBltMode(hdc, COLORONCOLOR);
+    StretchBlt(hdc, x, y, 7, 7, hdcMem, 0, 0, 11, 11, SRCCOPY);
+    SetStretchBltMode(hdc, nOldMode);
+    SelectObject(hdcMem, hbmOld);
+    DeleteDC(hdcMem);
+}
+
 static void PaintIcon(HWND hwnd, HDC hdc, DESKICON *p)
 {
     RECT rc;

@@ -67,6 +67,12 @@ void IconsFree(void)
     s_nExt = 0;
 }
 
+/* Associations changed: look document icons up again */
+void IconsForget(void)
+{
+    s_nExt = 0;
+}
+
 HICON IconStock(int idi)
 {
     if (idi < IDI_NEWSHELL || idi > IDI_LAST)

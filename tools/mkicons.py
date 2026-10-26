@@ -302,6 +302,8 @@ SMALL = [
     ("tb_sorttype", calmira("sorttype")), ("tb_sortsize", calmira("sortsize")),
     ("tb_sortdate", calmira("sortdate")), ("favorites", calmira("sm_favorites")),
     ("internet", calmira("sm_internet")),
+    ("tb_rename", calmira("edit")), ("tb_goto", calmira("open")),
+    ("tb_insert", calmira("insert")), ("tb_newitem", calmira("newprg")),
 ]
 
 # Order must match IDI_* in src/resource.h (newshell.rc names the files).

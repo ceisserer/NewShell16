@@ -48,6 +48,7 @@
 #define CLS_BIN         "NSBin"
 #define CLS_PROGRESS    "NSProgress"
 #define CLS_TOOLBAR     "NSToolbar"
+#define CLS_HINT        "NSHint"
 
 /* Private messages */
 #define WM_NS_OPENPATH  (WM_USER + 100)     /* wParam = global atom with path */
@@ -90,6 +91,13 @@ typedef struct tagNSCONFIG {
     BOOL bSnapToGrid;       /* desktop icons snap to a grid */
     BOOL bSingleClick;      /* desktop icons open with a single click */
     BOOL bShortcutArrows;   /* arrows on shortcuts */
+    BOOL bFolderToolbar;    /* folder windows: toolbar */
+    BOOL bFolderStatusBar;  /* folder windows: status bar */
+    BOOL bCapitalize;       /* folder windows: "Calc.exe" for CALC.EXE */
+    BOOL bShadeSelected;    /* folder windows: shade selected icons */
+    BOOL bFileHints;        /* folder windows: hints with file details */
+    BOOL bAskDrop;          /* ask Copy/Move/Alias after a drag */
+    BOOL bDragCopy;         /* drags copy unless Shift is held */
 } NSCONFIG;
 
 extern NSCONFIG g_cfg;
@@ -112,6 +120,7 @@ void MovePane(HWND hwndPane, int x, int y, int cx, int cy);
 void DrawPaneEdge(HDC hdc, int x, int y, int cx, int cy);
 void DrawSmallImage(HDC hdc, int x, int y, int nIndex);
 void DrawIconSmall(HDC hdc, int x, int y, HICON hIcon, COLORREF clrBk);
+void ShadeArea(HDC hdc, int x, int y, int cx, int cy, COLORREF clrBk);
 HFONT CreateUIFont(int nPoints, BOOL bBold);
 int  TextWidth(HDC hdc, LPCSTR lpsz);
 void FitText(HDC hdc, LPCSTR lpSrc, LPSTR lpDst, int cbDst, int cxMax);
@@ -130,6 +139,8 @@ BOOL LaunchCommand(HWND hwnd, LPCSTR lpCmdLine, LPCSTR lpDir, int nShow);
 BOOL OpenPath(HWND hwnd, LPCSTR lpPath);
 void ShowLaunchError(HWND hwnd, UINT uErr, LPCSTR lpWhat);
 BOOL IsShiftDown(void);
+BOOL WildMatch(LPCSTR lpPattern, LPCSTR lpName);
+BOOL MatchSpecList(LPCSTR lpName, LPCSTR lpList);
 
 /* ---- icons.c --------------------------------------------------------- */
 void  IconsInit(void);
@@ -137,6 +148,7 @@ void  IconsFree(void);
 HICON IconForFile(LPCSTR lpPath, BOOL bDir);
 HICON IconFromFile(LPCSTR lpFile, int nIndex);
 HICON IconStock(int idi);
+void  IconsForget(void);
 BOOL  IsProgramFile(LPCSTR lpPath);
 
 /* ---- progman.c -------------------------------------------------------- */
@@ -218,6 +230,7 @@ void DesktopLineUp(void);
 void DesktopRepaint(void);
 void DesktopCaptionsChanged(void);
 void DrawShortcutArrow(HDC hdc, int x, int y);
+void DrawShortcutArrowSmall(HDC hdc, int x, int y);
 LRESULT CALLBACK NSEXPORT DeskIconWndProc(HWND, UINT, WPARAM, LPARAM);
 
 /* ---- fview.c (folder view control) ------------------------------------ */
@@ -253,6 +266,7 @@ LRESULT CALLBACK NSEXPORT DeskIconWndProc(HWND, UINT, WPARAM, LPARAM);
 BOOL   FViewRegister(void);
 HWND   FViewCreate(HWND hwndParent, LPCSTR lpPath);
 LPCSTR FViewGetPath(HWND hwnd);
+LPCSTR FViewGetFilter(HWND hwnd);
 void   FViewSetPath(HWND hwnd, LPCSTR lpPath);
 void   FViewRefresh(HWND hwnd);
 void   FViewSetMode(HWND hwnd, int nMode);
@@ -263,6 +277,7 @@ void   FViewGetStatus(HWND hwnd, LPSTR lpBuf, int cbBuf);
 BOOL   FViewCommand(HWND hwnd, UINT id);
 void   FViewInitMenu(HWND hwnd, HMENU hMenu);
 void   FViewRefreshPath(LPCSTR lpDir);
+void   FViewApplyOptions(void);
 int    DropTargetAt(POINT pt, LPSTR lpDir);
 int    DriveIcon(int nDrive, BYTE FAR *lpbType);
 
@@ -270,6 +285,7 @@ int    DriveIcon(int nDrive, BYTE FAR *lpbType);
 BOOL FolderRegister(void);
 HWND FolderOpen(LPCSTR lpPath);     /* "" opens the Computer window */
 void FolderCloseAll(void);
+void FolderBarsChanged(void);
 void PaintStatusBar(HWND hwnd, HDC hdc, int cyStatus, LPCSTR lpText, int xPane);
 int  StatusBarHeight(void);
 LRESULT CALLBACK NSEXPORT FolderWndProc(HWND, UINT, WPARAM, LPARAM);
@@ -286,6 +302,9 @@ BOOL ToolbarRegister(void);
 int  ToolbarHeight(void);
 HWND ToolbarCreate(HWND hwndParent, const TBBTN FAR *lpButtons, int nButtons);
 void ToolbarSetState(HWND hwnd, UINT uCmd, BOOL bChecked, BOOL bEnabled);
+void ToolbarSyncView(HWND hwndToolbar, HWND hwndView);
+extern const TBBTN g_aFolderButtons[];
+extern const int g_nFolderButtons;
 
 /* ---- explorer.c ------------------------------------------------------ */
 BOOL ExplorerRegister(void);
@@ -293,6 +312,7 @@ HWND ExplorerOpen(LPCSTR lpPath);
 void ExplorerRefreshPath(LPCSTR lpDir);
 int  ExplorerDropTarget(HWND hwnd, POINT pt, LPSTR lpDir);
 void ExplorerCloseAll(void);
+void ExplorerRefreshDrives(void);
 
 /* ---- fileops.c ------------------------------------------------------- */
 BOOL   PathListAdd(HGLOBAL FAR *phList, LPCSTR lpPath);
@@ -312,6 +332,23 @@ BOOL FileOpNewFolder(HWND hwndOwner, LPCSTR lpDir, LPSTR lpName);
 void FileOpMeasure(LPCSTR lpPath, DWORD FAR *pdwSize, int FAR *pnFiles,
                    int FAR *pnDirs);
 
+/* ---- alias.c --------------------------------------------------------- */
+BOOL  AliasRead(LPCSTR lpPath, LPSHORTCUT lpsc);
+BOOL  AliasCreate(LPCSTR lpTarget, LPCSTR lpAlias);
+int   AliasCreateList(HWND hwnd, HGLOBAL hList, LPCSTR lpDir);
+BOOL  IsAliasFile(LPCSTR lpName);
+HICON AliasIcon(LPCSTR lpPath);
+BOOL  AliasOpen(HWND hwnd, LPCSTR lpPath);
+
+/* ---- folddlg.c ------------------------------------------------------- */
+int  SelectFilesDialog(HWND hwndOwner, LPSTR lpSpec, int cbSpec);
+BOOL FilterDialog(HWND hwndOwner, LPSTR lpSpec, int cbSpec, BOOL FAR *pbHidden);
+BOOL GotoDialog(HWND hwndOwner, LPSTR lpPath, int cbPath);
+BOOL OpenWithDialog(HWND hwndOwner, LPCSTR lpFile);
+BOOL DescribeDialog(HWND hwndOwner, LPCSTR lpName, LPSTR lpDesc, int cbDesc);
+BOOL DescriptionSet(LPCSTR lpDir, LPCSTR lpName, LPCSTR lpDesc);
+BOOL ColumnsDialog(HWND hwndOwner, UINT FAR *puHidden);
+
 /* ---- bin.c ----------------------------------------------------------- */
 BOOL BinRegister(void);
 BOOL BinCanTake(LPCSTR lpPath);
@@ -322,6 +359,7 @@ void BinOpen(void);
 void BinClose(void);
 void BinPropertiesDialog(HWND hwndOwner);
 void BinExit(void);
+BOOL BinUndelete(HWND hwndOwner);
 
 /* ---- props.c --------------------------------------------------------- */
 void PropertiesDialog(HWND hwndOwner, HGLOBAL hList);

@@ -88,7 +88,11 @@
 #define SMI_TB_SORTDATE     32
 #define SMI_FAVORITES       33
 #define SMI_INTERNET        34
-#define SMI_COUNT           35
+#define SMI_TB_RENAME       35
+#define SMI_TB_GOTO         36
+#define SMI_TB_INSERT       37
+#define SMI_TB_NEWITEM      38
+#define SMI_COUNT           39
 
 /* Cursors */
 #define IDC_DRAGMOVE        150
@@ -114,6 +118,12 @@
 #define IDD_SHORTCUT        309
 #define IDD_CHANGEICON      310
 #define IDD_BINPROPS        311
+#define IDD_SELECT          312
+#define IDD_FILTER          313
+#define IDD_GOTO            314
+#define IDD_OPENWITH        315
+#define IDD_DESCRIBE        316
+#define IDD_COLUMNS         317
 
 /* Dialog controls */
 #define IDC_RUNCMD          400
@@ -181,6 +191,20 @@
 #define IDC_BINEMPTYEXIT    542
 #define IDC_BINDIRECT       543
 #define IDC_BINSTATUS       544
+#define IDC_SELSPEC         550
+#define IDC_SELNONE         551
+#define IDC_FILTERSPEC      552
+#define IDC_FILTERHIDDEN    553
+#define IDC_FILTERALL       554
+#define IDC_GOTOPATH        555
+#define IDC_OWTEXT          556
+#define IDC_OWLIST          557
+#define IDC_OWPROG          558
+#define IDC_OWBROWSE        559
+#define IDC_OWALWAYS        560
+#define IDC_DESCTEXT        561
+#define IDC_DESCEDIT        562
+#define IDC_COL_FIRST       570     /* .. +5: Size .. Description */
 #define IDC_CIFILE          530
 #define IDC_CIBROWSE        531
 #define IDC_CILIST          532
@@ -233,6 +257,20 @@
 #define CMD_F_LIST          722
 #define CMD_F_TOOLBAR       723
 #define CMD_F_STATUSBAR     724
+#define CMD_F_OPENWITH      725
+#define CMD_F_SELECTFILES   726
+#define CMD_F_FILTER        727
+#define CMD_F_GOTO          728
+#define CMD_F_DESCRIBE      729
+#define CMD_F_INSPECT       730
+#define CMD_F_PRINT         731
+#define CMD_F_NEWALIAS      732
+#define CMD_F_UNDELETE      733
+#define CMD_F_COLUMNS       734
+#define CMD_F_MAPDRIVE      735
+#define CMD_F_DISCONNECT    736
+#define CMD_F_PARENTWIN     737
+#define CMD_F_COPYNAMES     738
 
 /* Bin and Task Manager commands */
 #define CMD_BIN_RESTORE     750

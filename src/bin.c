@@ -129,6 +129,9 @@ BOOL BinSend(LPCSTR lpPath)
     WritePrivateProfileString("Files", szName, szPath, szIni);
     wsprintf(szSize, "%lu%s", dwSize, (LPSTR)(bDir ? ",D" : ""));
     WritePrivateProfileString("Sizes", szName, szSize, szIni);
+    /* Undelete starts at the drive of the last item */
+    wsprintf(szSize, "%c", szPath[0]);
+    CfgSetStr("Bin", "LastDrive", szSize);
     return TRUE;
 }
 
@@ -546,6 +549,32 @@ void BinOpen(void)
     ShowWindow(s_hwndBin, SW_SHOWNORMAL);
     UpdateWindow(s_hwndBin);
     TaskbarRefresh();
+}
+
+/* Undelete (Ctrl+U): restores the newest item, from the drive deleted
+   from last if it has any */
+BOOL BinUndelete(HWND hwndOwner)
+{
+    char szDrive[4];
+    LPBINITEM b = NULL;
+    int i, nPass;
+
+    LoadBin();
+    CfgGetStr("Bin", "LastDrive", "", szDrive, sizeof(szDrive));
+    for (nPass = 0; nPass < 2 && !b; nPass++)
+        for (i = 0; i < s_nItems; i++) {
+            if (nPass == 0 && (s_lpItems[i].szOrig[0] & ~0x20) != (szDrive[0] & ~0x20))
+                continue;
+            if (!b || lstrcmpi(s_lpItems[i].szBinName, b->szBinName) > 0)
+                b = &s_lpItems[i];
+        }
+    if (!b) {
+        MessageBox(hwndOwner, "The Bin is empty.", NS_APPNAME, MB_OK | MB_ICONINFORMATION);
+        return FALSE;
+    }
+    Restore(hwndOwner, b);
+    BinChanged();
+    return TRUE;
 }
 
 /* Windows is exiting: empty the Bin if the properties say so */

@@ -197,6 +197,46 @@ LRESULT CALLBACK NSEXPORT ToolbarWndProc(HWND hwnd, UINT msg, WPARAM wParam,
     return DefWindowProc(hwnd, msg, wParam, lParam);
 }
 
+/* The buttons of folder windows and the File System window (Calmira's
+   Explorer buttons); 0 is a gap */
+const TBBTN g_aFolderButtons[] = {
+    { CMD_F_UP, SMI_TB_UP }, { CMD_F_GOTO, SMI_TB_GOTO }, { 0, 0 },
+    { CMD_F_NEWFOLDER, SMI_TB_NEWFOLDER }, { 0, 0 },
+    { CMD_F_CUT, SMI_TB_CUT }, { CMD_F_COPY, SMI_TB_COPY }, { CMD_F_PASTE, SMI_TB_PASTE },
+    { 0, 0 },
+    { CMD_F_DELETE, SMI_TB_DELETE }, { CMD_F_RENAME, SMI_TB_RENAME },
+    { CMD_F_PROPERTIES, SMI_TB_PROPS }, { 0, 0 },
+    { CMD_F_LARGEICONS, SMI_TB_LARGE }, { CMD_F_SMALLICONS, SMI_TB_SMALL },
+    { CMD_F_LIST, SMI_TB_LIST }, { CMD_F_DETAILS, SMI_TB_DETAILS }, { 0, 0 },
+    { CMD_F_SORTNAME, SMI_TB_SORTNAME }, { CMD_F_SORTTYPE, SMI_TB_SORTTYPE },
+    { CMD_F_SORTSIZE, SMI_TB_SORTSIZE }, { CMD_F_SORTDATE, SMI_TB_SORTDATE }
+};
+const int g_nFolderButtons = sizeof(g_aFolderButtons) / sizeof(g_aFolderButtons[0]);
+
+/* The buttons follow the menu states of a folder view */
+void ToolbarSyncView(HWND hwndToolbar, HWND hwndView)
+{
+    LPTOOLBAR t = GetToolbar(hwndToolbar);
+    HMENU hMenu;
+    UINT uState;
+    int i;
+
+    if (!hwndToolbar || !t)
+        return;
+    hMenu = CreatePopupMenu();
+    for (i = 0; i < t->nButtons; i++)
+        if (t->aButtons[i].uCmd)
+            AppendMenu(hMenu, MF_STRING, t->aButtons[i].uCmd, "");
+    FViewInitMenu(hwndView, hMenu);
+    for (i = 0; i < t->nButtons; i++)
+        if (t->aButtons[i].uCmd) {
+            uState = GetMenuState(hMenu, t->aButtons[i].uCmd, MF_BYCOMMAND);
+            ToolbarSetState(hwndToolbar, t->aButtons[i].uCmd,
+                            (uState & MF_CHECKED) != 0, !(uState & MF_GRAYED));
+        }
+    DestroyMenu(hMenu);
+}
+
 /* -------------------------------------------------------------------- */
 /* Public interface                                                     */
 /* -------------------------------------------------------------------- */

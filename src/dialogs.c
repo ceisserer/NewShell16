@@ -238,7 +238,10 @@ BOOL CALLBACK NSEXPORT OptionsDlgProc(HWND hDlg, UINT msg, WPARAM wParam,
                 DesktopCreate();
             }
             if (g_cfg.bShowHidden != bOldHidden)
+                FViewApplyOptions();
+            else
                 FViewRefreshPath(NULL);
+            DesktopRepaint();
             if (g_hwndTaskbar)
                 InvalidateRect(g_hwndTaskbar, NULL, FALSE);
             return TRUE;

@@ -75,6 +75,13 @@ static const CFGENTRY s_entries[] = {
     { "Folders",     "DeleteToBin",   &g_cfg.bDeleteToBin,     TRUE  },
     { "Folders",     "ConfirmDelete", &g_cfg.bConfirmDelete,   TRUE  },
     { "Folders",     "FileMonitor",   &g_cfg.bFileMonitor,     TRUE  },
+    { "Folders",     "Toolbar",       &g_cfg.bFolderToolbar,   TRUE  },
+    { "Folders",     "StatusBar",     &g_cfg.bFolderStatusBar, TRUE  },
+    { "Folders",     "Capitalize",    &g_cfg.bCapitalize,      FALSE },
+    { "Folders",     "ShadeSelected", &g_cfg.bShadeSelected,   TRUE  },
+    { "Folders",     "FileHints",     &g_cfg.bFileHints,       TRUE  },
+    { "Folders",     "AskOnDrop",     &g_cfg.bAskDrop,         FALSE },
+    { "Folders",     "DragCopy",      &g_cfg.bDragCopy,        FALSE },
 };
 
 void CfgLoad(void)

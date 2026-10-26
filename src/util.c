@@ -220,6 +220,58 @@ void DrawSmallImageDisabled(HDC hdc, int x, int y, int nIndex)
     DeleteDC(hdcMem);
 }
 
+/*
+ * Shades an icon drawn at x, y as selected (Windows 95 style): every
+ * other pixel of the icon, not of the background clrBk, becomes the
+ * highlight colour.
+ */
+void ShadeArea(HDC hdc, int x, int y, int cx, int cy, COLORREF clrBk)
+{
+    static WORD wChecker[8] = { 0xAA, 0x55, 0xAA, 0x55, 0xAA, 0x55, 0xAA, 0x55 };
+    HDC hdcMask;
+    HBITMAP hbmMask, hbmPat, hbmOld;
+    HBRUSH hbrPat, hbrHi, hbrOld;
+    COLORREF clrBkOld, clrTextOld;
+
+    hdcMask = CreateCompatibleDC(hdc);
+    hbmMask = CreateBitmap(cx, cy, 1, 1, NULL);
+    hbmPat = CreateBitmap(8, 8, 1, 1, wChecker);
+    if (!hdcMask || !hbmMask || !hbmPat) {
+        if (hdcMask)
+            DeleteDC(hdcMask);
+        if (hbmMask)
+            DeleteObject(hbmMask);
+        if (hbmPat)
+            DeleteObject(hbmPat);
+        return;
+    }
+    hbmOld = SelectObject(hdcMask, hbmMask);
+    /* 1 = background (clrBk), 0 = icon */
+    clrBkOld = SetBkColor(hdc, clrBk);
+    BitBlt(hdcMask, 0, 0, cx, cy, hdc, x, y, SRCCOPY);
+    /* leave out every other pixel: OR in the checker */
+    hbrPat = CreatePatternBrush(hbmPat);
+    hbrOld = SelectObject(hdcMask, hbrPat);
+    SetBrushOrg(hdcMask, 0, 0);
+    PatBlt(hdcMask, 0, 0, cx, cy, 0x00FA0089L);        /* DPo */
+    SelectObject(hdcMask, hbrOld);
+    DeleteObject(hbrPat);
+    /* the highlight where the mask is 0 */
+    SetBkColor(hdc, RGB(255, 255, 255));
+    clrTextOld = SetTextColor(hdc, RGB(0, 0, 0));
+    hbrHi = CreateSolidBrush(GetSysColor(COLOR_HIGHLIGHT));
+    hbrOld = SelectObject(hdc, hbrHi);
+    BitBlt(hdc, x, y, cx, cy, hdcMask, 0, 0, 0x00B8074AL);  /* PSDPxax */
+    SelectObject(hdc, hbrOld);
+    DeleteObject(hbrHi);
+    SetBkColor(hdc, clrBkOld);
+    SetTextColor(hdc, clrTextOld);
+    SelectObject(hdcMask, hbmOld);
+    DeleteDC(hdcMask);
+    DeleteObject(hbmMask);
+    DeleteObject(hbmPat);
+}
+
 /* Windows 3.1 can only draw icons at 32x32; shrink one via a memory DC. */
 void DrawIconSmall(HDC hdc, int x, int y, HICON hIcon, COLORREF clrBk)
 {
@@ -362,6 +414,57 @@ BOOL PathIsDirectory(LPCSTR lpPath)
     return (attr & _A_SUBDIR) != 0;
 }
 
+/* Case-insensitive wildcard match supporting * and ? */
+BOOL WildMatch(LPCSTR p, LPCSTR s)
+{
+    while (*p) {
+        if (*p == '*') {
+            while (*p == '*')
+                p++;
+            if (!*p)
+                return TRUE;
+            for (; *s; s++)
+                if (WildMatch(p, s))
+                    return TRUE;
+            return FALSE;
+        }
+        if (!*s)
+            return FALSE;
+        if (*p != '?' && (*p & ~0x20) != (*s & ~0x20)
+            && !(*p == *s))
+            return FALSE;
+        p++;
+        s++;
+    }
+    return *s == '\0';
+}
+
+/*
+ * Whether a file name matches one of the patterns of a list separated by
+ * ';', ',' or blanks ("*.TXT;*.DOC"). "*.*" and "X.*" also match names
+ * without an extension, as in DOS.
+ */
+BOOL MatchSpecList(LPCSTR lpName, LPCSTR lpList)
+{
+    char szPat[32], szName[16];
+    int n;
+
+    lstrcpyn(szName, lpName, sizeof(szName) - 1);
+    if (!_fstrchr(szName, '.'))
+        lstrcat(szName, ".");
+    while (*lpList) {
+        while (*lpList == ';' || *lpList == ',' || *lpList == ' ')
+            lpList++;
+        for (n = 0; *lpList && *lpList != ';' && *lpList != ',' && *lpList != ' '; lpList++)
+            if (n < sizeof(szPat) - 1)
+                szPat[n++] = *lpList;
+        szPat[n] = '\0';
+        if (n && (WildMatch(szPat, lpName) || WildMatch(szPat, szName)))
+            return TRUE;
+    }
+    return FALSE;
+}
+
 BOOL IsShiftDown(void)
 {
     return (GetKeyState(VK_SHIFT) & 0x8000) != 0;
@@ -446,6 +549,8 @@ BOOL OpenPath(HWND hwnd, LPCSTR lpPath)
     lstrcpyn(szDir, lpPath, sizeof(szDir));
     PathParent(szDir);
     hInst = ShellExecute(hwnd, NULL, lpPath, NULL, szDir, SW_SHOWNORMAL);
+    if ((UINT)hInst == 31)              /* no association: pick a program */
+        return OpenWithDialog(hwnd, lpPath);
     if ((UINT)hInst <= 32) {
         ShowLaunchError(hwnd, (UINT)hInst, lpPath);
         return FALSE;

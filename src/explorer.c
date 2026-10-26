@@ -61,19 +61,6 @@ typedef struct tagEXPLORER {
     BOOL    bToolbar, bStatusBar;   /* View > Toolbar, Status Bar */
 } EXPLORER, FAR *LPEXPLORER;
 
-/* the toolbar: Calmira's Explorer buttons; 0 is a gap */
-static const TBBTN s_aButtons[] = {
-    { CMD_F_UP, SMI_TB_UP }, { CMD_F_NEWFOLDER, SMI_TB_NEWFOLDER }, { 0, 0 },
-    { CMD_F_CUT, SMI_TB_CUT }, { CMD_F_COPY, SMI_TB_COPY }, { CMD_F_PASTE, SMI_TB_PASTE },
-    { 0, 0 },
-    { CMD_F_DELETE, SMI_TB_DELETE }, { CMD_F_PROPERTIES, SMI_TB_PROPS }, { 0, 0 },
-    { CMD_F_LARGEICONS, SMI_TB_LARGE }, { CMD_F_SMALLICONS, SMI_TB_SMALL },
-    { CMD_F_LIST, SMI_TB_LIST }, { CMD_F_DETAILS, SMI_TB_DETAILS }, { 0, 0 },
-    { CMD_F_SORTNAME, SMI_TB_SORTNAME }, { CMD_F_SORTTYPE, SMI_TB_SORTTYPE },
-    { CMD_F_SORTSIZE, SMI_TB_SORTSIZE }, { CMD_F_SORTDATE, SMI_TB_SORTDATE }
-};
-#define NBUTTONS (sizeof(s_aButtons) / sizeof(s_aButtons[0]))
-
 static HWND s_hwndExplorers[MAX_EXPLORERS];
 static int  s_nExplorers;
 
@@ -401,27 +388,10 @@ static void InvalidateStatus(HWND hwnd)
     InvalidateRect(hwnd, &rc, FALSE);
 }
 
-/* The buttons follow the menu states of the folder view */
 static void UpdateToolbar(LPEXPLORER e)
 {
-    HMENU hMenu;
-    UINT uState;
-    int i;
-
-    if (!e->hwndToolbar || !e->bToolbar)
-        return;
-    hMenu = CreatePopupMenu();
-    for (i = 0; i < (int)NBUTTONS; i++)
-        if (s_aButtons[i].uCmd)
-            AppendMenu(hMenu, MF_STRING, s_aButtons[i].uCmd, "");
-    FViewInitMenu(e->hwndView, hMenu);
-    for (i = 0; i < (int)NBUTTONS; i++)
-        if (s_aButtons[i].uCmd) {
-            uState = GetMenuState(hMenu, s_aButtons[i].uCmd, MF_BYCOMMAND);
-            ToolbarSetState(e->hwndToolbar, s_aButtons[i].uCmd,
-                            (uState & MF_CHECKED) != 0, !(uState & MF_GRAYED));
-        }
-    DestroyMenu(hMenu);
+    if (e->bToolbar)
+        ToolbarSyncView(e->hwndToolbar, e->hwndView);
 }
 
 static void ShowBars(HWND hwnd, LPEXPLORER e)
@@ -538,16 +508,9 @@ LRESULT CALLBACK NSEXPORT ExplorerWndProc(HWND hwnd, UINT msg, WPARAM wParam,
             e->xSplit = CfgGetInt("Explorer", "Split", 170);
             e->bToolbar = CfgGetInt("Explorer", "Toolbar", 1);
             e->bStatusBar = CfgGetInt("Explorer", "StatusBar", 1);
-            e->hwndToolbar = ToolbarCreate(hwnd, s_aButtons, NBUTTONS);
+            e->hwndToolbar = ToolbarCreate(hwnd, g_aFolderButtons, g_nFolderButtons);
             if (e->hwndToolbar && !e->bToolbar)
                 ShowWindow(e->hwndToolbar, SW_HIDE);
-            {
-                HMENU hView = GetSubMenu(GetMenu(hwnd), 2);
-
-                AppendMenu(hView, MF_SEPARATOR, 0, NULL);
-                AppendMenu(hView, MF_STRING, CMD_F_TOOLBAR, "T&oolbar");
-                AppendMenu(hView, MF_STRING, CMD_F_STATUSBAR, "&Status Bar");
-            }
             e->hwndTree = CreateWindow("LISTBOX", "",
                                        WS_CHILD | WS_VISIBLE | WS_VSCROLL
                                        | LBS_OWNERDRAWFIXED | LBS_NOTIFY
@@ -889,6 +852,30 @@ int ExplorerDropTarget(HWND hwnd, POINT pt, LPSTR lpDir)
         return DT_NONE;
     NodePath(e, i, lpDir);
     return DT_FOLDER;
+}
+
+/* Drives were connected or disconnected: rebuild the trees */
+void ExplorerRefreshDrives(void)
+{
+    char szPath[MAXPATHLEN];
+    LPEXPLORER e;
+    int w;
+
+    for (w = 0; w < s_nExplorers; w++) {
+        e = GetExplorer(s_hwndExplorers[w]);
+        if (!e)
+            continue;
+        lstrcpy(szPath, FViewGetPath(e->hwndView));
+        SendMessage(e->hwndTree, WM_SETREDRAW, FALSE, 0L);
+        DeleteNodes(e, 0, e->nNodes);
+        BuildDrives(e);
+        SendMessage(e->hwndTree, WM_SETREDRAW, TRUE, 0L);
+        if (!PathIsDirectory(szPath)) {
+            GetWindowsDirectory(szPath, sizeof(szPath));
+            szPath[3] = '\0';
+        }
+        SelectPath(s_hwndExplorers[w], e, szPath);
+    }
 }
 
 void ExplorerCloseAll(void)

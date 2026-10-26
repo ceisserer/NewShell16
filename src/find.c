@@ -44,31 +44,6 @@ static BOOL    s_bStop;
 static char    s_szPattern[64];
 static BOOL    s_bWild;
 
-/* Case-insensitive wildcard match supporting * and ? */
-static BOOL WildMatch(LPCSTR p, LPCSTR s)
-{
-    while (*p) {
-        if (*p == '*') {
-            while (*p == '*')
-                p++;
-            if (!*p)
-                return TRUE;
-            for (; *s; s++)
-                if (WildMatch(p, s))
-                    return TRUE;
-            return FALSE;
-        }
-        if (!*s)
-            return FALSE;
-        if (*p != '?' && (*p & ~0x20) != (*s & ~0x20)
-            && !(*p == *s))
-            return FALSE;
-        p++;
-        s++;
-    }
-    return *s == '\0';
-}
-
 static BOOL Matches(LPCSTR lpName)
 {
     char szName[16];
