@@ -429,6 +429,8 @@ BOOL FindIsDialogMessage(MSG FAR *lpMsg);
 void RunDialog(HWND hwndOwner);
 int  ShutdownDialog(HWND hwndOwner);    /* returns IDC_* choice or 0 */
 void AboutDialog(HWND hwndOwner);
+/* ---- options.c ------------------------------------------------------- */
 void OptionsDialog(HWND hwndOwner);
+void OptionsDialogPage(HWND hwndOwner, int nPage);
 
 #endif /* NEWSHELL_H */

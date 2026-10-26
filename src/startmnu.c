@@ -939,9 +939,10 @@ BOOL ExecMacro(HWND hwnd, LPCSTR lpCmd)
         StartMenuPropertiesDialog(hwnd);
     else if (!lstrcmpi(szName, "$BinProp"))
         BinPropertiesDialog(hwnd);
-    else if (!lstrcmpi(szName, "$TaskbarProp") || !lstrcmpi(szName, "$DesktopProp")
-             || !lstrcmpi(szName, "$SystemProp") || !lstrcmpi(szName, "$FileSystemProp"))
-        OptionsDialog(hwnd);
+    else if (!lstrcmpi(szName, "$TaskbarProp"))     OptionsDialogPage(hwnd, 0);
+    else if (!lstrcmpi(szName, "$DesktopProp"))     OptionsDialogPage(hwnd, 1);
+    else if (!lstrcmpi(szName, "$FileSystemProp"))  OptionsDialogPage(hwnd, 2);
+    else if (!lstrcmpi(szName, "$SystemProp"))      OptionsDialogPage(hwnd, 4);
     else if (!lstrcmpi(szName, "$Help"))
         WinHelp(hwnd, "WINHELP.HLP", HELP_CONTENTS, 0L);
     else {

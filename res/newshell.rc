@@ -332,29 +332,15 @@ BEGIN
     LTEXT           "", IDC_FINDSTATUS, 8, 160, 246, 8, SS_NOPREFIX
 END
 
-IDD_OPTIONS DIALOG 30, 20, 240, 196
+IDD_OPTIONS DIALOG 20, 10, 300, 214
 STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "NewShell16 Options"
 FONT 8, "MS Sans Serif"
 BEGIN
-    GROUPBOX        "Taskbar", -1, 6, 4, 228, 64
-    CONTROL         "Show &clock", IDC_OPT_CLOCK, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 12, 16, 100, 10
-    CONTROL         "&Hide minimized windows", IDC_OPT_HIDEMIN, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 120, 16, 110, 10
-    CONTROL         "Keep &maximized windows above the taskbar", IDC_OPT_MAXCLAMP, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 12, 28, 210, 10
-    CONTROL         "Ctrl+&Esc opens the Start menu (not the Task Manager)", IDC_OPT_CTRLESC, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 12, 40, 216, 10
-    CONTROL         "&Windows key opens the Start menu", IDC_OPT_WINKEY, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 12, 52, 210, 10
-    GROUPBOX        "Desktop", -1, 6, 72, 228, 28
-    CONTROL         "Show desktop &icons", IDC_OPT_DESKICONS, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 12, 84, 100, 10
-    CONTROL         "Desktop right-click &menu", IDC_OPT_DESKMENU, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 120, 84, 110, 10
-    GROUPBOX        "Folders and files", -1, 6, 104, 228, 52
-    CONTROL         "Open folders in &new windows", IDC_OPT_NEWWINDOW, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 12, 116, 110, 10
-    CONTROL         "Show hi&dden files", IDC_OPT_SHOWHIDDEN, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 130, 116, 100, 10
-    CONTROL         "Delete to the &Bin", IDC_OPT_TOBIN, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 12, 128, 110, 10
-    CONTROL         "Con&firm deleting", IDC_OPT_CONFIRMDEL, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 130, 128, 100, 10
-    CONTROL         "&Refresh folders on file changes", IDC_OPT_FILEMON, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 12, 140, 210, 10
-    CONTROL         "Run &StartUp programs (when NewShell16 is the shell)", IDC_OPT_STARTUP, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 6, 160, 228, 10
-    DEFPUSHBUTTON   "OK", IDOK, 128, 176, 50, 14
-    PUSHBUTTON      "Cancel", IDCANCEL, 184, 176, 50, 14
+    LISTBOX         IDC_OPTPAGES, 8, 8, 60, 178, LBS_NOTIFY | WS_VSCROLL | WS_BORDER | WS_TABSTOP
+    GROUPBOX        "", IDC_OPTFRAME, 74, 4, 218, 182
+    DEFPUSHBUTTON   "OK", IDOK, 188, 194, 50, 14
+    PUSHBUTTON      "Cancel", IDCANCEL, 242, 194, 50, 14
 END
 
 IDD_TASKMAN DIALOG 60, 30, 220, 150

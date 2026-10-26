@@ -38,7 +38,8 @@ OBJS    = $(OBJDIR)/main.obj     &
           $(OBJDIR)/find.obj     &
           $(OBJDIR)/dialogs.obj  &
           $(OBJDIR)/system.obj   &
-          $(OBJDIR)/users.obj
+          $(OBJDIR)/users.obj    &
+          $(OBJDIR)/options.obj
 
 RESFILES = $(RESDIR)/newshell.rc $(SRCDIR)/resource.h $(RESDIR)/*.ico &
            $(RESDIR)/*.cur $(RESDIR)/small.bmp
@@ -127,6 +128,7 @@ $(OBJDIR)/find.obj     : $(SRCDIR)/find.c
 $(OBJDIR)/dialogs.obj  : $(SRCDIR)/dialogs.c
 $(OBJDIR)/system.obj   : $(SRCDIR)/system.c
 $(OBJDIR)/users.obj    : $(SRCDIR)/users.c
+$(OBJDIR)/options.obj  : $(SRCDIR)/options.c
 
 # the installer (needs the submodules: git submodule update --init)
 release : .SYMBOLIC
