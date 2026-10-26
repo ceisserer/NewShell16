@@ -1207,6 +1207,10 @@ int DropTargetAt(POINT pt, LPSTR lpDir)
             ItemPath(v, i, lpDir);
             return DT_FOLDER;
         }
+        if (i >= 0 && !v->lpItems[i].bSel && IsProgramFile(v->lpItems[i].szName)) {
+            ItemPath(v, i, lpDir);
+            return DT_PROGRAM;
+        }
         if (v->szPath[0] == '\0')
             return DT_NONE;
         lstrcpy(lpDir, v->szPath);
@@ -1214,6 +1218,8 @@ int DropTargetAt(POINT pt, LPSTR lpDir)
     }
     if (lstrcmpi(szClass, CLS_DESKICON) == 0)
         return DesktopDropTarget(hwnd, lpDir);
+    if (hwnd == GetDesktopWindow())
+        return g_cfg.bDesktopIcons ? DT_DESKTOP : DT_NONE;
     return ExplorerDropTarget(hwnd, pt, lpDir);
 }
 
@@ -1223,6 +1229,8 @@ static HCURSOR DragCursor(int nTarget, BOOL bCopy)
         return LoadCursor(g_hInst, MAKEINTRESOURCE(IDC_NODROP));
     if (nTarget == DT_BIN)
         return LoadCursor(g_hInst, MAKEINTRESOURCE(IDC_DRAGMOVE));
+    if (nTarget == DT_DESKTOP || nTarget == DT_PROGRAM)
+        return LoadCursor(g_hInst, MAKEINTRESOURCE(IDC_DRAGCOPY));
     return LoadCursor(g_hInst, MAKEINTRESOURCE(bCopy ? IDC_DRAGCOPY : IDC_DRAGMOVE));
 }
 
@@ -1252,6 +1260,20 @@ static void DoDrop(HWND hwnd, LPFVIEW v, POINT ptScreen)
     if (nTarget == DT_BIN) {
         if (v->szPath[0])
             FileOpDelete(hwnd, hList, TRUE);
+    } else if (nTarget == DT_DESKTOP) {
+        DesktopAddShortcuts(hList, ptScreen);
+    } else if (nTarget == DT_PROGRAM) {
+        char szCmd[MAXPATHLEN * 2], szWork[MAXPATHLEN];
+        LPCSTR lp;
+        int n = 0;
+
+        lstrcpy(szWork, szDir);
+        PathParent(szWork);
+        for (lp = PathListFirst(hList); lp && n < 8; lp = PathListNext(lp), n++) {
+            wsprintf(szCmd, "%s %s", (LPSTR)szDir, lp);
+            LaunchCommand(hwnd, szCmd, szWork, SW_SHOWNORMAL);
+        }
+        PathListUnlock(hList);
     } else if (lstrcmpi(szDir, v->szPath) != 0 && v->szPath[0]) {
         FileOpCopyMove(hwnd, hList, szDir, !IsCopyDrop(v, szDir));
     }

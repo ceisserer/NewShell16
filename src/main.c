@@ -113,14 +113,17 @@ void HookApplySettings(void)
         uFlags |= NSH_WINKEY;
     if (g_cfg.bFileMonitor)
         uFlags |= NSH_FILES;
-    s_lpfnHookStart(g_hwndMain,
-                    GetSystemMetrics(SM_CYSCREEN) - TaskbarHeight(), uFlags);
+    uFlags = s_lpfnHookStart(g_hwndMain,
+                             GetSystemMetrics(SM_CYSCREEN) - TaskbarHeight(), uFlags);
+    /* File Manager drops onto the wallpaper reach the desktop subclass */
+    DragAcceptFiles(GetDesktopWindow(), (uFlags & NSH_DESKTOP) && g_cfg.bDesktopIcons);
 }
 
 static void UnloadHookDll(void)
 {
     if (!s_hHookDll)
         return;
+    DragAcceptFiles(GetDesktopWindow(), FALSE);
     s_lpfnHookStop();
     FreeLibrary(s_hHookDll);
     s_hHookDll = NULL;
@@ -245,6 +248,9 @@ LRESULT CALLBACK NSEXPORT MainWndProc(HWND hwnd, UINT msg, WPARAM wParam,
         case CMD_ARRANGEICONS:
             DesktopArrange();
             break;
+        case CMD_LINEUPICONS:
+            DesktopLineUp();
+            break;
         default:
             StartMenuCommand(hwnd, wParam);
         }
@@ -268,6 +274,10 @@ LRESULT CALLBACK NSEXPORT MainWndProc(HWND hwnd, UINT msg, WPARAM wParam,
         DesktopMenu((int)LOWORD(lParam), (int)HIWORD(lParam));
         return 0;
 
+    case WM_NS_DESKDROP:
+        DesktopDropFiles((HDROP)wParam);
+        return 0;
+
     case WM_NS_WINKEY:
         if (g_hwndTaskbar)
             PostMessage(g_hwndTaskbar, WM_COMMAND, CMD_STARTMENU, 0L);
@@ -287,8 +297,11 @@ LRESULT CALLBACK NSEXPORT MainWndProc(HWND hwnd, UINT msg, WPARAM wParam,
         return TRUE;
 
     case WM_ENDSESSION:
-        if (wParam)
+        if (wParam) {
+            if (g_bIsShell)
+                BinExit();
             UnloadHookDll();
+        }
         return 0;
 
     case WM_CLOSE:

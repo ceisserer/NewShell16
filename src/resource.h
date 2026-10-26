@@ -111,6 +111,9 @@
 #define IDD_FIND            306
 #define IDD_OPTIONS         307
 #define IDD_TASKMAN         308
+#define IDD_SHORTCUT        309
+#define IDD_CHANGEICON      310
+#define IDD_BINPROPS        311
 
 /* Dialog controls */
 #define IDC_RUNCMD          400
@@ -166,6 +169,23 @@
 #define IDC_TMHDR1          515
 #define IDC_TMHDR2          516
 
+#define IDC_SCICON          520
+#define IDC_SCCAPTION       521
+#define IDC_SCCMD           522
+#define IDC_SCBROWSE        523
+#define IDC_SCDIR           524
+#define IDC_SCSHOW          525
+#define IDC_SCCHANGEICON    526
+#define IDC_BINCAPTION      540
+#define IDC_BINCAPACITY     541
+#define IDC_BINEMPTYEXIT    542
+#define IDC_BINDIRECT       543
+#define IDC_BINSTATUS       544
+#define IDC_CIFILE          530
+#define IDC_CIBROWSE        531
+#define IDC_CILIST          532
+#define IDC_CISTATUS        533
+
 /* Commands (WM_COMMAND ids) */
 #define CMD_RUN             600
 #define CMD_SHUTDOWN        601
@@ -185,6 +205,7 @@
 #define CMD_OPTIONS         618
 #define CMD_DESKTOPPROPS    619
 #define CMD_ARRANGEICONS    620
+#define CMD_LINEUPICONS     621
 
 /* Folder view commands */
 #define CMD_F_OPEN          700
@@ -217,6 +238,7 @@
 #define CMD_BIN_RESTORE     750
 #define CMD_BIN_DELETE      751
 #define CMD_BIN_EMPTY       752
+#define CMD_BIN_PROPS       753
 #define CMD_TM_SWITCH       760
 #define CMD_TM_HIDE         761
 #define CMD_TM_MINIMIZE     762

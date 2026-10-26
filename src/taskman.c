@@ -24,6 +24,7 @@
  * It replaces the Windows Task List (Ctrl+Esc) when NEWSHELL.EXE is set
  * as taskman.exe= in SYSTEM.INI.
  */
+#include <stdlib.h>
 #include <string.h>
 #include "newshell.h"
 #include <toolhelp.h>
@@ -47,7 +48,7 @@ typedef struct tagTMTASK {
 
 static HWND   s_hwndTM;
 static HWND   s_hwndList;
-static TMTASK s_tasks[MAX_TM_TASKS];
+static TMTASK *s_tasks;         /* MAX_TM_TASKS, on the far heap */
 static int    s_nTasks;
 static HWND   s_hwndHidden[MAX_HIDDEN];     /* windows hidden by us */
 static int    s_nHidden;
@@ -523,6 +524,10 @@ void TaskManOpen(void)
     HWND hwndOwner;
     RECT rc;
 
+    if (!s_tasks)
+        s_tasks = (TMTASK *)malloc(MAX_TM_TASKS * sizeof(TMTASK));
+    if (!s_tasks)
+        return;
     s_hwndPrevActive = GetActiveWindow();
     while (s_hwndPrevActive
            && (hwndOwner = GetWindow(s_hwndPrevActive, GW_OWNER)) != NULL)

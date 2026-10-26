@@ -812,8 +812,10 @@ BOOL ExecMacro(HWND hwnd, LPCSTR lpCmd)
     else if (!lstrcmpi(szName, "$Bin"))         BinOpen();
     else if (!lstrcmpi(szName, "$TaskManager")) TaskManOpen();
     else if (!lstrcmpi(szName, "$MinimizePrograms")) TasksMinimizeAll();
-    else if (!lstrcmpi(szName, "$ArrangeIcons") || !lstrcmpi(szName, "$LineUpIcons"))
+    else if (!lstrcmpi(szName, "$ArrangeIcons"))
         DesktopArrange();
+    else if (!lstrcmpi(szName, "$LineUpIcons"))
+        DesktopLineUp();
     else if (!lstrcmpi(szName, "$Folder") || !lstrcmpi(szName, "$LargeIconFolder")
              || !lstrcmpi(szName, "$SmallIconFolder") || !lstrcmpi(szName, "$ListFolder"))
         FolderOpen(lpArg);

@@ -25,7 +25,8 @@
  *    so the taskbar updates at once;
  *  - a WH_CALLWNDPROC hook that reduces the maximised size of top-level
  *    windows (WM_GETMINMAXINFO) so they do not cover the taskbar;
- *  - a subclass of the desktop window reporting right clicks;
+ *  - a subclass of the desktop window reporting right clicks and files
+ *    dropped on it;
  *  - a keyboard hook for the Windows key (VK 0xFF under Windows 3.1);
  *  - KERNEL's undocumented file change callback (FileCdr), queued in a
  *    small ring buffer so the shell can refresh folder windows.
@@ -124,6 +125,11 @@ LRESULT CALLBACK __export NsDesktopProc(HWND hwnd, UINT msg, WPARAM wParam,
         pt.y = HIWORD(lParam);
         ClientToScreen(hwnd, &pt);
         PostMessage(s_hwndNotify, WM_NS_DESKMENU, 0, MAKELPARAM(pt.x, pt.y));
+    }
+    /* files from File Manager: the shell makes shortcuts of them */
+    if (msg == WM_DROPFILES && s_hwndNotify) {
+        PostMessage(s_hwndNotify, WM_NS_DESKDROP, wParam, 0L);
+        return 0;
     }
     return CallWindowProc(s_lpfnOldDesk, hwnd, msg, wParam, lParam);
 }

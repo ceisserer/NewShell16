@@ -33,6 +33,7 @@
 #define WM_NS_DESKMENU  (WM_USER + 121)     /* lParam = screen position */
 #define WM_NS_WINKEY    (WM_USER + 122)
 #define WM_NS_FILECHANGE (WM_USER + 123)    /* call NsHookGetFileChange */
+#define WM_NS_DESKDROP  (WM_USER + 124)     /* wParam = HDROP dropped on the desktop */
 
 typedef UINT (FAR PASCAL *NSHOOKSTART)(HWND hwndNotify, int yLimit, UINT uFlags);
 typedef void (FAR PASCAL *NSHOOKSTOP)(void);

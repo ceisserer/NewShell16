@@ -23,6 +23,7 @@ OBJS    = $(OBJDIR)/main.obj     &
           $(OBJDIR)/taskbar.obj  &
           $(OBJDIR)/startmnu.obj &
           $(OBJDIR)/desktop.obj  &
+          $(OBJDIR)/shortcut.obj &
           $(OBJDIR)/folder.obj   &
           $(OBJDIR)/fview.obj    &
           $(OBJDIR)/explorer.obj &
@@ -105,6 +106,7 @@ $(OBJDIR)/dde.obj      : $(SRCDIR)/dde.c
 $(OBJDIR)/taskbar.obj  : $(SRCDIR)/taskbar.c
 $(OBJDIR)/startmnu.obj : $(SRCDIR)/startmnu.c
 $(OBJDIR)/desktop.obj  : $(SRCDIR)/desktop.c
+$(OBJDIR)/shortcut.obj : $(SRCDIR)/shortcut.c
 $(OBJDIR)/folder.obj   : $(SRCDIR)/folder.c
 $(OBJDIR)/fview.obj    : $(SRCDIR)/fview.c
 $(OBJDIR)/explorer.obj : $(SRCDIR)/explorer.c

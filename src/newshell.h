@@ -87,6 +87,9 @@ typedef struct tagNSCONFIG {
     BOOL bDesktopMenu;      /* right-click menu on the desktop */
     BOOL bWinKey;           /* Windows key opens the Start menu */
     BOOL bFileMonitor;      /* refresh folders on file system changes */
+    BOOL bSnapToGrid;       /* desktop icons snap to a grid */
+    BOOL bSingleClick;      /* desktop icons open with a single click */
+    BOOL bShortcutArrows;   /* arrows on shortcuts */
 } NSCONFIG;
 
 extern NSCONFIG g_cfg;
@@ -134,6 +137,7 @@ void  IconsFree(void);
 HICON IconForFile(LPCSTR lpPath, BOOL bDir);
 HICON IconFromFile(LPCSTR lpFile, int nIndex);
 HICON IconStock(int idi);
+BOOL  IsProgramFile(LPCSTR lpPath);
 
 /* ---- progman.c -------------------------------------------------------- */
 typedef struct tagPMITEM {
@@ -180,6 +184,26 @@ BOOL DdeRegister(void);
 BOOL DdeEnabled(void);
 void DdeInitiate(HWND hwndClient, ATOM aApp, ATOM aTopic);
 
+/* ---- shortcut.c ------------------------------------------------------ */
+typedef struct tagSHORTCUT {
+    char szCaption[40];
+    char szCmd[128];
+    char szDir[80];
+    int  nShow;             /* 0 normal, 1 minimised, 2 maximised */
+    char szIconFile[80];    /* "" = the icon of what it runs */
+    int  nIconIndex;
+    BOOL bNoCommand;        /* dialog: only the caption can be changed */
+} SHORTCUT, FAR *LPSHORTCUT;
+typedef const SHORTCUT FAR *LPCSHORTCUT;
+
+BOOL  BrowseForFile(HWND hDlg, int idEdit, LPCSTR lpFilter, LPCSTR lpTitle);
+BOOL  ChangeIconDialog(HWND hwndOwner, LPSTR lpFile, int cbFile, int FAR *pnIndex);
+BOOL  ShortcutDialog(HWND hwndOwner, LPSHORTCUT lpsc, LPCSTR lpTitle);
+HICON ShortcutIconOf(LPCSHORTCUT lpsc);
+void  ShortcutParse(LPSTR lpValue, LPSHORTCUT lpsc);
+void  ShortcutFormat(LPCSHORTCUT lpsc, LPSTR lpBuf);
+BOOL  ShortcutRun(HWND hwnd, LPCSHORTCUT lpsc);
+
 /* ---- desktop.c ------------------------------------------------------- */
 void DesktopDefaultColor(void);
 BOOL DesktopCreate(void);
@@ -188,6 +212,12 @@ void DesktopArrange(void);
 void DesktopBinChanged(void);
 void DesktopMenu(int x, int y);
 int  DesktopDropTarget(HWND hwnd, LPSTR lpDir);
+void DesktopAddShortcuts(HGLOBAL hList, POINT pt);
+void DesktopDropFiles(HDROP hDrop);
+void DesktopLineUp(void);
+void DesktopRepaint(void);
+void DesktopCaptionsChanged(void);
+void DrawShortcutArrow(HDC hdc, int x, int y);
 LRESULT CALLBACK NSEXPORT DeskIconWndProc(HWND, UINT, WPARAM, LPARAM);
 
 /* ---- fview.c (folder view control) ------------------------------------ */
@@ -217,6 +247,8 @@ LRESULT CALLBACK NSEXPORT DeskIconWndProc(HWND, UINT, WPARAM, LPARAM);
 #define DT_NONE         0
 #define DT_FOLDER       1
 #define DT_BIN          2
+#define DT_DESKTOP      3       /* the wallpaper: make shortcuts */
+#define DT_PROGRAM      4       /* a program: lpDir = its command line */
 
 BOOL   FViewRegister(void);
 HWND   FViewCreate(HWND hwndParent, LPCSTR lpPath);
@@ -288,6 +320,8 @@ BOOL BinIsEmpty(void);
 void BinChanged(void);
 void BinOpen(void);
 void BinClose(void);
+void BinPropertiesDialog(HWND hwndOwner);
+void BinExit(void);
 
 /* ---- props.c --------------------------------------------------------- */
 void PropertiesDialog(HWND hwndOwner, HGLOBAL hList);
