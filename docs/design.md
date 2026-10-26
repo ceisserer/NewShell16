@@ -76,11 +76,16 @@ restyles those system parts:
 - **Menus.** The owner-drawn Start menu uses the font the system menus
   use: the theme's `Menu` font while the engine runs (`RETHEME.DLL`
   loaded; the font is read from the theme's `THEME.INI`, following
-  `Base=`), otherwise the bold System font of Windows 3.1. Separators are
-  etched with the engine and plain lines without it. Items are painted
-  into a memory bitmap and blitted, so the engine, which redraws text and
-  fills on menu DCs, cannot reinterpret them. Item heights follow the
-  font.
+  `Base=`), otherwise the bold System font of Windows 3.1. As in
+  Calmira's 3D Start menu, items use the button-face colour, the first
+  level has 32x32 icons and a banner (a gradient towards the active
+  caption colour), and separators are etched. Without the engine the
+  items also paint a raised Windows 95 frame: its inner lines are part of
+  the items, and its outer lines are drawn over the black menu border
+  Windows 3.1 draws (the owner-draw DC is not clipped to the item). Items
+  are painted into a memory bitmap and blitted, so the engine, which
+  redraws text and fills on menu DCs, cannot reinterpret them. Item
+  heights follow the font.
 - **Context menus** are owned by top-level windows (the engine only
   restyles menus of top-level windows), so they match the menu bars.
 - **Controls** are only placed in dialogs (the engine themes controls in
@@ -123,7 +128,8 @@ Notepad=notepad.exe;;0;;0         ; command;directory;show;iconfile;iconindex
 `show` is 0 (normal), 1 (minimised) or 2 (maximised). `iconfile` can be an
 executable or icon file, or a built-in image: `<programs>`, `<documents>`,
 `<settings>`, `<find>`, `<run>`, `<shutdown>`, `<system>`, `<folder>`,
-`<help>`, `<printer>`, `<control>`, `<explorer>`, `<bin>`, `<taskman>`...
+`<help>`, `<printer>`, `<control>`, `<explorer>`, `<bin>`, `<taskman>`,
+`<favorites>`, `<internet>`...
 
 Built-in commands: `$Run`, `$ShutDown`, `$Find`, `$Explore [path]`,
 `$System` (Computer), `$Bin`, `$TaskManager`, `$Folder path`,
@@ -170,7 +176,8 @@ Run=1              ; run load=/run= and the StartUp group when the shell
 
 ## Roadmap
 
-Calmira features still to come:
+[calmira-parity.md](calmira-parity.md) compares NewShell16 with Calmira
+feature by feature. The main gaps:
 
 - Shortcuts (aliases) as files, dragging items onto the desktop
 - Documents menu, editing the Start menu from a dialog

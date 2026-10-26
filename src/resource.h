@@ -36,7 +36,17 @@
 #define IDI_EXPLORER        12
 #define IDI_TASKMAN         13
 #define IDI_FIND            14
-#define IDI_LAST            14
+/* large Start menu images */
+#define IDI_SM_PROGRAMS     15
+#define IDI_SM_DOCUMENTS    16
+#define IDI_SM_SETTINGS     17
+#define IDI_SM_FIND         18
+#define IDI_SM_RUN          19
+#define IDI_SM_SHUTDOWN     20
+#define IDI_SM_HELP         21
+#define IDI_SM_FAVORITES    22
+#define IDI_SM_INTERNET     23
+#define IDI_LAST            23
 
 /* Bitmaps */
 #define IDB_SMALL           100     /* strip of 16x16 images, magenta key */
@@ -76,7 +86,9 @@
 #define SMI_TB_SORTTYPE     30
 #define SMI_TB_SORTSIZE     31
 #define SMI_TB_SORTDATE     32
-#define SMI_COUNT           33
+#define SMI_FAVORITES       33
+#define SMI_INTERNET        34
+#define SMI_COUNT           35
 
 /* Cursors */
 #define IDC_DRAGMOVE        150
