@@ -50,9 +50,11 @@ LD      = wlink
 
 # -bt=windows   target Windows 3.x       -ml    large memory model
 # -zWs          Windows prologs, smart callbacks (DS from SS)
+# -zc           string literals in the code segment, keeping the data
+#               segment (with the local heap and the stack) below 64 KB
 # -2            286 instructions         -s     no stack checks
 # -os           optimise for size        -w4    all warnings, -we as errors
-CFLAGS  = -q -bt=windows -ml -zWs -2 -s -os -w4 -we -zq &
+CFLAGS  = -q -bt=windows -ml -zWs -zc -2 -s -os -w4 -we -zq &
           -i="$(%WATCOM)/h" -i="$(%WATCOM)/h/win" -i=$(SRCDIR)
 
 # the hook DLL: DS != SS (-zu)
