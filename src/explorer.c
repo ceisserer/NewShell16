@@ -878,6 +878,15 @@ void ExplorerRefreshDrives(void)
     }
 }
 
+int ExplorerGetWindows(HWND FAR *lpOut, int nMax)
+{
+    int i;
+
+    for (i = 0; i < s_nExplorers && i < nMax; i++)
+        lpOut[i] = s_hwndExplorers[i];
+    return i;
+}
+
 void ExplorerCloseAll(void)
 {
     while (s_nExplorers > 0)

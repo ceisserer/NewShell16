@@ -27,6 +27,7 @@
  *                            so it can be used as "taskman.exe=" for Ctrl+Esc
  *   NEWSHELL /E [path]       File System window
  *   NEWSHELL /S              Start menu
+ *   NEWSHELL /D              show the desktop (minimise all, again: restore)
  *   NEWSHELL path            open a folder, document or program
  */
 #include <string.h>
@@ -176,6 +177,8 @@ static void OpenFromCommandLine(LPCSTR lpCmdLine)
     } else if (lpCmdLine[0] == '/' && (lpCmdLine[1] | 0x20) == 's') {
         if (g_hwndTaskbar)
             PostMessage(g_hwndTaskbar, WM_COMMAND, CMD_STARTMENU, 0L);
+    } else if (lpCmdLine[0] == '/' && (lpCmdLine[1] | 0x20) == 'd') {
+        TasksClearDesktop();
     } else if (*lpCmdLine)
         LaunchCommand(g_hwndMain, lpCmdLine, NULL, SW_SHOWNORMAL);
 }
@@ -210,6 +213,47 @@ void DoShutdownDialog(void)
         break;
     case IDC_CLOSESHELL:
         CloseShell();
+        break;
+    }
+}
+
+/* Commands of the desktop and taskbar menus and of some macros */
+void ShellCommand(UINT id)
+{
+    HWND hwnds[48];
+    char szSaver[MAXPATHLEN + 4];
+    int n;
+
+    switch (id) {
+    case CMD_TOGGLETASKBAR:
+        CfgSetInt("Taskbar", "Enabled", !CfgGetInt("Taskbar", "Enabled", 1));
+        TaskbarApplySettings();
+        HookApplySettings();
+        break;
+    case CMD_CLEARDESKTOP:
+        TasksClearDesktop();
+        break;
+    case CMD_CLOSEFOLDERS:
+        FolderCloseAll();
+        ExplorerCloseAll();
+        break;
+    case CMD_CASCADEFOLDERS:
+        n = FolderGetWindows(hwnds, 48);
+        CascadeList(hwnds, n);
+        if (n)
+            BringWindowToTop(hwnds[0]);
+        break;
+    case CMD_SCREENSAVER:
+        GetPrivateProfileString("boot", "SCRNSAVE.EXE", "", szSaver, MAXPATHLEN,
+                                "SYSTEM.INI");
+        if (!szSaver[0]) {
+            MessageBox(NULL, "No screen saver is chosen (Control Panel, Desktop).",
+                       NS_APPNAME, MB_OK | MB_ICONINFORMATION);
+            break;
+        }
+        lstrcat(szSaver, " /s");
+        if (WinExec(szSaver, SW_SHOWNORMAL) < 32)
+            ShowLaunchError(NULL, 2, szSaver);
         break;
     }
 }
@@ -250,6 +294,13 @@ LRESULT CALLBACK NSEXPORT MainWndProc(HWND hwnd, UINT msg, WPARAM wParam,
             break;
         case CMD_LINEUPICONS:
             DesktopLineUp();
+            break;
+        case CMD_TOGGLETASKBAR:
+        case CMD_CLEARDESKTOP:
+        case CMD_CLOSEFOLDERS:
+        case CMD_CASCADEFOLDERS:
+        case CMD_SCREENSAVER:
+            ShellCommand(wParam);
             break;
         default:
             StartMenuCommand(hwnd, wParam);
@@ -342,7 +393,7 @@ static BOOL RegisterClasses(void)
         return FALSE;
 
     return FolderRegister() && FViewRegister() && ExplorerRegister() && ToolbarRegister()
-        && TaskManRegister() && BinRegister() && FileOpRegister() && DdeRegister();
+        && TaskManRegister() && BinRegister() && FileOpRegister() && DdeRegister() && HintRegister();
 }
 
 /*

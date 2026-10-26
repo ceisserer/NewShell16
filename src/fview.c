@@ -1965,93 +1965,41 @@ static void EndRubber(HWND hwnd, LPFVIEW v)
 #define HINT_DELAY      700
 #define HINT_CHECK      200
 
-static HWND s_hwndHint;
-static char s_szHint[200];
-
-LRESULT CALLBACK NSEXPORT HintWndProc(HWND hwnd, UINT msg, WPARAM wParam,
-                                      LPARAM lParam)
-{
-    PAINTSTRUCT ps;
-    RECT rc;
-    HFONT hfOld;
-
-    switch (msg) {
-    case WM_PAINT:
-        BeginPaint(hwnd, &ps);
-        GetClientRect(hwnd, &rc);
-        FillSolid(ps.hdc, &rc, RGB(255, 255, 225));
-        hfOld = SelectObject(ps.hdc, g_hfontUI);
-        SetBkMode(ps.hdc, TRANSPARENT);
-        SetTextColor(ps.hdc, RGB(0, 0, 0));
-        InflateRect(&rc, -3, -1);
-        DrawText(ps.hdc, s_szHint, -1, &rc, DT_LEFT | DT_NOPREFIX);
-        SelectObject(ps.hdc, hfOld);
-        EndPaint(hwnd, &ps);
-        return 0;
-    case WM_MOUSEACTIVATE:
-        return MA_NOACTIVATE;
-    }
-    return DefWindowProc(hwnd, msg, wParam, lParam);
-}
-
 static void HideHint(HWND hwnd, LPFVIEW v)
 {
     KillTimer(hwnd, TIMER_HINT);
     v->nHint = -1;
-    if (s_hwndHint && IsWindowVisible(s_hwndHint))
-        ShowWindow(s_hwndHint, SW_HIDE);
+    HintHide();
 }
 
 static void ShowHint(LPFVIEW v, int i)
 {
-    char szSize[24], szDate[16], szTime[16], szType[32];
+    char szHint[200], szSize[24], szDate[16], szTime[16], szType[32];
     LPFITEM p = &v->lpItems[i];
-    RECT rc;
-    HDC hdc;
-    HFONT hfOld;
     POINT pt;
-    int n = 0, cxScreen = GetSystemMetrics(SM_CXSCREEN);
+    int n = 0;
 
-    if (!s_hwndHint)
-        s_hwndHint = CreateWindow(CLS_HINT, "", WS_POPUP | WS_BORDER, 0, 0, 0, 0,
-                                  NULL, NULL, g_hInst, NULL);
-    if (!s_hwndHint)
-        return;
     TypeName(p, szType);
-    n = wsprintf(s_szHint, "%s", (LPSTR)ShownName(p));
+    n = wsprintf(szHint, "%s", (LPSTR)ShownName(p));
     if (p->wDesc)
-        n += wsprintf(s_szHint + n, "\n%s", v->lpDesc + p->wDesc - 1);
-    n += wsprintf(s_szHint + n, "\n%s", (LPSTR)szType);
+        n += wsprintf(szHint + n, "\n%s", v->lpDesc + p->wDesc - 1);
+    n += wsprintf(szHint + n, "\n%s", (LPSTR)szType);
     if (p->bKind == FK_FILE) {
         FormatBytes(p->dwSize, szSize);
-        n += wsprintf(s_szHint + n, ", %s", (LPSTR)szSize);
+        n += wsprintf(szHint + n, ", %s", (LPSTR)szSize);
     }
     if (p->bKind != FK_DRIVE) {
         FormatDate(p->wDate, szDate);
         FormatTime(p->wTime, szTime);
-        n += wsprintf(s_szHint + n, "\n%s  %s", (LPSTR)szDate, (LPSTR)szTime);
+        n += wsprintf(szHint + n, "\n%s  %s", (LPSTR)szDate, (LPSTR)szTime);
         if (p->bAttr & (_A_RDONLY | _A_HIDDEN | _A_SYSTEM))
-            wsprintf(s_szHint + n, "\n%s%s%s",
+            wsprintf(szHint + n, "\n%s%s%s",
                      (LPSTR)((p->bAttr & _A_RDONLY) ? "Read-only " : ""),
                      (LPSTR)((p->bAttr & _A_HIDDEN) ? "Hidden " : ""),
                      (LPSTR)((p->bAttr & _A_SYSTEM) ? "System" : ""));
     }
-    hdc = GetDC(NULL);
-    hfOld = SelectObject(hdc, g_hfontUI);
-    SetRect(&rc, 0, 0, 300, 0);
-    DrawText(hdc, s_szHint, -1, &rc, DT_CALCRECT | DT_LEFT | DT_NOPREFIX);
-    SelectObject(hdc, hfOld);
-    ReleaseDC(NULL, hdc);
     GetCursorPos(&pt);
-    pt.y += 20;
-    if (pt.x + rc.right + 8 > cxScreen)
-        pt.x = cxScreen - rc.right - 8;
-    if (pt.y + rc.bottom + 4 > GetSystemMetrics(SM_CYSCREEN) - TaskbarHeight())
-        pt.y -= rc.bottom + 30;
-    SetWindowPos(s_hwndHint, HWND_TOPMOST, pt.x, pt.y, rc.right + 8, rc.bottom + 4,
-                 SWP_NOACTIVATE | SWP_SHOWWINDOW);
-    InvalidateRect(s_hwndHint, NULL, FALSE);
-    UpdateWindow(s_hwndHint);
+    HintShow(szHint, pt.x, pt.y + 20);
 }
 
 /* The mouse moved over the view without a button: prepare a hint */
@@ -2086,7 +2034,7 @@ static void OnHintTimer(HWND hwnd, LPFVIEW v)
         HideHint(hwnd, v);
         return;
     }
-    if (!s_hwndHint || !IsWindowVisible(s_hwndHint))
+    if (!HintVisible())
         ShowHint(v, v->nHint);
     /* keep checking whether the mouse leaves */
     SetTimer(hwnd, TIMER_HINT, HINT_CHECK, NULL);
@@ -2531,13 +2479,6 @@ BOOL FViewRegister(void)
     wc.hCursor = LoadCursor(NULL, IDC_ARROW);
     wc.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
     wc.lpszClassName = CLS_FVIEW;
-    if (!RegisterClass(&wc))
-        return FALSE;
-    wc.style = CS_SAVEBITS;
-    wc.lpfnWndProc = HintWndProc;
-    wc.cbWndExtra = 0;
-    wc.hbrBackground = NULL;
-    wc.lpszClassName = CLS_HINT;
     return RegisterClass(&wc);
 }
 

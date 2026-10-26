@@ -306,27 +306,33 @@ static void EndTask(void)
     SetTimer(s_hwndTM, TIMER_REFRESH, 700, NULL);
 }
 
-static void Terminate(void)
+/* Ends a task the hard way, after asking */
+void TaskManTerminate(HWND hwnd, HWND hwndOwner)
 {
-    HWND hwnd = SelectedWnd();
     char szMsg[160], szTitle[80];
     HTASK hTask;
 
-    if (!hwnd)
+    if (!hwnd || !IsWindow(hwnd))
         return;
     hTask = GetWindowTask(hwnd);
     GetWindowText(hwnd, szTitle, sizeof(szTitle));
     wsprintf(szMsg, "Terminating '%s' discards any unsaved data and may leave "
                     "Windows unstable.\n\nTerminate it anyway?", (LPSTR)szTitle);
-    if (MessageBox(s_hwndTM, szMsg, "Terminate Task",
+    if (MessageBox(hwndOwner, szMsg, "Terminate Task",
                    MB_YESNO | MB_ICONSTOP | MB_DEFBUTTON2) != IDYES)
         return;
     if (hTask == GetCurrentTask()) {
-        MessageBox(s_hwndTM, "NewShell16 cannot terminate itself.", "Terminate Task",
+        MessageBox(hwndOwner, "NewShell16 cannot terminate itself.", "Terminate Task",
                    MB_OK | MB_ICONEXCLAMATION);
         return;
     }
     TerminateApp(hTask, NO_UAE_BOX);
+    TaskbarRefresh();
+}
+
+static void Terminate(void)
+{
+    TaskManTerminate(SelectedWnd(), s_hwndTM);
     SetTimer(s_hwndTM, TIMER_REFRESH, 700, NULL);
 }
 

@@ -249,6 +249,14 @@
 #define CMD_ARRANGEICONS    620
 #define CMD_LINEUPICONS     621
 #define CMD_STARTPROPS      622
+#define CMD_TB_WININFO      623
+#define CMD_TB_TERMINATE    624
+#define CMD_TB_AUTOHIDE     625
+#define CMD_TOGGLETASKBAR   626
+#define CMD_CLEARDESKTOP    627
+#define CMD_CLOSEFOLDERS    628
+#define CMD_CASCADEFOLDERS  629
+#define CMD_SCREENSAVER     630
 
 /* Folder view commands */
 #define CMD_F_OPEN          700

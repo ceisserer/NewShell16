@@ -920,6 +920,11 @@ BOOL ExecMacro(HWND hwnd, LPCSTR lpCmd)
     else if (!lstrcmpi(szName, "$Bin"))         BinOpen();
     else if (!lstrcmpi(szName, "$TaskManager")) TaskManOpen();
     else if (!lstrcmpi(szName, "$MinimizePrograms")) TasksMinimizeAll();
+    else if (!lstrcmpi(szName, "$ClearDesktop"))  ShellCommand(CMD_CLEARDESKTOP);
+    else if (!lstrcmpi(szName, "$CascadeBrowsers")) ShellCommand(CMD_CASCADEFOLDERS);
+    else if (!lstrcmpi(szName, "$CloseBrowsers")) ShellCommand(CMD_CLOSEFOLDERS);
+    else if (!lstrcmpi(szName, "$ScreenSaver"))   ShellCommand(CMD_SCREENSAVER);
+    else if (!lstrcmpi(szName, "$ToggleTaskbar")) ShellCommand(CMD_TOGGLETASKBAR);
     else if (!lstrcmpi(szName, "$ArrangeIcons"))
         DesktopArrange();
     else if (!lstrcmpi(szName, "$LineUpIcons"))

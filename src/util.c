@@ -337,6 +337,97 @@ void FitText(HDC hdc, LPCSTR lpSrc, LPSTR lpDst, int cbDst, int cxMax)
 }
 
 /* -------------------------------------------------------------------- */
+/* Hints                                                                */
+/* -------------------------------------------------------------------- */
+
+/* One small yellow popup with text, used by folder views and the taskbar */
+static HWND s_hwndHint;
+static char s_szHint[256];
+
+LRESULT CALLBACK NSEXPORT HintWndProc(HWND hwnd, UINT msg, WPARAM wParam,
+                                      LPARAM lParam)
+{
+    PAINTSTRUCT ps;
+    RECT rc;
+    HFONT hfOld;
+
+    switch (msg) {
+    case WM_PAINT:
+        BeginPaint(hwnd, &ps);
+        GetClientRect(hwnd, &rc);
+        FillSolid(ps.hdc, &rc, RGB(255, 255, 225));
+        hfOld = SelectObject(ps.hdc, g_hfontUI);
+        SetBkMode(ps.hdc, TRANSPARENT);
+        SetTextColor(ps.hdc, RGB(0, 0, 0));
+        InflateRect(&rc, -3, -1);
+        DrawText(ps.hdc, s_szHint, -1, &rc, DT_LEFT | DT_NOPREFIX);
+        SelectObject(ps.hdc, hfOld);
+        EndPaint(hwnd, &ps);
+        return 0;
+    case WM_MOUSEACTIVATE:
+        return MA_NOACTIVATE;
+    }
+    return DefWindowProc(hwnd, msg, wParam, lParam);
+}
+
+BOOL HintRegister(void)
+{
+    WNDCLASS wc;
+
+    _fmemset(&wc, 0, sizeof(wc));
+    wc.style = CS_SAVEBITS;
+    wc.lpfnWndProc = HintWndProc;
+    wc.hInstance = g_hInst;
+    wc.hCursor = LoadCursor(NULL, IDC_ARROW);
+    wc.lpszClassName = CLS_HINT;
+    return RegisterClass(&wc);
+}
+
+/* Shows lpText (lines split by \n) with its top left near x, y on screen */
+void HintShow(LPCSTR lpText, int x, int y)
+{
+    RECT rc;
+    HDC hdc;
+    HFONT hfOld;
+    int cxScreen = GetSystemMetrics(SM_CXSCREEN);
+    int cyScreen = GetSystemMetrics(SM_CYSCREEN);
+
+    if (!s_hwndHint)
+        s_hwndHint = CreateWindow(CLS_HINT, "", WS_POPUP | WS_BORDER, 0, 0, 0, 0,
+                                  NULL, NULL, g_hInst, NULL);
+    if (!s_hwndHint)
+        return;
+    lstrcpyn(s_szHint, lpText, sizeof(s_szHint));
+    hdc = GetDC(NULL);
+    hfOld = SelectObject(hdc, g_hfontUI);
+    SetRect(&rc, 0, 0, 300, 0);
+    DrawText(hdc, s_szHint, -1, &rc, DT_CALCRECT | DT_LEFT | DT_NOPREFIX);
+    SelectObject(hdc, hfOld);
+    ReleaseDC(NULL, hdc);
+    if (x + rc.right + 8 > cxScreen)
+        x = cxScreen - rc.right - 8;
+    if (x < 0)
+        x = 0;
+    if (y + rc.bottom + 4 > cyScreen)
+        y = cyScreen - rc.bottom - 4;
+    SetWindowPos(s_hwndHint, HWND_TOPMOST, x, y, rc.right + 8, rc.bottom + 4,
+                 SWP_NOACTIVATE | SWP_SHOWWINDOW);
+    InvalidateRect(s_hwndHint, NULL, FALSE);
+    UpdateWindow(s_hwndHint);
+}
+
+void HintHide(void)
+{
+    if (s_hwndHint && IsWindowVisible(s_hwndHint))
+        ShowWindow(s_hwndHint, SW_HIDE);
+}
+
+BOOL HintVisible(void)
+{
+    return s_hwndHint && IsWindowVisible(s_hwndHint);
+}
+
+/* -------------------------------------------------------------------- */
 /* Paths                                                                */
 /* -------------------------------------------------------------------- */
 

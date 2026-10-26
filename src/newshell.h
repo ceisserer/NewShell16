@@ -139,6 +139,10 @@ BOOL LaunchCommand(HWND hwnd, LPCSTR lpCmdLine, LPCSTR lpDir, int nShow);
 BOOL OpenPath(HWND hwnd, LPCSTR lpPath);
 void ShowLaunchError(HWND hwnd, UINT uErr, LPCSTR lpWhat);
 BOOL IsShiftDown(void);
+BOOL HintRegister(void);
+void HintShow(LPCSTR lpText, int x, int y);
+void HintHide(void);
+BOOL HintVisible(void);
 BOOL WildMatch(LPCSTR lpPattern, LPCSTR lpName);
 BOOL MatchSpecList(LPCSTR lpName, LPCSTR lpList);
 
@@ -172,7 +176,10 @@ void RunWinIniLoadRun(void);
 BOOL TaskbarCreate(void);
 void TaskbarRefresh(void);
 int  TaskbarHeight(void);
+void TaskbarApplySettings(void);
 void TasksMinimizeAll(void);
+void TasksClearDesktop(void);
+void ShellCommand(UINT id);
 int  TasksGetList(HWND FAR *lpOut, int nMax);
 LRESULT CALLBACK NSEXPORT TaskbarWndProc(HWND, UINT, WPARAM, LPARAM);
 
@@ -289,6 +296,7 @@ BOOL FolderRegister(void);
 HWND FolderOpen(LPCSTR lpPath);     /* "" opens the Computer window */
 void FolderCloseAll(void);
 void FolderBarsChanged(void);
+int  FolderGetWindows(HWND FAR *lpOut, int nMax);
 void PaintStatusBar(HWND hwnd, HDC hdc, int cyStatus, LPCSTR lpText, int xPane);
 int  StatusBarHeight(void);
 LRESULT CALLBACK NSEXPORT FolderWndProc(HWND, UINT, WPARAM, LPARAM);
@@ -316,6 +324,7 @@ void ExplorerRefreshPath(LPCSTR lpDir);
 int  ExplorerDropTarget(HWND hwnd, POINT pt, LPSTR lpDir);
 void ExplorerCloseAll(void);
 void ExplorerRefreshDrives(void);
+int  ExplorerGetWindows(HWND FAR *lpOut, int nMax);
 
 /* ---- fileops.c ------------------------------------------------------- */
 BOOL   PathListAdd(HGLOBAL FAR *phList, LPCSTR lpPath);
@@ -371,6 +380,7 @@ void PropertiesDialog(HWND hwndOwner, HGLOBAL hList);
 BOOL TaskManRegister(void);
 void TaskManOpen(void);
 void TaskManClose(void);
+void TaskManTerminate(HWND hwndTask, HWND hwndOwner);
 BOOL TaskManIsDialogMessage(MSG FAR *lpMsg);
 void GetWorkArea(RECT FAR *lprc);
 void CascadeList(HWND FAR *lpList, int n);

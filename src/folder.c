@@ -365,6 +365,16 @@ HWND FolderOpen(LPCSTR lpPath)
     return hwnd;
 }
 
+/* The folder windows (and File System windows) into lpOut */
+int FolderGetWindows(HWND FAR *lpOut, int nMax)
+{
+    int i, n = 0;
+
+    for (i = 0; i < s_nFolders && n < nMax; i++)
+        lpOut[n++] = s_hwndFolders[i];
+    return n + ExplorerGetWindows(lpOut + n, nMax - n);
+}
+
 void FolderCloseAll(void)
 {
     while (s_nFolders > 0)

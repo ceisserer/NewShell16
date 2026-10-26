@@ -917,7 +917,14 @@ void DesktopMenu(int x, int y)
     AppendMenu(hMenu, MF_STRING, CMD_TILE, "Tile &Horizontally");
     AppendMenu(hMenu, MF_STRING, CMD_TILEVERT, "Tile &Vertically");
     AppendMenu(hMenu, MF_STRING, CMD_MINIMIZEALL, "&Minimize All Windows");
+    AppendMenu(hMenu, MF_STRING, CMD_CLEARDESKTOP, "&Show the Desktop");
     AppendMenu(hMenu, MF_SEPARATOR, 0, NULL);
+    AppendMenu(hMenu, MF_STRING, CMD_CASCADEFOLDERS, "Cascade &Folder Windows");
+    AppendMenu(hMenu, MF_STRING, CMD_CLOSEFOLDERS, "Close F&older Windows");
+    AppendMenu(hMenu, MF_SEPARATOR, 0, NULL);
+    if (!CfgGetInt("Taskbar", "Enabled", 1))
+        AppendMenu(hMenu, MF_STRING, CMD_TOGGLETASKBAR, "Show the Task&bar");
+    AppendMenu(hMenu, MF_STRING, CMD_SCREENSAVER, "Sc&reen Saver");
     AppendMenu(hMenu, MF_STRING, CMD_TASKMAN, "&Task Manager...");
     AppendMenu(hMenu, MF_STRING, CMD_DESKTOPPROPS, "&Desktop Settings...");
     AppendMenu(hMenu, MF_STRING, CMD_OPTIONS, "NewShell16 &Options...");
