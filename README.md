@@ -9,30 +9,47 @@ experience as a small, native 16-bit C program.
 
 ## Status
 
-Usable as the Windows 3.1 shell. Implemented so far:
+Usable as the Windows 3.1 shell, with nearly all of Calmira's features:
 
 - **Taskbar** with Start button, a button per application (icon, click to
-  activate/minimise, right-click for its system menu), clock, and a menu to
-  cascade/tile/minimise windows. Minimised windows are kept off the
-  desktop and maximised windows stop above the taskbar.
+  activate/minimise, right-click for its system menu with Window Info and
+  Terminate), a tray, a clock with the date as a hint, auto-hide, an
+  exclusion list, and a menu to cascade/tile/minimise windows and show
+  the desktop. Minimised windows are kept off the desktop and maximised
+  windows stop above the taskbar.
 - **Start menu** in Calmira's START.INI format (`NSSTART.INI`), created
-  from the Program Manager groups on first use, with icons at every level.
-- **Desktop** with Computer, Bin and configurable shortcut icons, and a
-  right-click menu.
+  from the Program Manager groups on first use, with icons at every level,
+  Calmira's 3D look or a plain menu, and an editor (Start Menu Properties).
+  Setup programs add their groups to it over DDE, as they would to
+  Program Manager.
+- **Desktop** with Computer, Bin and shortcuts made by dragging files,
+  folders, drives or programs onto it (shortcut properties, Change Icon,
+  Calmira's arrows, a grid), and a right-click menu.
 - **Folder windows** and the **Computer** window: large icon, small icon,
-  list and details views (a table with resizable columns, including the
-  descriptions of `DESCRIPT.ION`), sorting, multiple selection, type-ahead, inline
-  rename, new folder, cut/copy/paste, delete (to the Bin), properties,
-  drag and drop between windows, onto folders and onto the Bin, and drops
-  from File Manager.
-- **File System**: folder tree beside a folder view, with a toolbar (up,
-  new folder, cut/copy/paste, delete, properties, views, sort order) and a
-  two-part status bar.
-- **Bin**: deleted items can be restored or deleted for good.
+  list and details views (a table with resizable and optional columns,
+  including the descriptions of `DESCRIPT.ION`, which Describe edits),
+  sorting, multiple and rubber-band selection, type-ahead, filters,
+  Select Files, Go To, a toolbar, hints with file details, inline rename,
+  new folder, cut/copy/paste, delete (to the Bin) and Undelete, Open With,
+  Inspect, Print, aliases (Calmira's `.ALS` files), properties (with
+  version information, the program that opens a file, and a pie for
+  drives), drag and drop with either mouse button between windows, onto
+  folders, programs, the desktop and the Bin, and drops from File Manager.
+- **File System**: folder tree beside a folder view, with a toolbar and a
+  two-part status bar; the tree has Calmira's menu (expand branches,
+  share folders with Windows for Workgroups...). **Browse Folders** shows
+  the tree alone.
+- **Bin**: deleted items can be restored or deleted for good; a capacity,
+  emptying when Windows exits.
 - **Task Manager** (Ctrl+Esc): switch to, hide, minimise, end or terminate
   tasks, start new ones, cascade and tile.
-- **Find** files and folders.
-- Run, Shut Down, Properties, Options and About dialogs.
+- **Find** files and folders by name and contents, with a menu on the
+  results.
+- Run (with history and MS-DOS windows), Shut Down, Properties, Options
+  (pages for every setting), Tip of the Day and About dialogs.
+- Hot keys, the Windows key (Win+E, Win+R...), sounds for events, web
+  addresses opening in a browser, users with their own settings, a splash
+  and a shutdown screen, and the folder windows of the last session.
 - Folder windows refresh by themselves when files change.
 - As the shell it runs `load=`/`run=` and the StartUp group.
 

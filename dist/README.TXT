@@ -47,6 +47,29 @@ Silent installation (for scripts and network installs):
   SETUP /U [/S]   removes NewShell16
 
 
+USING NEWSHELL16
+
+  Start menu     Start > Settings > Start Menu edits it. Setup programs add
+                 their groups to Programs, as they would to Program Manager.
+  Shortcuts      Drag files, folders, drives or programs from a folder
+                 window or File Manager onto the desktop. Right-click a
+                 shortcut for its properties; drop it on the Bin to remove it.
+  Dragging       With the right mouse button, a menu asks whether to move,
+                 copy or make an alias. Drop documents onto a program to
+                 open them with it.
+  Folders        View > Set Filter, Edit > Select Files, File > Open With,
+                 Describe, Create Alias, Ctrl+U undeletes, Ctrl+G goes to a
+                 folder. Rest the mouse on a file to see its details.
+  Taskbar        Right-click it for Show the Desktop, Auto Hide and the
+                 Task Manager. Ctrl+Esc opens the Task Manager or the Start
+                 menu; the Windows key the Start menu (Win+E, Win+R, Win+F,
+                 Win+M, Win+D).
+  Options        Start > Settings > Taskbar has a page for each part of
+                 NewShell16. Some settings, such as the tray, hot keys and
+                 sounds, are explained in the NewShell16 documentation
+                 (docs/design.md in the source).
+
+
 FILES
 
   NEWSHELL.EXE   the shell
