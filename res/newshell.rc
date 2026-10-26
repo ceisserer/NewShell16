@@ -474,6 +474,43 @@ BEGIN
     PUSHBUTTON      "Cancel", IDCANCEL, 92, 100, 50, 14
 END
 
+IDD_STARTPROPS DIALOG 20, 10, 264, 236
+STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Start Menu Properties"
+FONT 8, "MS Sans Serif"
+BEGIN
+    LTEXT           "&Menu items (double-click a submenu to open or close it):", -1, 8, 6, 190, 8
+    LISTBOX         IDC_SPTREE, 8, 16, 178, 128,
+                    LBS_OWNERDRAWFIXED | LBS_NOTIFY | LBS_NOINTEGRALHEIGHT | LBS_WANTKEYBOARDINPUT
+                    | WS_VSCROLL | WS_BORDER | WS_TABSTOP
+    PUSHBUTTON      "&New Item...", IDC_SPNEWITEM, 192, 16, 64, 14
+    PUSHBUTTON      "New &Submenu...", IDC_SPNEWSUB, 192, 33, 64, 14
+    PUSHBUTTON      "Se&parator", IDC_SPNEWSEP, 192, 50, 64, 14
+    PUSHBUTTON      "&Delete", IDC_SPDELETE, 192, 67, 64, 14
+    PUSHBUTTON      "P&roperties...", IDC_SPEDIT, 192, 84, 64, 14
+    PUSHBUTTON      "Move &Up", IDC_SPUP, 192, 101, 64, 14
+    PUSHBUTTON      "Move Do&wn", IDC_SPDOWN, 192, 118, 64, 14
+    PUSHBUTTON      "&Import Groups", IDC_SPIMPORT, 192, 135, 64, 14
+    GROUPBOX        "Look", -1, 8, 148, 248, 64
+    CONTROL         "Windows &95 look: banner and 3D frame", IDC_SP3D, "Button",
+                    BS_AUTOCHECKBOX | WS_TABSTOP, 14, 160, 150, 10
+    CONTROL         "&Coloured selection bar", IDC_SPCOLBAR, "Button",
+                    BS_AUTOCHECKBOX | WS_TABSTOP, 14, 172, 110, 10
+    CONTROL         "&Bold selected item", IDC_SPBOLD, "Button",
+                    BS_AUTOCHECKBOX | WS_TABSTOP, 130, 172, 120, 10
+    CONTROL         "&Large icons on the first level", IDC_SPLARGE, "Button",
+                    BS_AUTOCHECKBOX | WS_TABSTOP, 14, 184, 110, 10
+    LTEXT           "Item &height:", -1, 130, 185, 44, 8
+    EDITTEXT        IDC_SPHEIGHT, 176, 183, 24, 12
+    PUSHBUTTON      "&Font...", IDC_SPFONT, 206, 158, 44, 14
+    CONTROL         "Open when the mouse button is &released", IDC_SPMOUSEUP, "Button",
+                    BS_AUTOCHECKBOX | WS_TABSTOP, 14, 197, 236, 10
+    CONTROL         "Let setup programs add &groups (DDE)", IDC_SPDDE, "Button",
+                    BS_AUTOCHECKBOX | WS_TABSTOP, 8, 218, 150, 10
+    DEFPUSHBUTTON   "OK", IDOK, 160, 216, 46, 14
+    PUSHBUTTON      "Cancel", IDCANCEL, 210, 216, 46, 14
+END
+
 VS_VERSION_INFO VERSIONINFO
 FILEVERSION     0, 2, 0, 0
 PRODUCTVERSION  0, 2, 0, 0

@@ -124,6 +124,7 @@
 #define IDD_OPENWITH        315
 #define IDD_DESCRIBE        316
 #define IDD_COLUMNS         317
+#define IDD_STARTPROPS      318
 
 /* Dialog controls */
 #define IDC_RUNCMD          400
@@ -205,6 +206,23 @@
 #define IDC_DESCTEXT        561
 #define IDC_DESCEDIT        562
 #define IDC_COL_FIRST       570     /* .. +5: Size .. Description */
+#define IDC_SPTREE          580
+#define IDC_SPNEWITEM       581
+#define IDC_SPNEWSUB        582
+#define IDC_SPNEWSEP        583
+#define IDC_SPDELETE        584
+#define IDC_SPEDIT          585
+#define IDC_SPUP            586
+#define IDC_SPDOWN          587
+#define IDC_SPIMPORT        588
+#define IDC_SP3D            589
+#define IDC_SPCOLBAR        590
+#define IDC_SPBOLD          591
+#define IDC_SPLARGE         592
+#define IDC_SPHEIGHT        593
+#define IDC_SPFONT          594
+#define IDC_SPMOUSEUP       595
+#define IDC_SPDDE           596
 #define IDC_CIFILE          530
 #define IDC_CIBROWSE        531
 #define IDC_CILIST          532
@@ -230,6 +248,7 @@
 #define CMD_DESKTOPPROPS    619
 #define CMD_ARRANGEICONS    620
 #define CMD_LINEUPICONS     621
+#define CMD_STARTPROPS      622
 
 /* Folder view commands */
 #define CMD_F_OPEN          700

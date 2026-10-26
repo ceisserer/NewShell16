@@ -22,6 +22,7 @@ OBJS    = $(OBJDIR)/main.obj     &
           $(OBJDIR)/dde.obj      &
           $(OBJDIR)/taskbar.obj  &
           $(OBJDIR)/startmnu.obj &
+          $(OBJDIR)/startprop.obj &
           $(OBJDIR)/desktop.obj  &
           $(OBJDIR)/shortcut.obj &
           $(OBJDIR)/folder.obj   &
@@ -107,6 +108,7 @@ $(OBJDIR)/progman.obj  : $(SRCDIR)/progman.c
 $(OBJDIR)/dde.obj      : $(SRCDIR)/dde.c
 $(OBJDIR)/taskbar.obj  : $(SRCDIR)/taskbar.c
 $(OBJDIR)/startmnu.obj : $(SRCDIR)/startmnu.c
+$(OBJDIR)/startprop.obj : $(SRCDIR)/startprop.c
 $(OBJDIR)/desktop.obj  : $(SRCDIR)/desktop.c
 $(OBJDIR)/shortcut.obj : $(SRCDIR)/shortcut.c
 $(OBJDIR)/folder.obj   : $(SRCDIR)/folder.c

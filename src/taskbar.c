@@ -48,6 +48,7 @@ static RECT    s_rcStart;
 static RECT    s_rcClock;
 static char    s_szClock[16];
 static BOOL    s_bStartDown;
+static BOOL    s_bStartPress;      /* Start pressed, opening on the release */
 static int     s_cyBar;
 static HWND    s_hwndSysMenuTarget;
 static BOOL    s_bLiftMenu;        /* move the next popup above the taskbar */
@@ -499,6 +500,7 @@ static void TaskbarContextMenu(HWND hwnd, POINT pt)
     AppendMenu(hMenu, MF_STRING, CMD_MINIMIZEALL, "&Minimize All Windows");
     AppendMenu(hMenu, MF_SEPARATOR, 0, NULL);
     AppendMenu(hMenu, MF_STRING, CMD_TASKMAN, "&Task Manager...");
+    AppendMenu(hMenu, MF_STRING, CMD_STARTPROPS, "&Start Menu...");
     AppendMenu(hMenu, MF_STRING, CMD_OPTIONS, "&Options...");
     AppendMenu(hMenu, MF_STRING, CMD_ABOUT, "&About NewShell16...");
     if (!g_bIsShell) {
@@ -614,10 +616,44 @@ LRESULT CALLBACK NSEXPORT TaskbarWndProc(HWND hwnd, UINT msg, WPARAM wParam,
         pt.x = LOWORD(lParam);
         pt.y = HIWORD(lParam);
         if (PtInRect(&s_rcStart, pt)) {
-            if (GetMessageTime() != (LONG)s_dwCloseTime)
+            if (GetMessageTime() == (LONG)s_dwCloseTime)
+                ;
+            else if (CfgGetInt("Start Menu", "MouseUp", 0)) {
+                /* opens on the release, like a button */
+                s_bStartDown = TRUE;
+                s_bStartPress = TRUE;
+                SetCapture(hwnd);
+                InvalidateRect(hwnd, &s_rcStart, FALSE);
+            } else
                 ShowStartMenu(hwnd);
         } else if ((i = HitTask(pt)) >= 0) {
             ActivateTask(s_tasks[i].hwnd);
+        }
+        return 0;
+
+    case WM_MOUSEMOVE:
+        if (s_bStartPress) {
+            pt.x = LOWORD(lParam);
+            pt.y = HIWORD(lParam);
+            if (PtInRect(&s_rcStart, pt) != s_bStartDown) {
+                s_bStartDown = !s_bStartDown;
+                InvalidateRect(hwnd, &s_rcStart, FALSE);
+            }
+        }
+        return 0;
+
+    case WM_LBUTTONUP:
+        if (s_bStartPress) {
+            s_bStartPress = FALSE;
+            ReleaseCapture();
+            pt.x = LOWORD(lParam);
+            pt.y = HIWORD(lParam);
+            if (PtInRect(&s_rcStart, pt))
+                ShowStartMenu(hwnd);
+            else {
+                s_bStartDown = FALSE;
+                InvalidateRect(hwnd, &s_rcStart, FALSE);
+            }
         }
         return 0;
 
