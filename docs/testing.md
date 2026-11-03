@@ -115,7 +115,7 @@ release can be installed with its own Setup from Program Manager:
 ```sh
 wmake release
 tools/emu/winemu.py --windir ~/win31/Win/WINDOWS --work /tmp/nsemu-setup --out shots \
-    --progman --no-install --install build/release/newshell-0.2.0=SETUPSRC \
+    --progman --no-install --install build/release/newshell-0.3.0=SETUPSRC \
     --set 'WIN.INI:windows:run=C:\SETUPSRC\SETUP.EXE' --script "sleep:20 shot:setup.png ..."
 ```
 

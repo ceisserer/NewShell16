@@ -107,7 +107,7 @@ You need your own copy of Windows 3.1 (see
 a [release](https://github.com/ceisserer/NewShell16/releases):
 
 ```sh
-V=0.2.0
+V=0.3.0
 curl -LO https://github.com/ceisserer/NewShell16/releases/download/v$V/newshell-$V-disk.img
 ```
 
