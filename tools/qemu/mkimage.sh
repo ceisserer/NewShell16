@@ -205,6 +205,20 @@ fi
 
 # ---- copy the setup files (the partition starts at sector 63)
 C="$TMP/win31.img@@32256"
+
+# Mouse acceleration off (WIN.INI [windows] MouseSpeed=0): QEMU passes the
+# host pointer on as relative PS/2 moves, which Windows would otherwise
+# accelerate, so its pointer drifts away from the host's (badly over VNC).
+mtype -i "$C" ::/WINDOWS/WIN.INI | tr -d '\r' | awk '
+    /^\[/ { if (sec == "[windows]" && !done) { print "MouseSpeed=0"; done = 1 }
+            sec = tolower($0) }
+    sec == "[windows]" && tolower($0) ~ /^mouse(speed|threshold1|threshold2)=/ {
+        if (!done) { print "MouseSpeed=0"; done = 1 }; next }
+    { print }
+    END { if (!done) { if (sec != "[windows]") print "[windows]"; print "MouseSpeed=0" } }
+' | sed 's/$/\r/' >"$TMP/WIN.INI"
+mcopy -o -i "$C" "$TMP/WIN.INI" ::/WINDOWS/WIN.INI
+
 echo "== copying $(basename "$NS_PKG") to C:\\NSSETUP"
 mmd -i "$C" ::/NSSETUP
 mcopy -s -i "$C" "$NS_REL"/* ::/NSSETUP/
