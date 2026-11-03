@@ -33,9 +33,9 @@ or remove its files, Setup restarts Windows with Program Manager once,
 finishes there and restarts Windows again.
 
 "Themes" in the same group switches the theme at once, without
-restarting Windows. Start > Settings > Taskbar, page Desktop, "Look of
-taskbar and Start menu" chooses the Windows XP or Windows 95 look of
-NewShell16 regardless of the theme.
+restarting Windows. Start > Settings > Taskbar, page Desktop, "Taskbar
+look" chooses the Windows XP or Windows 95 look of NewShell16's taskbar
+and Start menu regardless of the theme.
 
 Silent installation (for scripts and network installs):
 

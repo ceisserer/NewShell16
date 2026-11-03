@@ -74,7 +74,7 @@ static const OPTDEF s_opts[] = {
     { 1, OT_CHECK,    "Open icons with a &single click", "Desktop", "SingleClick", 0 },
     { 1, OT_CHECK,    "&Arrows on shortcuts and aliases", "Desktop", "ShortcutArrows", 1 },
     { 1, OT_CHECK,    "Right click on minimize or maximize box &closes", "Desktop", "RightClose", 0 },
-    { 1, OT_COMBO,    "&Look of taskbar and Start menu:", "Taskbar", "Look", 0 },
+    { 1, OT_COMBO,    "Taskbar &look:", "Taskbar", "Look", 0 },
     { 1, OT_COLOR,    "&Taskbar colour...", "Colors", "Taskbar", NSC_TASKBAR },
     { 1, OT_COLOR,    "St&art menu colour...", "Colors", "StartMenu", NSC_STARTMENU },
     { 1, OT_COLOR,    "S&election colour...", "Colors", "Selection", NSC_SELECTION },
