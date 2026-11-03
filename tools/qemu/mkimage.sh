@@ -32,12 +32,21 @@
 #   vbesvga-release.zip                          (-d 8/16; downloaded from
 #                                                GitHub if it is missing)
 #
-# Needs: qemu-system-i386, 7z (p7zip-full), mtools, sfdisk (fdisk), unzip,
-# Python 3, and for the build Open Watcom 2.0 (WATCOM, default /opt/watcom),
-# gcc, make and Pillow. Installing Windows takes a minute or two, unattended.
+# Needs: qemu-system-i386, 7z (p7zip / p7zip-full), mtools, sfdisk
+# (util-linux / fdisk), unzip, curl, Python 3, and for the build gcc, make,
+# Python's Pillow and Open Watcom 2.0. Open Watcom is looked for in $WATCOM,
+# /opt/watcom and ~/.cache/newshell16/watcom; if it is in none of them, the
+# current snapshot (about 100 MB) is downloaded into the last one. Installing
+# Windows takes a minute or two, unattended.
+#
+#   Fedora:  sudo dnf install qemu-system-x86 p7zip p7zip-plugins mtools \
+#                util-linux unzip curl gcc make python3-pillow
+#   Debian:  sudo apt install qemu-system-x86 p7zip-full mtools fdisk unzip \
+#                curl gcc make python3-pil
 set -eu
 
 HERE=$(cd "$(dirname "$0")" && pwd)
+PATH="$PATH:/usr/sbin:/sbin"     # sfdisk
 ROOT=$(cd "$HERE/../.." && pwd)
 MEDIA=${MEDIA:-$HERE}
 OUT=$HERE/win31.img
@@ -65,19 +74,58 @@ WINZIP="$MEDIA/Win_31.zip"
 for f in "$WIN7Z" "$DOS7Z" "$WINZIP"; do
     [ -f "$f" ] || { echo "missing: $f" >&2; exit 1; }
 done
-for t in qemu-system-i386 7z mcopy sfdisk unzip python3; do
-    command -v $t >/dev/null || { echo "missing tool: $t" >&2; exit 1; }
+missing=
+for t in qemu-system-i386 7z mcopy sfdisk unzip curl python3; do
+    command -v $t >/dev/null || missing="$missing $t"
 done
+if [ $BUILD = 1 ]; then
+    for t in gcc make; do
+        command -v $t >/dev/null || missing="$missing $t"
+    done
+    python3 -c "import PIL" 2>/dev/null || missing="$missing python3-pillow"
+fi
+[ -z "$missing" ] || { echo "missing tools:$missing (see the top of $0)" >&2; exit 1; }
+if [ ! -f "$ROOT/external/retheme16/Makefile" ] || [ ! -f "$ROOT/external/win16setup/Makefile" ]; then
+    echo "== fetching the submodules (Retheme16, Win16Setup)"
+    git -C "$ROOT" submodule update --init
+fi
 EMU=$RT/tools/emu
 [ -f "$EMU/mkwin31.py" ] || { echo "$RT has no tools/emu (git submodule update --init?)" >&2; exit 1; }
 
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 
+# ---- Open Watcom: $WATCOM, /opt/watcom, the cache, or download it there
+watcom_bin() {
+    case $(uname -m) in
+    x86_64) echo "$1/binl64" ;;
+    aarch64|arm64) echo "$1/arml64" ;;
+    *) echo "$1/binl" ;;
+    esac
+}
+find_watcom() {
+    for d in ${WATCOM:-} /opt/watcom "$HOME/.cache/newshell16/watcom"; do
+        if [ -x "$(watcom_bin "$d")/wmake" ]; then
+            echo "$d"
+            return
+        fi
+    done
+}
+if [ $BUILD = 1 ]; then
+    W=$(find_watcom)
+    if [ -z "$W" ]; then
+        W=$HOME/.cache/newshell16/watcom
+        echo "== Open Watcom not found: downloading the snapshot to $W"
+        mkdir -p "$W"
+        curl -sSfL https://github.com/open-watcom/open-watcom-v2/releases/download/Current-build/ow-snapshot.tar.xz \
+            | tar xJ -C "$W"
+    fi
+    export WATCOM="$W"
+    export PATH="$(watcom_bin "$W"):$PATH"
+fi
+
 # ---- the setup files
 if [ $BUILD = 1 ]; then
-    export WATCOM=${WATCOM:-/opt/watcom}
-    export PATH="$WATCOM/binl64:$WATCOM/binl:$PATH"
     (cd "$ROOT" && RETHEME16_DIR="$RT" python3 tools/release/mkrelease.py --no-floppy)
     make -C "$RT" release
 fi

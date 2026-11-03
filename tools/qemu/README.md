@@ -18,6 +18,17 @@ Win_31.zip                         only its HIMEM.SYS is used
 vbesvga-release.zip                optional, downloaded for -d 8/16
 ```
 
+Tools (Fedora; on Debian/Ubuntu `p7zip-full fdisk python3-pil` instead):
+
+```sh
+sudo dnf install qemu-system-x86 p7zip p7zip-plugins mtools util-linux unzip curl gcc make python3-pillow
+```
+
+Open Watcom 2.0 (the Win16 compiler) is taken from `$WATCOM`, `/opt/watcom`
+or `~/.cache/newshell16/watcom`; if none has it, `mkimage.sh` downloads the
+current snapshot (about 100 MB) into the last one. Missing submodules are
+fetched too.
+
 Then:
 
 ```sh
