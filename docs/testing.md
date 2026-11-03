@@ -61,6 +61,47 @@ tools/emu/winemu.py --windir ~/win31/Win/WINDOWS --work /tmp/nsemu-rt --out shot
 Run the same script with and without the engine and compare the
 screenshots side by side.
 
+## Windows 3.1 in QEMU with 65536 colours (the XP look)
+
+Windows 3.1 (3.10.103) is preferred over Windows for Workgroups 3.11 for
+testing (`Win_31.zip` is in fact WfW 3.11). Retheme16's emulator tools
+(`external/retheme16/tools/emu`, see its README) install Windows 3.1 from
+the floppies into a QEMU disk image, and switch it to the generic VBE
+driver [vbesvga.drv](https://github.com/PluMGMK/vbesvga.drv), which gives
+16-bit colour (65536 colours) in QEMU's standard VGA:
+
+```sh
+E=external/retheme16/tools/emu
+$E/mkdosdisk.sh 144OEM1.IMG dos.img 256          # MS-DOS setup disk 1
+$E/mkwin31.py --dos dos.img --himem HIMEM.SYS --out win31.img Disk0[1-6].img
+curl -LO https://github.com/PluMGMK/vbesvga.drv/releases/download/v1.0-beta4/vbesvga-release.zip
+mkdir vbe && unzip -d vbe vbesvga-release.zip
+$E/mkvbe.py --base win31.img --driver vbe --out win31hc.img --width 800 --height 600 --depth 16
+```
+
+`HIMEM.SYS` must be uncompressed (the one on the disks is compressed; an
+installed `WINDOWS` directory has one). To make NewShell16 the shell of
+that image, copy it in with mtools (the partition starts at sector 63) and
+set `shell=`:
+
+```sh
+C=win31hc.img@@32256
+mmd -i $C ::/NEWSHELL
+mcopy -i $C build/newshell.exe ::/NEWSHELL/NEWSHELL.EXE
+mcopy -i $C build/nshook.dll ::/NEWSHELL/NSHOOK.DLL
+mtype -i $C ::/WINDOWS/SYSTEM.INI | sed 's/^shell=.*/shell=C:\\NEWSHELL\\NEWSHELL.EXE/' > sys.ini
+mcopy -o -i $C sys.ini ::/WINDOWS/SYSTEM.INI
+```
+
+Retheme16's `run.py` then deploys the engine with a theme (on `load=`,
+which NewShell16 runs as the shell), boots, and takes screenshots:
+
+```sh
+(cd external/retheme16 && make win16)
+$E/run.py --base win31hc.img --out shots --theme WINXP --gallery styles --boot 55 \
+    --step "shot desktop" --step "click 30 588" --step 2 --step "shot start"
+```
+
 ## Testing the installer
 
 `--no-install` leaves out NewShell16 (no copy, `shell=` unchanged), so the

@@ -27,7 +27,7 @@ Ini2=%WINDIR%\SYSTEM.INI,boot,taskman.exe,%DIR%\NEWSHELL.EXE
 
 ; the bundled Retheme16 engine, started through load=
 [Option.Theme]
-Label=Windows &95 look (Retheme16)
+Label=Windows &95 or XP look (Retheme16)
 Switch=THEME
 Default=1
 Ini1=%DIR%\RETHEME\RETHEME.INI,Engine,Theme,%DIR%\RETHEME\THEMES\%CHOICE%
@@ -37,7 +37,7 @@ Window=Retheme16
 Wait=RETHEME,RTLOADER
 
 [Choice]
-Label=&Theme for the Windows 95 look:
+Label=&Theme (RedmondExperience: Windows XP):
 Switch=T
 Default=WIN95
 NameFrom=RETHEME\THEMES\%ITEM%\THEME.INI,Theme,Name

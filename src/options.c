@@ -74,6 +74,7 @@ static const OPTDEF s_opts[] = {
     { 1, OT_CHECK,    "Open icons with a &single click", "Desktop", "SingleClick", 0 },
     { 1, OT_CHECK,    "&Arrows on shortcuts and aliases", "Desktop", "ShortcutArrows", 1 },
     { 1, OT_CHECK,    "Right click on minimize or maximize box &closes", "Desktop", "RightClose", 0 },
+    { 1, OT_COMBO,    "&Look of taskbar and Start menu:", "Taskbar", "Look", 0 },
     { 1, OT_COLOR,    "&Taskbar colour...", "Colors", "Taskbar", NSC_TASKBAR },
     { 1, OT_COLOR,    "St&art menu colour...", "Colors", "StartMenu", NSC_STARTMENU },
     { 1, OT_COLOR,    "S&election colour...", "Colors", "Selection", NSC_SELECTION },
@@ -184,9 +185,15 @@ static void MakeControls(HWND hDlg)
                                     cx - rc.right * 18, rc.bottom * 6, hDlg,
                                     (HMENU)(ID_FIRST + i), g_hInst, NULL);
                 SendMessage(hwnd, WM_SETFONT, (WPARAM)hf, 0L);
-                SendMessage(hwnd, CB_ADDSTRING, 0, (LPARAM)(LPSTR)"where Windows puts them");
-                SendMessage(hwnd, CB_ADDSTRING, 0, (LPARAM)(LPSTR)"cascaded");
-                SendMessage(hwnd, CB_ADDSTRING, 0, (LPARAM)(LPSTR)"where the last one was");
+                if (lstrcmp(o->lpKey, "Look") == 0) {     /* luna.c */
+                    SendMessage(hwnd, CB_ADDSTRING, 0, (LPARAM)(LPSTR)"as the theme says");
+                    SendMessage(hwnd, CB_ADDSTRING, 0, (LPARAM)(LPSTR)"Windows XP");
+                    SendMessage(hwnd, CB_ADDSTRING, 0, (LPARAM)(LPSTR)"Windows 95");
+                } else {
+                    SendMessage(hwnd, CB_ADDSTRING, 0, (LPARAM)(LPSTR)"where Windows puts them");
+                    SendMessage(hwnd, CB_ADDSTRING, 0, (LPARAM)(LPSTR)"cascaded");
+                    SendMessage(hwnd, CB_ADDSTRING, 0, (LPARAM)(LPSTR)"where the last one was");
+                }
                 SendMessage(hwnd, CB_SETCURSEL, CfgGetInt(o->lpSection, o->lpKey, 0), 0L);
             } else {
                 int cxEdit = cx - rc.right * 18 - (o->bType == OT_FILE ? rc.right * 11 : 0);
@@ -309,6 +316,7 @@ static void ApplyOptions(void)
 {
     CfgLoad();
     NsColorsChanged();
+    LunaRefresh();
     StartMenuOptionsChanged();
     HookApplySettings();
     TaskbarApplySettings();

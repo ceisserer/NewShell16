@@ -33,7 +33,8 @@ executable, `NEWSHELL.EXE`.
 | `system.c` | Sounds, web addresses, splash and shutdown screens, Tip of the Day, help, saved windows |
 | `users.c` | Users: logon dialog, per-user settings |
 | `settings.c` | `NEWSHELL.INI` |
-| `util.c` | 3D drawing, small images, colours, hints, path helpers, launching |
+| `util.c` | 3D drawing, small images, colours, hints, path helpers, launching, reading the active theme |
+| `luna.c` | The Windows XP ("Luna") look of the taskbar, Start button and Start menu |
 | `nshook.c` | `NSHOOK.DLL`: system hooks (see below) |
 
 ## Windows 3.1 specifics
@@ -122,6 +123,34 @@ restyles those system parts:
 - **Desktop icon labels** use the icon title font from the Control Panel
   (`SPI_GETICONTITLELOGFONT`).
 
+### The Windows XP look
+
+When the running Retheme16 theme has `[Shell] Style=XP` in its
+`THEME.INI` (Retheme16's RedmondExperience theme, `THEMES\WINXP`; `Base=`
+is followed), `luna.c` draws the taskbar in the Windows XP "Luna" style: a
+blue gradient bar, a green Start button with rounded right corners filling
+the height of the bar and "start" in white italics, rounded light blue task
+buttons (dark blue for the active task), a light blue tray, white text. The
+Start menu gets white items, a light-to-dark blue banner and flat grey
+separators; the engine draws the white menu border.
+
+`[Taskbar] Look=` overrides the theme: 0 follows it, 1 always uses the XP
+look (also without the engine), 2 never. The look is re-read when system
+colours change (the theme engine sets and restores them when it starts and
+stops), when `WIN.INI` changes, and when the 500 ms taskbar timer sees the
+engine start or stop. The colour settings of `[Colors]` (taskbar, Start
+menu) do not apply to the XP look.
+
+Everything is drawn procedurally into the taskbar's memory bitmap:
+gradients row by row with `ExtTextOut(ETO_OPAQUE)`, rounded corners
+anti-aliased by blending with the pixels below (4 x 4 samples per corner
+pixel). Small icons over the gradient are drawn into an enlarged copy of
+the background and shrunk back, so the gradient shows through. There are
+no bitmaps, the code is a separate discardable segment and the data
+segment grows by 16 bytes, so the classic look costs nothing extra. The
+gradients want a 15/16/24-bit display; GDI dithers them with 16 or 256
+colours.
+
 ## Command line
 
 | | |
@@ -189,6 +218,8 @@ DocFirst=0         ; "README.TXT - Notepad"
 LowerDoc=0         ; ... "readme.txt - Notepad"
 Exclude=           ; programs (module names) without a button
 Tray=              ; programs shown as icons beside the clock
+Look=0             ; 0 as the theme says ([Shell] Style=XP), 1 Windows XP,
+                   ; 2 Windows 95
 
 [Desktop]
 Icons=1

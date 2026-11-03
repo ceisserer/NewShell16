@@ -409,21 +409,28 @@ static void Layout(HWND hwnd, HDC hdc)
     cyBtn = rc.bottom - BTN_TOP - 2;
 
     hfOld = SelectObject(hdc, g_hfontBold);
-    SetRect(&s_rcStart, 2, BTN_TOP, 2 + 30 + TextWidth(hdc, "Start"),
-            BTN_TOP + cyBtn);
+    if (LunaLook())     /* XP: the Start button fills the height of the bar */
+        SetRect(&s_rcStart, 0, 0, LunaStartWidth(hdc, rc.bottom), rc.bottom);
+    else
+        SetRect(&s_rcStart, 2, BTN_TOP, 2 + 30 + TextWidth(hdc, "Start"),
+                BTN_TOP + cyBtn);
     SelectObject(hdc, g_hfontUI);
 
     if (g_cfg.bClock || s_nTray) {
         int cx = (g_cfg.bClock ? TextWidth(hdc, "88:88 MM") + 12 : 6) + s_nTray * TRAY_CX;
         SetRect(&s_rcClock, rc.right - 2 - cx, BTN_TOP, rc.right - 2,
                 BTN_TOP + cyBtn);
+        if (LunaLook())     /* XP: the tray reaches the edges of the bar */
+            SetRect(&s_rcClock, rc.right - cx - 8, 0, rc.right, rc.bottom);
     } else
         SetRect(&s_rcClock, rc.right, BTN_TOP, rc.right, BTN_TOP + cyBtn);
     SetRect(&s_rcTray, s_rcClock.left + 2, s_rcClock.top,
             s_rcClock.left + 2 + s_nTray * TRAY_CX, s_rcClock.bottom);
+    if (LunaLook())
+        OffsetRect(&s_rcTray, 4, 0);
     SelectObject(hdc, hfOld);
 
-    xLeft = s_rcStart.right + GAP + 2;
+    xLeft = s_rcStart.right + GAP + (LunaLook() ? 6 : 2);
     xRight = s_rcClock.left - GAP - 2;
     if (s_nTasks > 0) {
         cxBtn = (xRight - xLeft + GAP) / s_nTasks - GAP;
@@ -455,6 +462,61 @@ static void DrawButton(HDC hdc, const RECT FAR *lprc, BOOL bDown, BOOL bChecked)
     Draw3DEdge(hdc, lprc, bDown, TRUE);
 }
 
+/* The taskbar in the Windows XP look (luna.c) */
+static void PaintLuna(HDC hdc, const RECT FAR *lprc)
+{
+    HFONT hfOld;
+    RECT rcEdge;
+    char szText[80];
+    int i, off;
+
+    LunaDrawBar(hdc, lprc);
+    if (g_cfg.bClock || s_nTray)
+        LunaDrawTray(hdc, &s_rcClock);
+    LunaDrawStart(hdc, &s_rcStart, s_bStartDown);
+
+    SetBkMode(hdc, TRANSPARENT);
+    SetTextColor(hdc, RGB(255, 255, 255));
+    hfOld = SelectObject(hdc, g_hfontUI);
+    for (i = 0; i < s_nTasks; i++) {
+        BOOL bActive = (s_tasks[i].hwnd == s_hwndActive);
+        RECT rcB = s_rcTask[i];
+        int xText;
+
+        rcB.top--;
+        LunaDrawTask(hdc, &rcB, bActive);
+        off = bActive ? 1 : 0;
+        xText = rcB.left + 6 + off;
+        if (rcB.right - rcB.left >= 48) {
+            LunaIconSmall(hdc, rcB.left + 5 + off,
+                          rcB.top + (rcB.bottom - rcB.top - 16) / 2 + off,
+                          s_tasks[i].hIcon);
+            xText += 19;
+        }
+        SelectObject(hdc, bActive ? g_hfontBold : g_hfontUI);
+        FitText(hdc, s_tasks[i].szTitle, szText, sizeof(szText),
+                rcB.right - xText - 5);
+        SetRect(&rcEdge, xText, rcB.top + off, rcB.right - 4, rcB.bottom + off);
+        DrawText(hdc, szText, -1, &rcEdge,
+                 DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+    }
+
+    if (g_cfg.bClock || s_nTray) {
+        RECT rcTime = s_rcClock;
+
+        SelectObject(hdc, g_hfontUI);
+        for (i = 0; i < s_nTray; i++)
+            LunaIconSmall(hdc, s_rcTray.left + 2 + i * TRAY_CX,
+                          s_rcTray.top + (s_rcTray.bottom - s_rcTray.top - 16) / 2,
+                          s_hTrayIcon[i]);
+        rcTime.left = s_rcTray.right;
+        if (g_cfg.bClock)
+            DrawText(hdc, s_szClock, -1, &rcTime,
+                     DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+    }
+    SelectObject(hdc, hfOld);
+}
+
 static void PaintTaskbar(HWND hwnd, HDC hdcWin)
 {
     HDC hdc;
@@ -469,6 +531,14 @@ static void PaintTaskbar(HWND hwnd, HDC hdcWin)
     hbm = CreateCompatibleBitmap(hdcWin, rc.right, rc.bottom);
     hbmOld = SelectObject(hdc, hbm);
     Layout(hwnd, hdc);
+    if (LunaLook()) {
+        PaintLuna(hdc, &rc);
+        BitBlt(hdcWin, 0, 0, rc.right, rc.bottom, hdc, 0, 0, SRCCOPY);
+        SelectObject(hdc, hbmOld);
+        DeleteObject(hbm);
+        DeleteDC(hdc);
+        return;
+    }
 
     FillSolid(hdc, &rc, NsColor(NSC_TASKBAR));
     SetRect(&rcEdge, -2, 0, rc.right + 2, rc.bottom + 2);
@@ -968,6 +1038,7 @@ LRESULT CALLBACK NSEXPORT TaskbarWndProc(HWND hwnd, UINT msg, WPARAM wParam,
         }
         i = UpdateTasks();
         i |= UpdateClock();
+        i |= LunaCheckEngine();     /* the theme engine started or stopped */
         if (i)
             InvalidateRect(hwnd, NULL, FALSE);
         CheckAutoHide(hwnd);
@@ -1094,6 +1165,8 @@ LRESULT CALLBACK NSEXPORT TaskbarWndProc(HWND hwnd, UINT msg, WPARAM wParam,
 
     case WM_SYSCOLORCHANGE:
     case WM_WININICHANGE:
+        /* a theme setting system colours was started, stopped or changed */
+        LunaRefresh();
         s_szClock[0] = '\0';
         UpdateClock();
         InvalidateRect(hwnd, NULL, FALSE);
@@ -1105,6 +1178,7 @@ LRESULT CALLBACK NSEXPORT TaskbarWndProc(HWND hwnd, UINT msg, WPARAM wParam,
             DeleteObject(s_hbrChecker);
             s_hbrChecker = NULL;
         }
+        LunaFree();
         g_hwndTaskbar = NULL;
         return 0;
     }

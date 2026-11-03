@@ -117,6 +117,21 @@ void CfgGetStr(LPCSTR lpSection, LPCSTR lpKey, LPCSTR lpDefault,
                LPSTR lpBuf, int cbBuf);
 void CfgSetStr(LPCSTR lpSection, LPCSTR lpKey, LPCSTR lpValue);
 
+/* ---- luna.c ---------------------------------------------------------- */
+BOOL LunaRefresh(void);
+BOOL LunaLook(void);
+BOOL LunaCheckEngine(void);
+void LunaFree(void);
+void LunaDrawBar(HDC hdc, const RECT FAR *lprc);
+void LunaDrawTask(HDC hdc, const RECT FAR *lprc, BOOL bDown);
+int  LunaStartWidth(HDC hdc, int cyBar);
+void LunaDrawStart(HDC hdc, const RECT FAR *lprc, BOOL bDown);
+void LunaDrawTray(HDC hdc, const RECT FAR *lprc);
+void LunaIconSmall(HDC hdc, int x, int y, HICON hIcon);
+COLORREF LunaMenuFace(void);
+COLORREF LunaBannerColor(int y, int cy);
+void LunaDrawSeparator(HDC hdc, const RECT FAR *lprc);
+
 /* ---- util.c ---------------------------------------------------------- */
 void FillSolid(HDC hdc, const RECT FAR *lprc, COLORREF clr);
 #define NSC_TASKBAR     0
@@ -138,6 +153,9 @@ HFONT CreateUIFont(int nPoints, BOOL bBold);
 int  TextWidth(HDC hdc, LPCSTR lpsz);
 void FitText(HDC hdc, LPCSTR lpSrc, LPSTR lpDst, int cbDst, int cxMax);
 BOOL ThemeEngineActive(void);
+BOOL ThemeDirectory(LPSTR lpDir, int cbDir);
+BOOL ReadThemeString(LPCSTR lpThemeDir, LPCSTR lpSection, LPCSTR lpKey,
+                     LPSTR lpBuf, int cbBuf);
 HFONT GetMenuFont(void);
 HFONT CreateIconTitleFont(void);
 

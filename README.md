@@ -55,7 +55,13 @@ Usable as the Windows 3.1 shell, with nearly all of Calmira's features:
 
 It looks consistent both on a plain Windows 3.1 and with the
 [Retheme16](https://github.com/ceisserer/win31_theme_engine) Windows 95
-theme engine.
+theme engine. With Retheme16's RedmondExperience theme (the Windows XP
+"Luna" look) the taskbar and the Start menu turn into the Windows XP ones:
+a green Start button, a blue taskbar with rounded task buttons, a light
+blue tray and a white Start menu with a blue banner (best with a display
+driver for 65536 colours, see [docs/testing.md](docs/testing.md)).
+
+![NewShell16 with RedmondExperience on Windows 3.1, 800x600, 65536 colours](docs/images/luna.png)
 
 See [docs/design.md](docs/design.md) for internals, configuration and the
 roadmap, and [docs/calmira-parity.md](docs/calmira-parity.md) for what
