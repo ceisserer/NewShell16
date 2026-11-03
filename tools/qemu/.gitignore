@@ -1,0 +1,6 @@
+# licensed media and generated images: never commit them
+*.7z
+*.zip
+*.img
+*.IMG
+*.iso

@@ -16,7 +16,8 @@ stages the installation files and lets Win16Setup's packer write:
   SHA256SUMS
 
 Needs Open Watcom 2.0 (WATCOM, default /opt/watcom), gcc, Python 3 with
-Pillow and mtools. The ZIP and the floppy image are reproducible: file
+Pillow and mtools. RETHEME16_DIR=<dir> in the environment bundles another
+Retheme16 checkout instead of the submodule. The ZIP and the floppy image are reproducible: file
 dates come from SOURCE_DATE_EPOCH (default: the last git commit).
 """
 import argparse
@@ -27,7 +28,8 @@ import sys
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 W16SETUP = os.path.join(ROOT, "external", "win16setup")
-RETHEME = os.path.join(ROOT, "external", "retheme16")
+# RETHEME16_DIR selects another Retheme16 checkout (e.g. a branch with new themes)
+RETHEME = os.path.abspath(os.environ.get("RETHEME16_DIR") or os.path.join(ROOT, "external", "retheme16"))
 PACK = os.path.join(W16SETUP, "tools", "w16pack.py")
 DEFAULT_THEME = "WIN95"
 

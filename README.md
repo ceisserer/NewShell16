@@ -132,7 +132,10 @@ shell. Later sessions need only
 `dosbox-x -c "mount c $HOME/win31/c" -c "c:" -c "cd \\windows" -c "win"`.
 The installation lives in `~/win31/c`; delete it to start over.
 
-**QEMU** needs a bootable hard disk image with DOS and Windows 3.1 (for
+**QEMU**: `tools/qemu/mkimage.sh` makes a Windows 3.1 image with the
+NewShell16 and Retheme16 setups on it from the Windows 3.1 and MS-DOS
+archives, and `tools/qemu/run.sh` starts it (see
+[tools/qemu/README.md](tools/qemu/README.md)). By hand, QEMU needs a bootable hard disk image with DOS and Windows 3.1 (for
 example installed from the Windows 3.1 and MS-DOS floppies). Attach the
 NewShell16 floppy, boot, and run `win a:\setup.exe` at the DOS prompt:
 

@@ -63,6 +63,11 @@ screenshots side by side.
 
 ## Windows 3.1 in QEMU with 65536 colours (the XP look)
 
+For trying things by hand, [tools/qemu](../tools/qemu/README.md) has two
+scripts: `mkimage.sh` makes such an image with the NewShell16 and
+Retheme16 setups copied onto it (not installed), `run.sh` starts it in a
+window. The steps below are what they do.
+
 Windows 3.1 (3.10.103) is preferred over Windows for Workgroups 3.11 for
 testing (`Win_31.zip` is in fact WfW 3.11). Retheme16's emulator tools
 (`external/retheme16/tools/emu`, see its README) install Windows 3.1 from
