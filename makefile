@@ -39,7 +39,8 @@ OBJS    = $(OBJDIR)/main.obj     &
           $(OBJDIR)/dialogs.obj  &
           $(OBJDIR)/system.obj   &
           $(OBJDIR)/users.obj    &
-          $(OBJDIR)/options.obj
+          $(OBJDIR)/options.obj  &
+          $(OBJDIR)/luna.obj
 
 RESFILES = $(RESDIR)/newshell.rc $(SRCDIR)/resource.h $(RESDIR)/*.ico &
            $(RESDIR)/*.cur $(RESDIR)/small.bmp

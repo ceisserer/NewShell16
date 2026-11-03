@@ -55,7 +55,13 @@ Usable as the Windows 3.1 shell, with nearly all of Calmira's features:
 
 It looks consistent both on a plain Windows 3.1 and with the
 [Retheme16](https://github.com/ceisserer/win31_theme_engine) Windows 95
-theme engine.
+theme engine. With Retheme16's RedmondExperience theme (the Windows XP
+"Luna" look) the taskbar and the Start menu turn into the Windows XP ones:
+a green Start button, a blue taskbar with rounded task buttons, a light
+blue tray and a white Start menu with a blue banner (best with a display
+driver for 65536 colours, see [docs/testing.md](docs/testing.md)).
+
+![NewShell16 with RedmondExperience on Windows 3.1, 800x600, 65536 colours](docs/images/luna.png)
 
 See [docs/design.md](docs/design.md) for internals, configuration and the
 roadmap, and [docs/calmira-parity.md](docs/calmira-parity.md) for what
@@ -126,7 +132,10 @@ shell. Later sessions need only
 `dosbox-x -c "mount c $HOME/win31/c" -c "c:" -c "cd \\windows" -c "win"`.
 The installation lives in `~/win31/c`; delete it to start over.
 
-**QEMU** needs a bootable hard disk image with DOS and Windows 3.1 (for
+**QEMU**: `tools/qemu/mkimage.sh` makes a Windows 3.1 image with the
+NewShell16 and Retheme16 setups on it from the Windows 3.1 and MS-DOS
+archives, and `tools/qemu/run.sh` starts it (see
+[tools/qemu/README.md](tools/qemu/README.md)). By hand, QEMU needs a bootable hard disk image with DOS and Windows 3.1 (for
 example installed from the Windows 3.1 and MS-DOS floppies). Attach the
 NewShell16 floppy, boot, and run `win a:\setup.exe` at the DOS prompt:
 

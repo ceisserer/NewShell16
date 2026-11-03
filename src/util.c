@@ -738,28 +738,64 @@ BOOL ThemeEngineActive(void)
     return GetModuleHandle("RETHEME") != NULL;
 }
 
-/* Reads "face,points,weight[,italic]" for lpName from a theme directory,
-   following its Base= chain */
-static BOOL ReadThemeFont(LPCSTR lpThemeDir, LPCSTR lpName, LOGFONT FAR *lplf,
-                          int nDepth)
+/*
+ * The directory of the theme the running engine uses (RETHEME.INI next to
+ * RETHEME.DLL, [Engine] Theme=, default THEMES\WIN95). FALSE if the engine
+ * does not run.
+ */
+BOOL ThemeDirectory(LPSTR lpDir, int cbDir)
 {
-    char szIni[MAXPATHLEN], szValue[64], szBase[16];
+    char szHome[MAXPATHLEN], szIni[MAXPATHLEN], szTheme[MAXPATHLEN];
+    HMODULE hmod = GetModuleHandle("RETHEME");
+
+    if (!hmod)
+        return FALSE;
+    GetModuleFileName((HINSTANCE)hmod, szHome, sizeof(szHome));
+    *PathFileName(szHome) = '\0';
+    lstrcpy(szIni, szHome);
+    lstrcat(szIni, "RETHEME.INI");
+    lstrcpy(szTheme, szHome);
+    lstrcat(szTheme, "THEMES\\WIN95");
+    GetPrivateProfileString("Engine", "Theme", szTheme, szTheme, sizeof(szTheme), szIni);
+    lstrcpyn(lpDir, szTheme, cbDir);
+    return TRUE;
+}
+
+/* Reads a value from a theme's THEME.INI, following its Base= chain */
+static BOOL ReadThemeStringAt(LPCSTR lpThemeDir, LPCSTR lpSection, LPCSTR lpKey,
+                              LPSTR lpBuf, int cbBuf, int nDepth)
+{
+    char szIni[MAXPATHLEN], szBase[16];
+
+    lstrcpyn(szIni, lpThemeDir, sizeof(szIni) - 12);
+    PathAppend(szIni, "THEME.INI");
+    if (GetPrivateProfileString(lpSection, lpKey, "", lpBuf, cbBuf, szIni) != 0)
+        return TRUE;
+    if (nDepth >= 4 || GetPrivateProfileString("Theme", "Base", "", szBase,
+                                               sizeof(szBase), szIni) == 0)
+        return FALSE;
+    lstrcpyn(szIni, lpThemeDir, sizeof(szIni) - 16);
+    PathParent(szIni);
+    PathAppend(szIni, szBase);
+    return ReadThemeStringAt(szIni, lpSection, lpKey, lpBuf, cbBuf, nDepth + 1);
+}
+
+BOOL ReadThemeString(LPCSTR lpThemeDir, LPCSTR lpSection, LPCSTR lpKey,
+                     LPSTR lpBuf, int cbBuf)
+{
+    return ReadThemeStringAt(lpThemeDir, lpSection, lpKey, lpBuf, cbBuf, 0);
+}
+
+/* Reads "face,points,weight[,italic]" for lpName from a theme directory */
+static BOOL ReadThemeFont(LPCSTR lpThemeDir, LPCSTR lpName, LOGFONT FAR *lplf)
+{
+    char szValue[64];
     LPSTR p, q;
     int nPoints = 8, nWeight = FW_NORMAL;
     HDC hdc;
 
-    lstrcpyn(szIni, lpThemeDir, sizeof(szIni) - 12);
-    PathAppend(szIni, "THEME.INI");
-    if (GetPrivateProfileString("Fonts", lpName, "", szValue, sizeof(szValue),
-                                szIni) == 0) {
-        if (nDepth >= 4 || GetPrivateProfileString("Theme", "Base", "", szBase,
-                                                   sizeof(szBase), szIni) == 0)
-            return FALSE;
-        lstrcpyn(szIni, lpThemeDir, sizeof(szIni) - 16);
-        PathParent(szIni);
-        PathAppend(szIni, szBase);
-        return ReadThemeFont(szIni, lpName, lplf, nDepth + 1);
-    }
+    if (!ReadThemeString(lpThemeDir, "Fonts", lpName, szValue, sizeof(szValue)))
+        return FALSE;
     for (p = szValue; *p && *p != ','; p++)
         ;
     if (*p == ',') {
@@ -794,11 +830,10 @@ HFONT GetMenuFont(void)
 {
     static HFONT s_hfTheme;
     static BOOL  s_bThemed;
-    char szHome[MAXPATHLEN], szIni[MAXPATHLEN], szTheme[MAXPATHLEN];
-    HMODULE hmod = GetModuleHandle("RETHEME");
+    char szTheme[MAXPATHLEN];
     LOGFONT lf;
 
-    if (!hmod) {
+    if (!ThemeEngineActive()) {
         if (s_hfTheme) {
             DeleteObject(s_hfTheme);
             s_hfTheme = NULL;
@@ -809,16 +844,8 @@ HFONT GetMenuFont(void)
     if (s_bThemed && s_hfTheme)
         return s_hfTheme;
 
-    GetModuleFileName((HINSTANCE)hmod, szHome, sizeof(szHome));
-    *PathFileName(szHome) = '\0';
-    lstrcpy(szIni, szHome);
-    lstrcat(szIni, "RETHEME.INI");
-    lstrcpy(szTheme, szHome);
-    lstrcat(szTheme, "THEMES\\WIN95");
-    GetPrivateProfileString("Engine", "Theme", szTheme, szTheme, sizeof(szTheme), szIni);
-
     _fmemset(&lf, 0, sizeof(lf));
-    if (!ReadThemeFont(szTheme, "Menu", &lf, 0)) {
+    if (!ThemeDirectory(szTheme, sizeof(szTheme)) || !ReadThemeFont(szTheme, "Menu", &lf)) {
         _fmemset(&lf, 0, sizeof(lf));
         lstrcpy(lf.lfFaceName, "MS Sans Serif");
         lf.lfHeight = -MulDiv(8, 96, 72);

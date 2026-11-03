@@ -85,6 +85,7 @@ static int      s_cyMenu;
 static int      s_cyTop, s_cySub;   /* item heights for the current font */
 static HFONT    s_hfMenu;           /* GetMenuFont() when the menu opened */
 static BOOL     s_bThemed;          /* the theme engine draws the menus */
+static BOOL     s_bLuna;            /* the Windows XP look (luna.c) */
 static HFONT    s_hfBanner, s_hfBannerLight;
 static int      s_cyBannerFont;
 static HFONT    s_hfCustom;         /* [Start Menu] Font=, if set */
@@ -528,6 +529,7 @@ void StartMenuShow(HWND hwndOwner, int x, int y)
     CreateBannerFont();
     ReadOptions();
     s_bThemed = ThemeEngineActive();
+    s_bLuna = LunaLook();
     {
         TEXTMETRIC tm;
         HDC hdc = GetDC(NULL);
@@ -658,9 +660,11 @@ static void DrawBanner(HDC hdc, const RECT FAR *lprcItem, LPSMITEM p)
     yMenu = lprcItem->top - p->yTop;    /* the top of the menu in hdc */
     for (y = p->yTop & ~3; y < p->yTop + (lprcItem->bottom - lprcItem->top); y += 4) {
         long f = s_cyMenu > 0 ? (long)y * 256 / s_cyMenu : 256;
-        HBRUSH hbr = CreateSolidBrush(RGB(GetRValue(clr) * f / 256,
-                                          GetGValue(clr) * f / 256,
-                                          GetBValue(clr) * f / 256));
+        /* XP: from light to dark Luna blue */
+        HBRUSH hbr = CreateSolidBrush(s_bLuna ? LunaBannerColor(y, s_cyMenu)
+                                      : RGB(GetRValue(clr) * f / 256,
+                                            GetGValue(clr) * f / 256,
+                                            GetBValue(clr) * f / 256));
 
         yEnd = yMenu + y + 4;
         SetRect(&rc, lprcItem->left, max(yMenu + y, lprcItem->top),
@@ -702,7 +706,8 @@ static BOOL IsLastItem(LPSMITEM p)
 static void PaintItem(HDC hdc, RECT rc, LPSMITEM p, BOOL bSel)
 {
     BOOL bTop = HasBanner(p), bLarge = IsLarge(p);
-    COLORREF clrFace = s_b3D ? NsColor(NSC_STARTMENU) : GetSysColor(COLOR_MENU);
+    COLORREF clrFace = s_bLuna ? LunaMenuFace()
+                       : s_b3D ? NsColor(NSC_STARTMENU) : GetSysColor(COLOR_MENU);
     RECT rcIn, rcText;
     int cy;
 
@@ -712,7 +717,7 @@ static void PaintItem(HDC hdc, RECT rc, LPSMITEM p, BOOL bSel)
         rc.left += BANNER_W;
     }
     rcIn = rc;
-    if (!s_bThemed && s_b3D) {
+    if (!s_bThemed && s_b3D && !s_bLuna) {
         RECT rcLine;
 
         if (!bTop) {
@@ -735,6 +740,10 @@ static void PaintItem(HDC hdc, RECT rc, LPSMITEM p, BOOL bSel)
         }
     }
 
+    if ((p->bFlags & SF_SEP) && s_bLuna) {
+        LunaDrawSeparator(hdc, &rcIn);
+        return;
+    }
     if (p->bFlags & SF_SEP) {
         cy = rc.top + (rc.bottom - rc.top) / 2 - 1;
         SetRect(&rcText, rcIn.left + 2, cy, rcIn.right - 2, cy + 2);
@@ -778,7 +787,7 @@ static void PaintItem(HDC hdc, RECT rc, LPSMITEM p, BOOL bSel)
         COLORREF clrOld = SetTextColor(hdc,
             GetSysColor(bSel && s_bColBar ? COLOR_HIGHLIGHTTEXT
                         : (p->bFlags & SF_EMPTY) ? COLOR_GRAYTEXT
-                        : s_b3D ? COLOR_BTNTEXT : COLOR_MENUTEXT));
+                        : s_b3D && !s_bLuna ? COLOR_BTNTEXT : COLOR_MENUTEXT));
 
         SetRect(&rcText, rc.left + (bLarge ? TOP_TEXT_X : SUB_TEXT_X), rc.top,
                 rc.right, rc.bottom);
@@ -832,7 +841,7 @@ BOOL StartMenuDrawItem(DRAWITEMSTRUCT FAR *lpdis)
         if (hdcMem)
             DeleteDC(hdcMem);
         PaintItem(lpdis->hDC, rc, p, bSel);
-        if (!s_bThemed && s_b3D)
+        if (!s_bThemed && s_b3D && !s_bLuna)
             DrawOuterFrame(lpdis->hDC, &rc, p);
         return TRUE;
     }
@@ -844,7 +853,7 @@ BOOL StartMenuDrawItem(DRAWITEMSTRUCT FAR *lpdis)
     SelectObject(hdcMem, hbmOld);
     DeleteObject(hbm);
     DeleteDC(hdcMem);
-    if (!s_bThemed && s_b3D)
+    if (!s_bThemed && s_b3D && !s_bLuna)
         DrawOuterFrame(lpdis->hDC, &rc, p);
     return TRUE;
 }
