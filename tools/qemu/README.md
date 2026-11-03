@@ -61,9 +61,25 @@ from `$WATCOM`, `/opt/watcom` or `~/.cache/newshell16/watcom`; if none has
 it, the current snapshot (about 100 MB) is downloaded into the last one.
 
 `run.sh` options: `-t` (throw changes away when QEMU ends), `-f DISK.IMG`
-(a floppy as drive A:), `-m MB`; options after the image go to QEMU
-(e.g. `-vnc :1`). Click into the window to give QEMU the mouse,
-Ctrl+Alt+G releases it. Shut Windows down before closing the window.
+(a floppy as drive A:), `-m MB`, `-d gtk|sdl` (QEMU's window, GTK by
+default), `-n` (no KVM); options after the image go to QEMU. Click into
+the window to give QEMU the mouse, Ctrl+Alt+G releases it. Shut Windows
+down before closing the window.
+
+Speed: `run.sh` uses KVM when `/dev/kvm` is readable and writable
+(`sudo usermod -aG kvm $USER`, then log in again); without it QEMU
+emulates the CPU and says so.
+
+VNC (`run.sh IMAGE -vnc :1 -display none`) works but is slower than
+QEMU's own window, and the pointer can be out of step: Windows 3.1 only
+has a relative PS/2 mouse, so QEMU turns the VNC client's positions into
+moves. Images made by `mkimage.sh` have mouse acceleration off
+(`MouseSpeed=0` in WIN.INI; for an older image add that line to
+`[windows]` in `C:\WINDOWS\WIN.INI`), so the offset stays constant;
+move the pointer to the edge that Windows' pointer reaches first (it
+stops there, the VNC pointer catches up) and both line up. VNC clients
+that can grab the pointer, such as `remote-viewer vnc://HOST:5901`
+(virt-viewer), avoid the problem.
 
 The image keeps every change; run `mkimage.sh` again for a fresh one (about
 a minute). For scripted screenshot tests see [docs/testing.md](../../docs/testing.md).
