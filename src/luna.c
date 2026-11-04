@@ -376,3 +376,29 @@ void LunaDrawSeparator(HDC hdc, const RECT FAR *lprc)
 
     Line(hdc, lprc->left + 2, y, lprc->right - 2, y + 1, RGB(172, 168, 153));
 }
+
+/* The header (bTop: rounded top corners) and the footer of the two-column
+   Start menu: Luna blue, lighter at the top */
+static const LSTOP s_stPanelHead[] = {
+    {   0, 120, 170, 255 }, {  20,  60, 128, 240 }, { 110,  36, 104, 226 },
+    { 255,  20,  84, 205 }
+};
+static const LSTOP s_stPanelFoot[] = {
+    {   0,  70, 136, 236 }, {  40,  40, 108, 226 }, { 255,  24,  80, 196 }
+};
+
+void LunaDrawPanelBar(HDC hdc, const RECT FAR *lprc, BOOL bTop)
+{
+    RECT rc = *lprc;
+
+    if (bTop)
+        Shape(hdc, &rc, s_stPanelHead, NSTOPS(s_stPanelHead), 6, LC_TL | LC_TR);
+    else
+        Shape(hdc, &rc, s_stPanelFoot, NSTOPS(s_stPanelFoot), 0, 0);
+}
+
+/* A Quick Launch button under the mouse (bDown: pressed) */
+void LunaDrawQuickButton(HDC hdc, const RECT FAR *lprc, BOOL bDown)
+{
+    LunaDrawTask(hdc, lprc, bDown);
+}

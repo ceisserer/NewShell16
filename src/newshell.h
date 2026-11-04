@@ -53,6 +53,7 @@ extern char g_szUser[24];
 #define CLS_PROGRESS    "NSProgress"
 #define CLS_TOOLBAR     "NSToolbar"
 #define CLS_HINT        "NSHint"
+#define CLS_STARTXP     "NSStartXP"
 
 /* Private messages */
 #define WM_NS_OPENPATH  (WM_USER + 100)     /* wParam = global atom with path */
@@ -131,6 +132,8 @@ void LunaIconSmall(HDC hdc, int x, int y, HICON hIcon);
 COLORREF LunaMenuFace(void);
 COLORREF LunaBannerColor(int y, int cy);
 void LunaDrawSeparator(HDC hdc, const RECT FAR *lprc);
+void LunaDrawPanelBar(HDC hdc, const RECT FAR *lprc, BOOL bTop);
+void LunaDrawQuickButton(HDC hdc, const RECT FAR *lprc, BOOL bDown);
 
 /* ---- util.c ---------------------------------------------------------- */
 void FillSolid(HDC hdc, const RECT FAR *lprc, COLORREF clr);
@@ -233,6 +236,29 @@ BOOL StartMenuMeasureItem(MEASUREITEMSTRUCT FAR *lpmis);
 BOOL StartMenuDrawItem(DRAWITEMSTRUCT FAR *lpdis);
 BOOL ExecMacro(HWND hwnd, LPCSTR lpCmd);
 void StartMenuFree(void);
+
+/* startmnu.c, for the two-column menu */
+#define SF_TOP          0x01    /* item flags (SmFlags) */
+#define SF_SEP          0x02
+#define SF_SUBMENU      0x04
+#define SF_EMPTY        0x10
+BOOL  SmBegin(void);
+BOOL  SmTwoColumns(void);
+HMENU SmBuild(LPCSTR lpSection, BOOL bTop);
+HMENU SmBuildPinned(void);
+HMENU SmBuildRecent(void);
+int   SmItems(HMENU hMenu, int FAR *lpn, int nMax);
+LPCSTR SmText(int n);
+UINT  SmFlags(int n);
+HMENU SmSubmenu(int n);
+BOOL  SmIsMacro(int n, LPCSTR lpMacro);
+BOOL  SmIsPrograms(int n);
+HFONT SmFont(BOOL bBold);
+void  SmDrawIcon(HDC hdc, int n, int x, int y, BOOL bLarge, COLORREF clrBk);
+
+/* startxp.c */
+void StartXPShow(HWND hwndOwner, int x, int y);
+LRESULT CALLBACK NSEXPORT StartXPWndProc(HWND, UINT, WPARAM, LPARAM);
 
 /* ---- dde.c ---------------------------------------------------------- */
 BOOL DdeRegister(void);

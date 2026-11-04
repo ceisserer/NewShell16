@@ -30,7 +30,15 @@
  *   LowerDoc=0         ; ... with the document name in lower case
  *   MinAbove=0         ; minimised windows: icons above the bar (HideMinApps=0)
  *   Hints=1            ; full captions, date and resources as hints
+ *   QuickLaunch=1      ; the Quick Launch bar beside the Start button
+ *
+ * The Quick Launch bar (of the Windows 98 / IE4 shell) holds small buttons
+ * for programs: [Quick Launch] in NSSTART.INI, in the Start menu's format
+ * ("Name=command;directory;showmode;iconfile;iconindex", '$' macros and
+ * <images> included). It is read again when the section changes, so
+ * editing NSSTART.INI (taskbar menu: Edit Quick Launch) takes effect at once.
  */
+#include <stdlib.h>
 #include <string.h>
 #include <dos.h>
 #include "newshell.h"
@@ -49,6 +57,19 @@
 #define BTN_MINWIDTH    40
 #define BTN_TOP         4
 #define GAP             3
+#define MAX_QL          12
+#define QL_CX           23          /* a Quick Launch button */
+#define QL_EDGE         8           /* the separator and grip before the bar */
+#define QL_CHECK_TICKS  10          /* refresh timer ticks between re-reads */
+
+typedef struct tagQLITEM {
+    char   szName[40];
+    char   szCmd[128];
+    char   szDir[64];
+    BYTE   bShow;
+    signed char nImage;     /* SMI_* or -1 */
+    HICON  hIcon;
+} QLITEM;
 
 typedef struct tagTASKBTN {
     HWND  hwnd;
@@ -76,6 +97,13 @@ static int     s_cyBar;
 static HWND    s_hwndSysMenuTarget;
 static BOOL    s_bLiftMenu;        /* move the next popup above the taskbar */
 static HBRUSH  s_hbrChecker;
+static QLITEM *s_ql;               /* Quick Launch */
+static int     s_nQl;
+static RECT    s_rcQl;             /* the buttons (empty: no bar) */
+static int     s_nQlHot = -1, s_nQlDown = -1;
+static BOOL    s_bQlPressed;       /* s_nQlDown is drawn pressed */
+static WORD    s_wQlSum;           /* checksum of the [Quick Launch] section */
+static int     s_nQlTicks;
 
 static void SlideBar(HWND hwnd, BOOL bShow);
 
@@ -399,6 +427,256 @@ static BOOL UpdateClock(void)
     return TRUE;
 }
 
+/* -------------------------------------------------------------------- */
+/* Quick Launch                                                         */
+/* -------------------------------------------------------------------- */
+
+/* The [Quick Launch] section as one checksum, to notice changes */
+static WORD QlChecksum(LPSTR lpKeys, int cbKeys)
+{
+    char szValue[300];
+    WORD w = 0;
+    LPSTR p, q;
+
+    GetPrivateProfileString("Quick Launch", NULL, "", lpKeys, cbKeys, NS_STARTINI);
+    for (p = lpKeys; *p; p += lstrlen(p) + 1) {
+        GetPrivateProfileString("Quick Launch", p, "", szValue, sizeof(szValue), NS_STARTINI);
+        for (q = p; *q; q++)
+            w = (WORD)(w * 31 + (BYTE)*q);
+        for (q = szValue; *q; q++)
+            w = (WORD)(w * 17 + (BYTE)*q);
+    }
+    return w;
+}
+
+/* the icons belong to the icon cache (icons.c) */
+static void QlFree(void)
+{
+    s_nQl = 0;
+}
+
+static void QlLoadIcon(QLITEM *q, LPCSTR lpIcon, int nIndex)
+{
+    char szFile[MAXPATHLEN];
+    OFSTRUCT of;
+    int i;
+
+    q->nImage = -1;
+    q->hIcon = NULL;
+    if (lpIcon[0] == '<') {
+        q->nImage = (signed char)StartMenuImage(lpIcon);
+        if (q->nImage >= 0)
+            return;
+    } else if (lpIcon[0] && (q->hIcon = IconFromFile(lpIcon, nIndex)) != NULL)
+        return;
+    if (q->szCmd[0] == '$' || !q->szCmd[0]) {
+        q->nImage = SMI_APP;
+        return;
+    }
+    for (i = 0; q->szCmd[i] && q->szCmd[i] != ' ' && i < sizeof(szFile) - 1; i++)
+        szFile[i] = q->szCmd[i];
+    szFile[i] = '\0';
+    if (PathIsDirectory(szFile))
+        q->nImage = SMI_FOLDER;
+    else if (OpenFile(szFile, &of, OF_EXIST) == HFILE_ERROR)
+        q->nImage = SMI_APP;
+    else {
+        OemToAnsi(of.szPathName, szFile);
+        q->hIcon = IconForFile(szFile, FALSE);
+        if (!q->hIcon)
+            q->nImage = SMI_APP;
+    }
+}
+
+/* Reads [Quick Launch]; TRUE if it changed */
+static BOOL QlLoad(BOOL bForce)
+{
+    char *pKeys, *p, szValue[300];
+    LPSTR f[5], q;
+    WORD wSum;
+    int i, n;
+
+    if (!CfgGetInt("Taskbar", "QuickLaunch", 1)) {
+        if (!s_nQl)
+            return FALSE;
+        QlFree();
+        return TRUE;
+    }
+    if (!s_ql && (s_ql = (QLITEM *)malloc(MAX_QL * sizeof(QLITEM))) == NULL)
+        return FALSE;
+    pKeys = (char *)malloc(SM_KEYBUF);
+    if (!pKeys)
+        return FALSE;
+    wSum = QlChecksum(pKeys, SM_KEYBUF);
+    if (!bForce && wSum == s_wQlSum && s_nQl) {
+        free(pKeys);
+        return FALSE;
+    }
+    s_wQlSum = wSum;
+    QlFree();
+    for (p = pKeys; *p && s_nQl < MAX_QL; p += lstrlen(p) + 1) {
+        QLITEM *ql = &s_ql[s_nQl];
+
+        if (*p == '-')
+            continue;
+        GetPrivateProfileString("Quick Launch", p, "", szValue, sizeof(szValue), NS_STARTINI);
+        f[0] = szValue;
+        for (i = 1; i < 5; i++)
+            f[i] = "";
+        for (q = szValue, n = 0; *q && n < 4; q++)
+            if (*q == ';') {
+                *q = '\0';
+                f[++n] = q + 1;
+            }
+        _fmemset(ql, 0, sizeof(QLITEM));
+        lstrcpyn(ql->szName, p, sizeof(ql->szName));
+        lstrcpyn(ql->szCmd, f[0], sizeof(ql->szCmd));
+        lstrcpyn(ql->szDir, f[1], sizeof(ql->szDir));
+        ql->bShow = (BYTE)(f[2][0] - '0');
+        QlLoadIcon(ql, f[3], atoi(f[4]));
+        s_nQl++;
+    }
+    free(pKeys);
+    return TRUE;
+}
+
+static void QlRun(int i)
+{
+    QLITEM *q = &s_ql[i];
+
+    if (q->szCmd[0] == '$')
+        ExecMacro(g_hwndMain, q->szCmd);
+    else if (q->szCmd[0])
+        LaunchCommand(NULL, q->szCmd, q->szDir,
+                      q->bShow == 1 ? SW_SHOWMINNOACTIVE
+                      : q->bShow == 2 ? SW_SHOWMAXIMIZED : SW_SHOWNORMAL);
+}
+
+static int HitQl(POINT pt)
+{
+    if (!s_nQl || !PtInRect(&s_rcQl, pt))
+        return -1;
+    return (pt.x - s_rcQl.left) / QL_CX < s_nQl ? (pt.x - s_rcQl.left) / QL_CX : -1;
+}
+
+static void QlButtonRect(int i, RECT FAR *lprc)
+{
+    SetRect(lprc, s_rcQl.left + i * QL_CX, s_rcQl.top, s_rcQl.left + (i + 1) * QL_CX,
+            s_rcQl.bottom);
+}
+
+/* The name of a button without '&' */
+static void QlName(int i, LPSTR lpBuf, int cbBuf)
+{
+    LPCSTR p;
+    int n = 0;
+
+    for (p = s_ql[i].szName; *p && n < cbBuf - 1; p++)
+        if (*p != '&' || p[1] == '&')
+            lpBuf[n++] = *p;
+    lpBuf[n] = '\0';
+}
+
+/* Edit Quick Launch: NSSTART.INI in Notepad */
+static void QlEdit(HWND hwnd)
+{
+    char szCmd[MAXPATHLEN + 16];
+    int n;
+
+    lstrcpy(szCmd, "NOTEPAD.EXE ");
+    n = lstrlen(szCmd);
+    GetWindowsDirectory(szCmd + n, sizeof(szCmd) - n - 14);
+    PathAppend(szCmd + n, NS_STARTINI);
+    LaunchCommand(hwnd, szCmd, NULL, SW_SHOWNORMAL);
+}
+
+/* The separator and grip before the bar, or between it and the tasks */
+static void QlEdge(HDC hdc, int x, const RECT FAR *lprcBar, BOOL bGrip)
+{
+    RECT rc;
+
+    if (LunaLook()) {
+        SetRect(&rc, x, lprcBar->top + 4, x + 1, lprcBar->bottom - 4);
+        FillSolid(hdc, &rc, RGB(16, 66, 175));
+        OffsetRect(&rc, 1, 0);
+        FillSolid(hdc, &rc, RGB(96, 160, 240));
+        if (bGrip) {
+            int y;
+
+            for (y = lprcBar->top + 5; y < lprcBar->bottom - 6; y += 4) {
+                SetRect(&rc, x + 4, y, x + 6, y + 2);
+                FillSolid(hdc, &rc, RGB(20, 52, 140));
+                OffsetRect(&rc, -1, -1);
+                FillSolid(hdc, &rc, RGB(160, 200, 250));
+            }
+        }
+        return;
+    }
+    /* Windows 98: an etched line, then a raised grip */
+    SetRect(&rc, x, lprcBar->top + 2, x + 1, lprcBar->bottom - 2);
+    FillSolid(hdc, &rc, GetSysColor(COLOR_BTNSHADOW));
+    OffsetRect(&rc, 1, 0);
+    FillSolid(hdc, &rc, GetSysColor(COLOR_BTNHIGHLIGHT));
+    if (bGrip) {
+        SetRect(&rc, x + 4, lprcBar->top + 2, x + 7, lprcBar->bottom - 2);
+        Draw3DEdge(hdc, &rc, FALSE, FALSE);
+    }
+}
+
+static void PaintQuickLaunch(HDC hdc)
+{
+    RECT rc, rcBar;
+    int i, off;
+    BOOL bLuna = LunaLook();
+
+    if (!s_nQl)
+        return;
+    SetRect(&rcBar, s_rcQl.left, s_rcQl.top, s_rcQl.right, s_rcQl.bottom);
+    QlEdge(hdc, s_rcQl.left - QL_EDGE, &rcBar, TRUE);
+    QlEdge(hdc, s_rcQl.right + 2, &rcBar, FALSE);
+    for (i = 0; i < s_nQl; i++) {
+        BOOL bDown = (i == s_nQlDown && s_bQlPressed);
+        BOOL bHot = (i == s_nQlHot) || bDown;
+        int x, y;
+
+        QlButtonRect(i, &rc);
+        if (bHot) {
+            if (bLuna)
+                LunaDrawQuickButton(hdc, &rc, bDown);
+            else
+                Draw3DEdge(hdc, &rc, bDown, FALSE);
+        }
+        off = bDown ? 1 : 0;
+        x = rc.left + (QL_CX - 16) / 2 + off;
+        y = rc.top + (rc.bottom - rc.top - 16) / 2 + off;
+        if (s_ql[i].nImage >= 0)
+            DrawSmallImage(hdc, x, y, s_ql[i].nImage);
+        else if (bLuna)
+            LunaIconSmall(hdc, x, y, s_ql[i].hIcon);
+        else
+            DrawIconSmall(hdc, x, y, s_ql[i].hIcon, NsColor(NSC_TASKBAR));
+    }
+}
+
+static void QlSetHot(HWND hwnd, int i)
+{
+    RECT rc;
+
+    if (i == s_nQlHot)
+        return;
+    if (s_nQlHot >= 0 && s_nQlHot < s_nQl) {
+        QlButtonRect(s_nQlHot, &rc);
+        InflateRect(&rc, 1, 1);
+        InvalidateRect(hwnd, &rc, FALSE);
+    }
+    s_nQlHot = i;
+    if (i >= 0) {
+        QlButtonRect(i, &rc);
+        InflateRect(&rc, 1, 1);
+        InvalidateRect(hwnd, &rc, FALSE);
+    }
+}
+
 static void Layout(HWND hwnd, HDC hdc)
 {
     RECT rc;
@@ -431,6 +709,16 @@ static void Layout(HWND hwnd, HDC hdc)
     SelectObject(hdc, hfOld);
 
     xLeft = s_rcStart.right + GAP + (LunaLook() ? 6 : 2);
+    if (s_nQl) {
+        /* Quick Launch: separator and grip, the buttons, a separator */
+        if (LunaLook())
+            SetRect(&s_rcQl, xLeft + QL_EDGE, 2, xLeft + QL_EDGE + s_nQl * QL_CX, rc.bottom - 2);
+        else
+            SetRect(&s_rcQl, xLeft + QL_EDGE, BTN_TOP, xLeft + QL_EDGE + s_nQl * QL_CX,
+                    BTN_TOP + cyBtn);
+        xLeft = s_rcQl.right + 2 + 2 + GAP + 2;
+    } else
+        SetRectEmpty(&s_rcQl);
     xRight = s_rcClock.left - GAP - 2;
     if (s_nTasks > 0) {
         cxBtn = (xRight - xLeft + GAP) / s_nTasks - GAP;
@@ -474,6 +762,7 @@ static void PaintLuna(HDC hdc, const RECT FAR *lprc)
     if (g_cfg.bClock || s_nTray)
         LunaDrawTray(hdc, &s_rcClock);
     LunaDrawStart(hdc, &s_rcStart, s_bStartDown);
+    PaintQuickLaunch(hdc);
 
     SetBkMode(hdc, TRANSPARENT);
     SetTextColor(hdc, RGB(255, 255, 255));
@@ -557,6 +846,7 @@ static void PaintTaskbar(HWND hwnd, HDC hdcWin)
     SetRect(&rcEdge, s_rcStart.left + 23 + off, s_rcStart.top + off,
             s_rcStart.right + off, s_rcStart.bottom + off);
     DrawText(hdc, "Start", -1, &rcEdge, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+    PaintQuickLaunch(hdc);
 
     /* Task buttons */
     for (i = 0; i < s_nTasks; i++) {
@@ -765,6 +1055,9 @@ static void TaskbarContextMenu(HWND hwnd, POINT pt)
     AppendMenu(hMenu, MF_STRING | (CfgGetInt("Taskbar", "AutoHide", 0) ? MF_CHECKED : 0),
                CMD_TB_AUTOHIDE, "Auto &Hide");
     AppendMenu(hMenu, MF_STRING, CMD_TOGGLETASKBAR, "Hide the Task&bar");
+    AppendMenu(hMenu, MF_STRING | (CfgGetInt("Taskbar", "QuickLaunch", 1) ? MF_CHECKED : 0),
+               CMD_TB_QUICKLAUNCH, "&Quick Launch");
+    AppendMenu(hMenu, MF_STRING, CMD_TB_EDITQL, "&Edit Quick Launch...");
     AppendMenu(hMenu, MF_SEPARATOR, 0, NULL);
     AppendMenu(hMenu, MF_STRING, CMD_TASKMAN, "&Task Manager...");
     AppendMenu(hMenu, MF_STRING, CMD_STARTPROPS, "&Start Menu...");
@@ -940,6 +1233,8 @@ void TaskbarApplySettings(void)
     if (!IsWindowVisible(g_hwndTaskbar))
         ShowWindow(g_hwndTaskbar, SW_SHOWNOACTIVATE);
     UpdateTasks();
+    StartMenuEnsure();      /* the first Quick Launch buttons */
+    QlLoad(TRUE);
     InvalidateRect(g_hwndTaskbar, NULL, FALSE);
 }
 
@@ -970,7 +1265,9 @@ static void ShowBarHint(HWND hwnd)
     else if ((i = HitTray(pt)) >= 0) {
         hwndFor = s_hwndTray[i];
         i += 100;
-    } else if (PtInRect(&s_rcClock, pt))
+    } else if ((i = HitQl(pt)) >= 0)
+        i += 200;
+    else if (PtInRect(&s_rcClock, pt))
         i = -1;
     else
         i = -2;
@@ -979,6 +1276,8 @@ static void ShowBarHint(HWND hwnd)
     s_nHintAt = i;
     if (hwndFor) {
         GetWindowText(hwndFor, szText, sizeof(szText));
+    } else if (i >= 200) {
+        QlName(i - 200, szText, sizeof(szText));
     } else if (i == -1) {
         struct dosdate_t d;
         static const char *s_szDay[] = { "Sunday", "Monday", "Tuesday", "Wednesday",
@@ -1038,6 +1337,21 @@ LRESULT CALLBACK NSEXPORT TaskbarWndProc(HWND hwnd, UINT msg, WPARAM wParam,
         }
         i = UpdateTasks();
         i |= UpdateClock();
+        if (++s_nQlTicks >= QL_CHECK_TICKS) {
+            s_nQlTicks = 0;
+            if (QlLoad(FALSE)) {
+                s_nQlHot = -1;
+                i = TRUE;
+            }
+        }
+        if (s_nQlHot >= 0 && s_nQlDown < 0) {
+            POINT ptNow;
+
+            GetCursorPos(&ptNow);
+            ScreenToClient(hwnd, &ptNow);
+            if (HitQl(ptNow) != s_nQlHot)
+                QlSetHot(hwnd, -1);
+        }
         i |= LunaCheckEngine();     /* the theme engine started or stopped */
         if (i)
             InvalidateRect(hwnd, NULL, FALSE);
@@ -1075,6 +1389,13 @@ LRESULT CALLBACK NSEXPORT TaskbarWndProc(HWND hwnd, UINT msg, WPARAM wParam,
                 InvalidateRect(hwnd, &s_rcStart, FALSE);
             } else
                 ShowStartMenu(hwnd);
+        } else if ((i = HitQl(pt)) >= 0) {
+            HintHide();
+            s_nQlDown = i;
+            s_bQlPressed = TRUE;
+            SetCapture(hwnd);
+            QlSetHot(hwnd, i);
+            InvalidateRect(hwnd, &s_rcQl, FALSE);
         } else if ((i = HitTask(pt)) >= 0) {
             ActivateTask(s_tasks[i].hwnd);
         } else if ((i = HitTray(pt)) >= 0) {
@@ -1083,6 +1404,19 @@ LRESULT CALLBACK NSEXPORT TaskbarWndProc(HWND hwnd, UINT msg, WPARAM wParam,
         return 0;
 
     case WM_MOUSEMOVE:
+        pt.x = (int)(short)LOWORD(lParam);
+        pt.y = (int)(short)HIWORD(lParam);
+        if (s_nQlDown >= 0) {
+            BOOL bIn = HitQl(pt) == s_nQlDown;
+
+            if (bIn != s_bQlPressed) {
+                s_bQlPressed = bIn;
+                InvalidateRect(hwnd, &s_rcQl, FALSE);
+            }
+            return 0;
+        }
+        if (s_nQl)
+            QlSetHot(hwnd, HitQl(pt));
         if (CfgGetInt("Taskbar", "Hints", 1) && !s_bStartPress) {
             if (HintVisible())
                 ShowBarHint(hwnd);
@@ -1099,6 +1433,20 @@ LRESULT CALLBACK NSEXPORT TaskbarWndProc(HWND hwnd, UINT msg, WPARAM wParam,
         return 0;
 
     case WM_LBUTTONUP:
+        if (s_nQlDown >= 0) {
+            int nDown = s_nQlDown;
+
+            pt.x = (int)(short)LOWORD(lParam);
+            pt.y = (int)(short)HIWORD(lParam);
+            s_nQlDown = -1;
+            s_bQlPressed = FALSE;
+            ReleaseCapture();
+            InvalidateRect(hwnd, &s_rcQl, FALSE);
+            UpdateWindow(hwnd);
+            if (HitQl(pt) == nDown)
+                QlRun(nDown);
+            return 0;
+        }
         if (s_bStartPress) {
             s_bStartPress = FALSE;
             ReleaseCapture();
@@ -1156,6 +1504,12 @@ LRESULT CALLBACK NSEXPORT TaskbarWndProc(HWND hwnd, UINT msg, WPARAM wParam,
             CfgSetInt("Taskbar", "AutoHide", !CfgGetInt("Taskbar", "AutoHide", 0));
             TaskbarApplySettings();
             HookApplySettings();
+        } else if (wParam == CMD_TB_QUICKLAUNCH) {
+            CfgSetInt("Taskbar", "QuickLaunch", !CfgGetInt("Taskbar", "QuickLaunch", 1));
+            QlLoad(TRUE);
+            InvalidateRect(hwnd, NULL, FALSE);
+        } else if (wParam == CMD_TB_EDITQL) {
+            QlEdit(hwnd);
         } else if (wParam == CMD_STARTMENU) {
             ShowStartMenu(hwnd);
         } else {
@@ -1179,6 +1533,7 @@ LRESULT CALLBACK NSEXPORT TaskbarWndProc(HWND hwnd, UINT msg, WPARAM wParam,
             s_hbrChecker = NULL;
         }
         LunaFree();
+        QlFree();
         g_hwndTaskbar = NULL;
         return 0;
     }

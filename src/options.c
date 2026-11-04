@@ -61,6 +61,7 @@ static const OPTDEF s_opts[] = {
     { 0, OT_CHECK,    "Ctrl+&Esc opens the Start menu (not the Task Manager)", "Taskbar", "CtrlEscStart", 0 },
     { 0, OT_CHECK,    "&Windows key: Start menu, Win+E, Win+R, Win+F...", "Taskbar", "WinKey", 1 },
     { 0, OT_CHECK,    "&Auto hide", "Taskbar", "AutoHide", 0 },
+    { 0, OT_CHECK,    "&Quick Launch beside the Start button", "Taskbar", "QuickLaunch", 1 },
     { 0, OT_CHECK,    "Show the &taskbar", "Taskbar", "Enabled", 1 },
     { 0, OT_CHECK,    "Hi&nts: captions, the date and free resources", "Taskbar", "Hints", 1 },
     { 0, OT_CHECK,    "&Document name first: \"README.TXT - Notepad\"", "Taskbar", "DocFirst", 0 },
@@ -75,6 +76,7 @@ static const OPTDEF s_opts[] = {
     { 1, OT_CHECK,    "&Arrows on shortcuts and aliases", "Desktop", "ShortcutArrows", 1 },
     { 1, OT_CHECK,    "Right click on minimize or maximize box &closes", "Desktop", "RightClose", 0 },
     { 1, OT_COMBO,    "Taskbar &look:", "Taskbar", "Look", 0 },
+    { 1, OT_COMBO,    "Start &menu:", "Start Menu", "Style", 0 },
     { 1, OT_COLOR,    "&Taskbar colour...", "Colors", "Taskbar", NSC_TASKBAR },
     { 1, OT_COLOR,    "St&art menu colour...", "Colors", "StartMenu", NSC_STARTMENU },
     { 1, OT_COLOR,    "S&election colour...", "Colors", "Selection", NSC_SELECTION },
@@ -189,6 +191,10 @@ static void MakeControls(HWND hDlg)
                     SendMessage(hwnd, CB_ADDSTRING, 0, (LPARAM)(LPSTR)"as the theme says");
                     SendMessage(hwnd, CB_ADDSTRING, 0, (LPARAM)(LPSTR)"Windows XP");
                     SendMessage(hwnd, CB_ADDSTRING, 0, (LPARAM)(LPSTR)"Windows 95");
+                } else if (lstrcmp(o->lpKey, "Style") == 0) {    /* startxp.c */
+                    SendMessage(hwnd, CB_ADDSTRING, 0, (LPARAM)(LPSTR)"as the taskbar look");
+                    SendMessage(hwnd, CB_ADDSTRING, 0, (LPARAM)(LPSTR)"classic");
+                    SendMessage(hwnd, CB_ADDSTRING, 0, (LPARAM)(LPSTR)"Windows XP, two columns");
                 } else {
                     SendMessage(hwnd, CB_ADDSTRING, 0, (LPARAM)(LPSTR)"where Windows puts them");
                     SendMessage(hwnd, CB_ADDSTRING, 0, (LPARAM)(LPSTR)"cascaded");

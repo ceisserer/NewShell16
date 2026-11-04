@@ -115,6 +115,40 @@ def dos(n):
     return img
 
 
+def show_desktop(n):
+    """Quick Launch "Show Desktop": a desk pad with a pencil (16x16)."""
+    img, d = canvas(n)
+    d.polygon([(1, 9), (5, 5), (14, 5), (10, 9)], fill=TEAL, outline=BLACK)
+    d.rectangle([1, 9, 10, 11], fill=OLIVE, outline=BLACK)
+    d.line([10, 9, 14, 5], fill=BLACK)
+    d.line([10, 11, 14, 7], fill=BLACK)
+    d.line([14, 5, 14, 7], fill=BLACK)
+    d.line([6, 7, 12, 1], fill=YELLOW)
+    d.line([7, 7, 13, 1], fill=OLIVE)
+    d.point([6, 8], fill=BLACK)
+    return img
+
+
+def log_off(n):
+    """Log Off: a key (16x16)."""
+    img, d = canvas(n)
+    d.ellipse([1, 1, 7, 7], fill=YELLOW, outline=BLACK)
+    d.ellipse([3, 3, 5, 5], fill=T, outline=OLIVE)
+    d.line([6, 6, 13, 13], fill=BLACK, width=3)
+    d.line([6, 6, 13, 13], fill=YELLOW)
+    d.line([11, 13, 13, 11], fill=BLACK)
+    d.line([9, 11, 10, 10], fill=BLACK)
+    return img
+
+
+def all_programs(n):
+    """The arrow of All Programs in the two-column Start menu (16x16)."""
+    img, d = canvas(n)
+    d.ellipse([0, 0, 15, 15], fill=GREEN, outline=DGREEN)
+    d.polygon([(5, 3), (11, 8), (5, 13)], fill=WHITE)
+    return img
+
+
 def folder_open(n):
     """An open folder for the selected node of the folder tree (16x16), in
     the colours of Calmira's closed folder."""
@@ -334,7 +368,8 @@ SMALL = [
     ("internet", calmira("sm_internet")),
     ("tb_rename", calmira("edit")), ("tb_goto", calmira("open")),
     ("tb_insert", calmira("insert")), ("tb_newitem", calmira("newprg")),
-    ("folderopen", folder_open),
+    ("folderopen", folder_open), ("desktop", show_desktop), ("logoff", log_off),
+    ("allprograms", all_programs),
 ]
 
 # Order must match IDI_* in src/resource.h (newshell.rc names the files).
