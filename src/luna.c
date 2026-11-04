@@ -30,7 +30,8 @@
  *
  * Everything is drawn procedurally (gradients and anti-aliased rounded
  * corners), so the look costs no bitmaps and no memory while it is not
- * used: this module is a code segment of its own, loaded on first use.
+ * used: this module is a discardable code segment of its own (see
+ * docs/building.md), which Windows can drop when memory is short.
  * Gradients want a high-colour display; GDI dithers them otherwise.
  */
 #include <string.h>

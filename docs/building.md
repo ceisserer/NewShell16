@@ -31,6 +31,24 @@ cannot run twice, and the second copy forwards Ctrl+Esc and command
 lines), so large tables are allocated from the global heap. The executable is marked as a
 Windows 3.1 application (`wrc -31`).
 
+Code segments: each module is a code segment of its own
+(`option packcode=0`), moveable, discardable and loaded on first call
+(`segment class 'CODE' ...` in the makefile); only what the shell needs
+as soon as it starts (`PRELOAD` in the makefile) is loaded with it.
+Windows can then drop code that is not running, such as the Windows XP
+and 11 looks, the dialogs or Find, when memory is short, and reloads it
+from `NEWSHELL.EXE` when it is called again. (Open Watcom's
+`segment type code` is not applied by wlink 2.0; `class 'CODE'` is. A
+segment named on its own line gets only the attributes given there.)
+
+Measured on Windows 3.1 in QEMU with ToolHelp: the old build kept
+164 KB of code in fixed memory; this one has 41 KB of preloaded code,
+and after `GlobalCompact(-1)` and then using the XP Start menu, All
+Programs and a folder window, 112 KB in 18 of 30 segments. Started as
+the shell it still has all segments in memory a few seconds after
+starting (not when started from Program Manager); what loads them has
+not been found yet.
+
 ## Release and installer
 
 The installer is built with [Win16Setup](https://github.com/ceisserer/Win16Setup)
