@@ -144,8 +144,9 @@ def log_off(n):
 def all_programs(n):
     """The arrow of All Programs in the two-column Start menu (16x16)."""
     img, d = canvas(n)
-    d.ellipse([0, 0, 15, 15], fill=GREEN, outline=DGREEN)
-    d.polygon([(5, 3), (11, 8), (5, 13)], fill=WHITE)
+    d.rounded_rectangle([0, 0, 15, 15], radius=3, fill=DGREEN, outline=DGREEN)
+    d.rounded_rectangle([1, 1, 14, 7], radius=2, fill=GREEN)
+    d.polygon([(6, 4), (10, 8), (6, 12)], fill=WHITE)
     return img
 
 

@@ -439,3 +439,103 @@ void LunaDrawQuickButton(HDC hdc, const RECT FAR *lprc, BOOL bDown)
 {
     LunaDrawTask(hdc, lprc, bDown);
 }
+
+/* -------------------------------------------------------------------- */
+/* The two-column Start menu                                            */
+/* -------------------------------------------------------------------- */
+
+static const LSTOP s_stArrow[] = {
+    {   0, 132, 214, 112 }, {  90,  78, 182,  66 }, { 255,  38, 132,  38 }
+};
+static const LSTOP s_stLogOff[] = {
+    {   0, 255, 222, 110 }, { 110, 248, 178,  50 }, { 255, 214, 118,  18 }
+};
+static const LSTOP s_stPower[] = {
+    {   0, 255, 150, 110 }, { 110, 236,  86,  46 }, { 255, 186,  44,  18 }
+};
+
+/* A white triangle pointing right, cy high (odd), its tip at x + cy / 2 */
+static void Triangle(HDC hdc, int x, int y, int cy, COLORREF clr)
+{
+    int i, h = cy / 2;
+
+    for (i = 0; i <= h; i++)
+        Line(hdc, x + i, y + i, x + i + 1, y + cy - i, clr);
+}
+
+/* A rounded square button in a gradient with a white rim */
+static void Tile(HDC hdc, const RECT FAR *lprc, const LSTOP *lpst, int nst)
+{
+    RECT rc = *lprc;
+
+    LunaRoundRect(hdc, &rc, 4, RGB(255, 255, 255));
+    InflateRect(&rc, -1, -1);
+    Shape(hdc, &rc, lpst, nst, 3, LC_TL | LC_TR | LC_BL | LC_BR);
+}
+
+/* The green arrow of All Programs: a rounded square, cx wide */
+void LunaDrawArrowButton(HDC hdc, int x, int y, int cx)
+{
+    RECT rc;
+    int cyTri = (cx / 2) | 1;
+
+    SetRect(&rc, x, y, x + cx, y + cx);
+    Shape(hdc, &rc, s_stArrow, NSTOPS(s_stArrow), 4, LC_TL | LC_TR | LC_BL | LC_BR);
+    /* a lighter rim at the top */
+    Line(hdc, x + 3, y, x + cx - 3, y + 1, RGB(178, 234, 160));
+    Triangle(hdc, x + (cx - cyTri / 2) / 2 + 1, y + (cx - cyTri) / 2, cyTri,
+             RGB(255, 255, 255));
+}
+
+/* The icons of Log Off (an arrow out of a door) and Shut Down (the power
+   symbol) in the footer, cx x cx */
+void LunaDrawFootIcon(HDC hdc, int x, int y, int cx, BOOL bPower)
+{
+    RECT rc;
+    COLORREF clrW = RGB(255, 255, 255);
+    int m = x + cx / 2, c = y + cx / 2;
+
+    SetRect(&rc, x, y, x + cx, y + cx);
+    if (bPower) {
+        HPEN hpen = CreatePen(PS_SOLID, 2, clrW), hpOld;
+        HBRUSH hbOld;
+        int r = cx * 5 / 16;
+
+        Tile(hdc, &rc, s_stPower, NSTOPS(s_stPower));
+        hpOld = SelectObject(hdc, hpen);
+        hbOld = SelectObject(hdc, GetStockObject(NULL_BRUSH));
+        Ellipse(hdc, m - r, c - r + 1, m + r + 1, c + r + 2);
+        SelectObject(hdc, hbOld);
+        SelectObject(hdc, hpOld);
+        DeleteObject(hpen);
+        /* the gap at the top of the ring, and the bar through it */
+        Line(hdc, m - 2, c - r - 1, m + 3, c - 1, StopColor(s_stPower, NSTOPS(s_stPower),
+                                                            cx / 4, cx));
+        Line(hdc, m, c - r - 2, m + 2, c + 1, clrW);
+    } else {
+        int cyTri = (cx / 2) | 1;
+
+        Tile(hdc, &rc, s_stLogOff, NSTOPS(s_stLogOff));
+        /* the door: an open frame on the left */
+        Line(hdc, x + 4, y + 4, x + 6, y + cx - 4, clrW);
+        Line(hdc, x + 4, y + 4, x + cx / 2, y + 6, clrW);
+        Line(hdc, x + 4, y + cx - 6, x + cx / 2, y + cx - 4, clrW);
+        /* the arrow out of it */
+        Line(hdc, x + 8, c - 1, x + cx - 4 - cyTri / 2, c + 1, clrW);
+        Triangle(hdc, x + cx - 4 - cyTri / 2, c - cyTri / 2, cyTri, clrW);
+    }
+}
+
+/* A horizontal line that fades into clrFace towards both ends */
+void LunaDrawFadeLine(HDC hdc, int x0, int x1, int y, COLORREF clr, COLORREF clrFace)
+{
+    int cx = x1 - x0, cxFade = cx / 4, x;
+
+    if (cx <= 0)
+        return;
+    for (x = 0; x < cx; x += 2) {
+        int d = x < cx - x ? x : cx - x, n = cxFade > 0 && d < cxFade ? d * 16 / cxFade : 16;
+
+        Line(hdc, x0 + x, y, x0 + x + 2, y + 1, Blend(clrFace, clr, n));
+    }
+}
