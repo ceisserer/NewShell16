@@ -17,11 +17,16 @@ Usable as the Windows 3.1 shell, with nearly all of Calmira's features:
   exclusion list, and a menu to cascade/tile/minimise windows and show
   the desktop. Minimised windows are kept off the desktop and maximised
   windows stop above the taskbar.
+- **Quick Launch** bar beside the Start button, as in Windows 98: Show
+  Desktop and program buttons from `NSSTART.INI`.
 - **Start menu** in Calmira's START.INI format (`NSSTART.INI`), created
   from the Program Manager groups on first use, with icons at every level,
   Calmira's 3D look or a plain menu, and an editor (Start Menu Properties).
   Setup programs add their groups to it over DDE, as they would to
-  Program Manager.
+  Program Manager. With the XP look it is the two-column Windows XP Start
+  menu: pinned programs, the programs started last, All Programs, the
+  first level of the menu on the right, Log Off and Shut Down (also
+  available without the XP look).
 - **Desktop** with Computer, Bin and shortcuts made by dragging files,
   folders, drives or programs onto it (shortcut properties, Change Icon,
   Calmira's arrows, a grid), and a right-click menu.
@@ -58,10 +63,17 @@ It looks consistent both on a plain Windows 3.1 and with the
 theme engine. With Retheme16's RedmondExperience theme (the Windows XP
 "Luna" look) the taskbar and the Start menu turn into the Windows XP ones:
 a green Start button, a blue taskbar with rounded task buttons, a light
-blue tray and a white Start menu with a blue banner (best with a display
+blue tray and the two-column Windows XP Start menu (best with a display
 driver for 65536 colours, see [docs/testing.md](docs/testing.md)).
 
 ![NewShell16 with RedmondExperience on Windows 3.1, 800x600, 65536 colours](docs/images/luna.png)
+
+With Retheme16's Redmond-11 theme the taskbar becomes the Windows 11 one:
+a light bar with the Start button, Quick Launch and the programs as icons
+in the middle, the clock with the date, and the Windows 11 Start menu
+(pinned programs, All apps, Recommended, the power button).
+
+![NewShell16 with Redmond-11 on Windows 3.1, 800x600, 65536 colours](docs/images/win11.png)
 
 See [docs/design.md](docs/design.md) for internals, configuration and the
 roadmap, and [docs/calmira-parity.md](docs/calmira-parity.md) for what

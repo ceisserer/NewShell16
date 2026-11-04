@@ -9,8 +9,9 @@ executable, `NEWSHELL.EXE`.
 | File | Purpose |
 |------|---------|
 | `main.c` | `WinMain`, hidden main window, shell detection, hook DLL loading, start-up programs, second-instance forwarding |
-| `taskbar.c` | Taskbar window: Start button, task buttons, clock, task system menus |
-| `startmnu.c` | Owner-drawn Start menu from `NSSTART.INI`, `$` macros |
+| `taskbar.c` | Taskbar window: Start button, Quick Launch, task buttons, clock, task system menus |
+| `startmnu.c` | Owner-drawn Start menu from `NSSTART.INI`, `$` macros, the programs started last |
+| `startxp.c` | The two-column Start menu of Windows XP (pinned and recent programs, All Programs, Log Off, Shut Down) and the Windows 11 Start menu |
 | `startprop.c` | Start Menu Properties: the Start menu as an editable tree, its look |
 | `progman.c` | `PROGMAN.INI` / `*.GRP` reader, `load=`/`run=`, StartUp group |
 | `dde.c` | Program Manager DDE server for setup programs |
@@ -34,7 +35,8 @@ executable, `NEWSHELL.EXE`.
 | `users.c` | Users: logon dialog, per-user settings |
 | `settings.c` | `NEWSHELL.INI` |
 | `util.c` | 3D drawing, small images, colours, hints, path helpers, launching, reading the active theme |
-| `luna.c` | The Windows XP ("Luna") look of the taskbar, Start button and Start menu |
+| `luna.c` | The Windows XP ("Luna") look of the taskbar, Start button and Start menu; which look is used |
+| `win11.c` | The Windows 11 look of the taskbar |
 | `nshook.c` | `NSHOOK.DLL`: system hooks (see below) |
 
 ## Windows 3.1 specifics
@@ -151,6 +153,64 @@ segment grows by 16 bytes, so the classic look costs nothing extra. The
 gradients want a 15/16/24-bit display; GDI dithers them with 16 or 256
 colours.
 
+### The Windows 11 look
+
+With Retheme16's Redmond-11 theme (`[Shell] Style=11`, `THEMES\WIN11`), or
+`[Taskbar] Look=3`, `win11.c` draws the taskbar of Windows 11: a light bar
+8 pixels taller than the others (windows and desktop icons follow when the
+look changes), the Start button (four blue panes), the Quick Launch
+buttons and the task buttons as icons centred on the bar, light rounded
+squares under the mouse and behind the active task, a short grey line under
+running tasks and a longer blue one under the active task (the titles are
+in the hints), and the clock with the date below the time.
+
+The Start menu is then the Windows 11 one, centred above the taskbar: a
+grid of pinned programs (`[Pinned]`, then the first level of
+`NSSTART.INI` except Programs and Shut Down; up to 18), All apps (the
+Programs submenu), Recommended (the programs started last) and a footer
+with the user (Log Off when there are users) and the power button (Shut
+Down). It is the panel of the two-column menu with another layout; the
+arrow keys move to the nearest item in their direction.
+
+![NewShell16 with Redmond-11: the Windows 11 taskbar and Start menu](images/win11.png)
+
+### The two-column Start menu
+
+With the XP look (or always, with `[Start Menu] Style=2`) the Start button
+opens the Windows XP Start menu (`startxp.c`) instead of the classic one:
+a header with a picture and the user's name, a white left column with the
+pinned programs (`[Pinned]` in `NSSTART.INI`, large icons, bold) and the
+programs started last from the Start menu (`[Recent]`, up to five, kept by
+`startmnu.c`), All Programs at its bottom (the Programs submenu), a light
+blue right column with the first level of `NSSTART.INI` except Programs
+and Shut Down, and a footer with Log Off (when there are users) and Shut
+Down.
+
+![The two-column Start menu with the XP look](images/startxp.png)
+![... and without it (Style=2), with the Windows 95 theme](images/startxp-classic.png)
+
+It is a popup window with a modal loop of its own, like a menu: it holds
+the mouse capture (a click outside closes it, also on the Start button)
+and the keyboard (arrows move in a column, Left/Right change columns,
+Enter, Esc, mnemonics). Submenus (All Programs, Settings...) are the
+ordinary owner-drawn popup menus of the classic Start menu, opened by a
+click, the Right key or after resting the mouse on the item for a moment.
+The command chosen is posted to the taskbar after the window is gone.
+Without the XP look the menu uses the system colours (caption gradient,
+window and Start menu colours), like the classic style of Windows XP.
+
+### Quick Launch
+
+The Quick Launch bar of the Windows 98 shell (IE4 Desktop Update) sits
+between the Start button and the task buttons: a separator and grip,
+small flat buttons that rise under the mouse, a separator. Its buttons are
+`[Quick Launch]` in `NSSTART.INI`, in the Start menu's format; by default
+Show Desktop (`$ClearDesktop`, again restores the windows), File System and
+Notepad. The taskbar's right-click menu switches it on and off and opens
+`NSSTART.INI` in Notepad (Edit Quick Launch); the section is read again
+when it changes. With the XP look the buttons sit on the blue bar and use
+the rounded task button shape.
+
 ## Command line
 
 | | |
@@ -181,7 +241,7 @@ Notepad=notepad.exe;;0;;0         ; command;directory;show;iconfile;iconindex
 executable or icon file, or a built-in image: `<programs>`, `<documents>`,
 `<settings>`, `<find>`, `<run>`, `<shutdown>`, `<system>`, `<folder>`,
 `<help>`, `<printer>`, `<control>`, `<explorer>`, `<bin>`, `<taskman>`,
-`<favorites>`, `<internet>`...
+`<favorites>`, `<internet>`, `<showdesktop>`, `<logoff>`...
 
 Built-in commands: `$Run`, `$ShutDown`, `$Find`, `$Explore [path]`,
 `$BrowseFolders`, `$System` (Computer), `$Bin`, `$TaskManager`,
@@ -196,6 +256,23 @@ open in the web browser.
 Settings > Start Menu (`$StartMenuProp`) edits the menu as a tree and
 writes `NSSTART.INI` anew. Setup programs add their groups to Programs
 over DDE.
+
+Two more sections in the same format belong to the two-column Start menu
+and the taskbar; they are created once (`PinnedMade=`, `QuickLaunchMade=`
+in `NEWSHELL.INI`), so emptying them is kept:
+
+```ini
+[Pinned]                          ; left column of the two-column menu
+File &System=$Explore;;0;<explorer>;0
+&Notepad=NOTEPAD.EXE;;0;;0
+
+[Quick Launch]                    ; buttons beside the Start button
+Show Desktop=$ClearDesktop;;0;<showdesktop>;0
+Notepad=NOTEPAD.EXE;;0;;0
+
+[Recent]                          ; written by NewShell16: name|item
+1=Write|WRITE.EXE;;0;C:\WINDOWS\WRITE.EXE;0
+```
 
 ## NEWSHELL.INI
 
@@ -218,8 +295,9 @@ DocFirst=0         ; "README.TXT - Notepad"
 LowerDoc=0         ; ... "readme.txt - Notepad"
 Exclude=           ; programs (module names) without a button
 Tray=              ; programs shown as icons beside the clock
-Look=0             ; 0 as the theme says ([Shell] Style=XP), 1 Windows XP,
-                   ; 2 Windows 95
+Look=0             ; 0 as the theme says ([Shell] Style=XP or 11), 1 Windows
+                   ; XP, 2 Windows 95, 3 Windows 11
+QuickLaunch=1      ; the Quick Launch bar ([Quick Launch] in NSSTART.INI)
 
 [Desktop]
 Icons=1
@@ -270,6 +348,11 @@ StatusBar=1        ; View > Status Bar
 RememberLast=1     ; open at the last folder (Last=)
 
 [Start Menu]
+Style=0            ; 0 as the taskbar look: two columns (Windows XP) with the
+                   ; XP look, Windows 11 with the Windows 11 look, else
+                   ; classic; 1 always classic; 2 always two columns;
+                   ; 3 always Windows 11
+UserName=          ; the name in the XP / 11 menus (default: the user)
 Win95Look=1        ; banner and 3D frame, else a plain menu
 ColouredBar=1
 BoldSelect=0

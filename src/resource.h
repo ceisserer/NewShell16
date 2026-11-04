@@ -93,6 +93,9 @@
 #define SMI_TB_INSERT       37
 #define SMI_TB_NEWITEM      38
 #define SMI_FOLDEROPEN      39
+#define SMI_DESKTOP         40
+#define SMI_LOGOFF          41
+#define SMI_ALLPROGRAMS     42
 #define SMI_COUNT           40
 
 /* Cursors */
@@ -267,6 +270,9 @@
 #define CMD_BROWSEFOLDERS   631
 #define CMD_TIPS            632
 #define CMD_HELP            633
+#define CMD_LOGOFF          634
+#define CMD_TB_QUICKLAUNCH  635
+#define CMD_TB_EDITQL       636
 
 /* Folder view commands */
 #define CMD_F_OPEN          700

@@ -52,12 +52,11 @@
 #define SUB_ICON_X      6
 #define SUB_TEXT_X      28
 
-/* item flags */
-#define SF_TOP          0x01
-#define SF_SEP          0x02
-#define SF_SUBMENU      0x04
+/* item flags (SF_TOP ... SF_EMPTY are in newshell.h for startxp.c) */
 #define SF_ICONDONE     0x08
-#define SF_EMPTY        0x10
+#define SF_PINNED       0x20    /* the pinned list of the two-column menu */
+
+#define SM_RECENTMAX    5       /* programs remembered for the two-column menu */
 
 typedef struct tagSMITEM {
     char   szText[40];
@@ -99,13 +98,13 @@ static const char *s_szImageNames[] = {
     "<programs>", "<documents>", "<settings>", "<find>", "<run>", "<shutdown>",
     "<system>", "<folder>", "<help>", "<printer>", "<control>", "<about>",
     "<dos>", "<application>", "<start>", "<explorer>", "<bin>", "<taskman>",
-    "<favorites>", "<desktop>", "<taskbar>", "<internet>"
+    "<favorites>", "<desktop>", "<taskbar>", "<internet>", "<showdesktop>", "<logoff>"
 };
 static const signed char s_nImageMap[] = {
     SMI_PROGRAMS, SMI_DOCUMENT, SMI_SETTINGS, SMI_FIND, SMI_RUN, SMI_SHUTDOWN,
     SMI_COMPUTER, SMI_FOLDER, SMI_HELP, SMI_PRINTER, SMI_CONTROL, SMI_ABOUT,
     SMI_DOS, SMI_APP, SMI_START, SMI_EXPLORER, SMI_BIN, SMI_TASKMAN,
-    SMI_FAVORITES, SMI_COMPUTER, SMI_SETTINGS, SMI_INTERNET
+    SMI_FAVORITES, SMI_COMPUTER, SMI_SETTINGS, SMI_INTERNET, SMI_DESKTOP, SMI_LOGOFF
 };
 
 /* -------------------------------------------------------------------- */
@@ -164,7 +163,8 @@ static void CreateDefaultMenu(void)
     WritePrivateProfileString(NULL, NULL, NULL, START_INI);    /* flush */
 }
 
-/* Creates NSSTART.INI from the Program Manager groups if it is missing */
+/* Creates NSSTART.INI from the Program Manager groups if it is missing,
+   and the first items of the pinned list and the Quick Launch bar */
 void StartMenuEnsure(void)
 {
     char szTest[8];
@@ -172,6 +172,24 @@ void StartMenuEnsure(void)
     if (GetPrivateProfileString("Start", NULL, "", szTest, sizeof(szTest),
                                 START_INI) == 0)
         CreateDefaultMenu();
+    if (!CfgGetInt("Start Menu", "PinnedMade", 0)) {
+        CfgSetInt("Start Menu", "PinnedMade", 1);
+        if (GetPrivateProfileString("Pinned", NULL, "", szTest, sizeof(szTest), START_INI) == 0) {
+            WriteItem("Pinned", "File &System", "$Explore", "", 0, "<explorer>", 0);
+            WriteItem("Pinned", "&Notepad", "NOTEPAD.EXE", "", 0, "", 0);
+            WriteItem("Pinned", "MS-&DOS Prompt", "DOSPRMPT.PIF", "", 0, "<dos>", 0);
+        }
+    }
+    if (!CfgGetInt("Taskbar", "QuickLaunchMade", 0)) {
+        CfgSetInt("Taskbar", "QuickLaunchMade", 1);
+        if (GetPrivateProfileString("Quick Launch", NULL, "", szTest, sizeof(szTest),
+                                    START_INI) == 0) {
+            WriteItem("Quick Launch", "Show Desktop", "$ClearDesktop", "", 0, "<showdesktop>", 0);
+            WriteItem("Quick Launch", "File System", "$Explore", "", 0, "<explorer>", 0);
+            WriteItem("Quick Launch", "Notepad", "NOTEPAD.EXE", "", 0, "", 0);
+        }
+    }
+    WritePrivateProfileString(NULL, NULL, NULL, START_INI);    /* flush */
 }
 
 /*
@@ -348,7 +366,7 @@ static void AppendItem(HMENU hMenu, LPSMITEM p, HMENU hSub)
         AppendMenu(hMenu, MF_OWNERDRAW, CMD_SM_FIRST + n, (LPCSTR)(DWORD)n);
 }
 
-static HMENU BuildMenu(LPCSTR lpSection, BOOL bTop)
+static HMENU BuildMenu(LPCSTR lpSection, BOOL bTop, BOOL bEmptyItem)
 {
     HMENU hMenu = CreatePopupMenu();
     char szValue[300], szSub[128];
@@ -383,7 +401,7 @@ static HMENU BuildMenu(LPCSTR lpSection, BOOL bTop)
                 p->nImage = SMI_FOLDER;
             if (lstrlen(lpSection) + n + 2 < sizeof(szSub)) {
                 wsprintf(szSub, "%s\\%s", lpSection, (LPSTR)p->szText);
-                hSub = BuildMenu(szSub, FALSE);
+                hSub = BuildMenu(szSub, FALSE, TRUE);
             } else
                 hSub = CreatePopupMenu();
         }
@@ -391,7 +409,7 @@ static HMENU BuildMenu(LPCSTR lpSection, BOOL bTop)
     }
     free(pKeys);
 
-    if (GetMenuItemCount(hMenu) == 0 && (p = NewItem(hMenu, bTop)) != NULL) {
+    if (bEmptyItem && GetMenuItemCount(hMenu) == 0 && (p = NewItem(hMenu, bTop)) != NULL) {
         lstrcpy(p->szText, "(Empty)");
         p->bFlags |= SF_EMPTY;
         AppendItem(hMenu, p, NULL);
@@ -510,16 +528,15 @@ static void ReadOptions(void)
     }
 }
 
-void StartMenuShow(HWND hwndOwner, int x, int y)
+/* Gets the items, options and fonts ready for building the menu */
+BOOL SmBegin(void)
 {
-    HMENU hMenu;
-
     if (!s_lpItems) {
         s_lpItems = (LPSMITEM)malloc(SM_MAXITEMS * sizeof(SMITEM));
         s_lpCmds = (LPSMCMD)malloc(SM_MAXITEMS * sizeof(SMCMD));
         if (!s_lpItems || !s_lpCmds) {
             StartMenuFree();
-            return;
+            return FALSE;
         }
     }
     StartMenuEnsure();
@@ -544,7 +561,36 @@ void StartMenuShow(HWND hwndOwner, int x, int y)
         s_cyTop = tm.tmHeight + 10 > cyLarge ? tm.tmHeight + 10 : cyLarge;
         s_cySub = tm.tmHeight + 4 > SUB_MIN_H ? tm.tmHeight + 4 : SUB_MIN_H;
     }
-    hMenu = BuildMenu("Start", TRUE);
+    return TRUE;
+}
+
+/*
+ * Which Start menu: [Start Menu] Style=0 follows the taskbar look (the
+ * two-column menu of Windows XP with the XP look, the Windows 11 menu with
+ * the Windows 11 look), 1 is always the classic (Calmira) menu, 2 always
+ * the two-column menu, 3 always the Windows 11 menu. Returns SMS_*.
+ */
+int SmStyle(void)
+{
+    switch (CfgGetInt("Start Menu", "Style", 0)) {
+    case 1:  return SMS_CLASSIC;
+    case 2:  return SMS_XP;
+    case 3:  return SMS_11;
+    }
+    return LunaLook() ? SMS_XP : Win11Look() ? SMS_11 : SMS_CLASSIC;
+}
+
+void StartMenuShow(HWND hwndOwner, int x, int y)
+{
+    HMENU hMenu;
+
+    if (SmStyle() != SMS_CLASSIC) {
+        StartXPShow(hwndOwner, x, y, SmStyle() == SMS_11);
+        return;
+    }
+    if (!SmBegin())
+        return;
+    hMenu = BuildMenu("Start", TRUE, TRUE);
     LayoutTop();
 
     /* place the menu just above the taskbar (2 pixels of menu border) */
@@ -555,6 +601,123 @@ void StartMenuShow(HWND hwndOwner, int x, int y)
 /* -------------------------------------------------------------------- */
 /* Drawing                                                              */
 /* -------------------------------------------------------------------- */
+
+/* -------------------------------------------------------------------- */
+/* For the two-column menu (startxp.c)                                  */
+/* -------------------------------------------------------------------- */
+
+/* The top-level menu, or the pinned list (no "(Empty)" item) */
+HMENU SmBuild(LPCSTR lpSection, BOOL bTop)
+{
+    return BuildMenu(lpSection, bTop, bTop);
+}
+
+HMENU SmBuildPinned(void)
+{
+    HMENU hMenu = BuildMenu("Pinned", FALSE, FALSE);
+    int i;
+
+    for (i = 0; i < s_nItems; i++)
+        if (s_lpItems[i].hMenu == hMenu)
+            s_lpItems[i].bFlags |= SF_PINNED;
+    return hMenu;
+}
+
+/* The programs started last from the Start menu ([Recent] in NSSTART.INI:
+   1=name|command;directory;showmode;iconfile;iconindex) */
+HMENU SmBuildRecent(void)
+{
+    HMENU hMenu = CreatePopupMenu();
+    char szKey[4], szValue[300];
+    LPSTR lpBar;
+    LPSMITEM p;
+    int i;
+
+    for (i = 1; i <= SM_RECENTMAX; i++) {
+        wsprintf(szKey, "%d", i);
+        if (!GetPrivateProfileString("Recent", szKey, "", szValue, sizeof(szValue), START_INI))
+            continue;
+        lpBar = _fstrchr(szValue, '|');
+        if (!lpBar || lpBar == szValue || (p = NewItem(hMenu, FALSE)) == NULL)
+            continue;
+        *lpBar = '\0';
+        lstrcpyn(p->szText, szValue, sizeof(p->szText));
+        ParseValue(p, lpBar + 1);
+        AppendItem(hMenu, p, NULL);
+    }
+    return hMenu;
+}
+
+/* The indices of the items of hMenu, in menu order; returns their number */
+int SmItems(HMENU hMenu, int FAR *lpn, int nMax)
+{
+    int i, j, n = 0;
+
+    for (j = 0; j < GetMenuItemCount(hMenu) && n < nMax; j++)
+        for (i = 0; i < s_nItems; i++)
+            if (s_lpItems[i].hMenu == hMenu && s_lpItems[i].nPos == j) {
+                lpn[n++] = i;
+                break;
+            }
+    return n;
+}
+
+LPCSTR SmText(int n)
+{
+    return s_lpItems[n].szText;
+}
+
+UINT SmFlags(int n)
+{
+    return s_lpItems[n].bFlags;
+}
+
+HMENU SmSubmenu(int n)
+{
+    if (!(s_lpItems[n].bFlags & SF_SUBMENU))
+        return NULL;
+    return GetSubMenu(s_lpItems[n].hMenu, s_lpItems[n].nPos);
+}
+
+/* Whether the item runs the macro lpMacro ("$ShutDown") */
+BOOL SmIsMacro(int n, LPCSTR lpMacro)
+{
+    return lstrcmpi(s_lpCmds[n].szCmd, lpMacro) == 0;
+}
+
+/* Whether the item is the Programs submenu (where the groups go) */
+BOOL SmIsPrograms(int n)
+{
+    char szSection[128], szMine[128];
+
+    if (!(s_lpItems[n].bFlags & SF_SUBMENU) || !(s_lpItems[n].bFlags & SF_TOP))
+        return FALSE;
+    StartMenuProgramsSection(szSection, sizeof(szSection));
+    wsprintf(szMine, "Start\\%s", (LPSTR)s_lpItems[n].szText);
+    return lstrcmpi(szSection, szMine) == 0;
+}
+
+/* The menu font, or a bold version */
+HFONT SmFont(BOOL bBold)
+{
+    static HFONT s_hfBold;
+    static HFONT s_hfBoldOf;
+    LOGFONT lf;
+
+    if (!bBold)
+        return s_hfMenu;
+    if (s_hfBoldOf != s_hfMenu || !s_hfBold) {
+        if (s_hfBold)
+            DeleteObject(s_hfBold);
+        s_hfBold = NULL;
+        if (GetObject(s_hfMenu, sizeof(lf), &lf)) {
+            lf.lfWeight = FW_BOLD;
+            s_hfBold = CreateFontIndirect(&lf);
+        }
+        s_hfBoldOf = s_hfMenu;
+    }
+    return s_hfBold ? s_hfBold : s_hfMenu;
+}
 
 static LPSMITEM ItemFromData(DWORD dwData)
 {
@@ -644,6 +807,28 @@ static int LargeIcon(int nImage)
     case SMI_APP:       return IDI_APP;
     }
     return 0;
+}
+
+/* The item's icon at (x, y): 32x32 (bLarge) or 16x16 over clrBk */
+void SmDrawIcon(HDC hdc, int n, int x, int y, BOOL bLarge, COLORREF clrBk)
+{
+    LPSMITEM p = &s_lpItems[n];
+
+    if (!(p->bFlags & SF_ICONDONE))
+        LoadItemIcon(p);
+    if (bLarge) {
+        int idi = LargeIcon(p->nImage);
+
+        if (p->hIcon)
+            DrawIcon(hdc, x, y, p->hIcon);
+        else if (idi)
+            DrawIcon(hdc, x, y, IconStock(idi));
+        else if (p->nImage >= 0)
+            DrawSmallImage(hdc, x + 8, y + 8, p->nImage);
+    } else if (p->nImage >= 0)
+        DrawSmallImage(hdc, x, y, p->nImage);
+    else if (p->hIcon)
+        DrawIconSmall(hdc, x, y, p->hIcon, clrBk);
 }
 
 /*
@@ -962,6 +1147,31 @@ BOOL ExecMacro(HWND hwnd, LPCSTR lpCmd)
     return TRUE;
 }
 
+/* Puts item k first in [Recent] (programs only, not the pinned ones) */
+static void RememberRecent(int k)
+{
+    LPSMITEM p = &s_lpItems[k];
+    LPSMCMD c = &s_lpCmds[k];
+    char szOld[SM_RECENTMAX][300], szKey[4];
+    int i, n = 0;
+
+    if (c->szCmd[0] == '$' || !c->szCmd[0] || (p->bFlags & SF_PINNED))
+        return;
+    wsprintf(szOld[0], "%s|%s;%s;%d;%s;%d", (LPSTR)p->szText, (LPSTR)c->szCmd,
+             (LPSTR)c->szDir, p->bShow, (LPSTR)p->szIcon, p->bIconIndex);
+    n = 1;
+    for (i = 1; i <= SM_RECENTMAX && n < SM_RECENTMAX; i++) {
+        wsprintf(szKey, "%d", i);
+        GetPrivateProfileString("Recent", szKey, "", szOld[n], sizeof(szOld[n]), START_INI);
+        if (szOld[n][0] && lstrcmpi(szOld[n], szOld[0]) != 0)
+            n++;
+    }
+    for (i = 0; i < SM_RECENTMAX; i++) {
+        wsprintf(szKey, "%d", i + 1);
+        WritePrivateProfileString("Recent", szKey, i < n ? szOld[i] : NULL, START_INI);
+    }
+}
+
 BOOL StartMenuCommand(HWND hwnd, UINT id)
 {
     if (id >= CMD_SM_FIRST && id < CMD_SM_FIRST + SM_MAXITEMS) {
@@ -971,6 +1181,7 @@ BOOL StartMenuCommand(HWND hwnd, UINT id)
         if (!s_lpItems || k >= s_nItems)
             return TRUE;
         c = &s_lpCmds[k];
+        RememberRecent(k);
         if (c->szCmd[0] == '$')
             ExecMacro(hwnd, c->szCmd);
         else if (c->szCmd[0])
@@ -981,6 +1192,7 @@ BOOL StartMenuCommand(HWND hwnd, UINT id)
     switch (id) {
     case CMD_RUN:           RunDialog(hwnd); break;
     case CMD_SHUTDOWN:      DoShutdownDialog(); break;
+    case CMD_LOGOFF:        LogOff(); break;
     case CMD_ABOUT:         AboutDialog(hwnd); break;
     case CMD_TIPS:          TipsDialog(hwnd); break;
     case CMD_HELP:          ShellHelp(hwnd); break;
