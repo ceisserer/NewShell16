@@ -148,8 +148,9 @@ gradients row by row with `ExtTextOut(ETO_OPAQUE)`, rounded corners
 anti-aliased by blending with the pixels below (4 x 4 samples per corner
 pixel). Small icons over the gradient are drawn into an enlarged copy of
 the background and shrunk back, so the gradient shows through. There are
-no bitmaps, the code is a separate discardable segment and the data
-segment grows by 16 bytes, so the classic look costs nothing extra. The
+no bitmaps, the code is a separate discardable segment (see
+[building.md](building.md)) and the data segment grows by 16 bytes, so
+the classic look costs little extra. The
 gradients want a 15/16/24-bit display; GDI dithers them with 16 or 256
 colours.
 

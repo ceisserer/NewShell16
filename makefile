@@ -44,6 +44,14 @@ OBJS    = $(OBJDIR)/main.obj     &
           $(OBJDIR)/luna.obj     &
           $(OBJDIR)/win11.obj
 
+# Code segments: one per module (packcode=0), moveable, discardable and
+# loaded on first call, so code that is not used (the Windows XP and 11
+# looks, dialogs, Find, the Bin...) costs no memory until it runs and can
+# be discarded again when memory is short. What the shell needs as soon as
+# it starts is loaded with it.
+PRELOAD = _TEXT main_TEXT settings_TEXT util_TEXT icons_TEXT taskbar_TEXT &
+          desktop_TEXT
+
 RESFILES = $(RESDIR)/newshell.rc $(SRCDIR)/resource.h $(RESDIR)/*.ico &
            $(RESDIR)/*.cur $(RESDIR)/small.bmp
 
@@ -85,6 +93,9 @@ $(OBJDIR)/$(NAME).lnk : makefile
     @%append $@ option stack=12k, heapsize=8k
     @%append $@ option description 'NewShell16'
     @%append $@ library commdlg.lib, shell.lib, toolhelp.lib
+    @%append $@ option packcode=0
+    @%append $@ segment class 'CODE' moveable discardable loadoncall
+    @for %i in ($(PRELOAD)) do @%append $@ segment '%i' preload moveable discardable
     @for %i in ($(OBJS)) do @%append $@ file %i
 
 $(OBJDIR)/nshook.dll : $(OBJDIR)/nshook.obj makefile
