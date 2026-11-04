@@ -191,10 +191,12 @@ static void MakeControls(HWND hDlg)
                     SendMessage(hwnd, CB_ADDSTRING, 0, (LPARAM)(LPSTR)"as the theme says");
                     SendMessage(hwnd, CB_ADDSTRING, 0, (LPARAM)(LPSTR)"Windows XP");
                     SendMessage(hwnd, CB_ADDSTRING, 0, (LPARAM)(LPSTR)"Windows 95");
+                    SendMessage(hwnd, CB_ADDSTRING, 0, (LPARAM)(LPSTR)"Windows 11");
                 } else if (lstrcmp(o->lpKey, "Style") == 0) {    /* startxp.c */
                     SendMessage(hwnd, CB_ADDSTRING, 0, (LPARAM)(LPSTR)"as the taskbar look");
                     SendMessage(hwnd, CB_ADDSTRING, 0, (LPARAM)(LPSTR)"classic");
                     SendMessage(hwnd, CB_ADDSTRING, 0, (LPARAM)(LPSTR)"Windows XP, two columns");
+                    SendMessage(hwnd, CB_ADDSTRING, 0, (LPARAM)(LPSTR)"Windows 11");
                 } else {
                     SendMessage(hwnd, CB_ADDSTRING, 0, (LPARAM)(LPSTR)"where Windows puts them");
                     SendMessage(hwnd, CB_ADDSTRING, 0, (LPARAM)(LPSTR)"cascaded");

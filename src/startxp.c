@@ -16,7 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 /*
- * startxp.c - the two-column Start menu of Windows XP
+ * startxp.c - the two-column Start menu of Windows XP, and the Start menu
+ * of Windows 11
  *
  *   +--------------------------------------+
  *   | [icon] user name                     |  header
@@ -47,6 +48,19 @@
  * focus. Submenus are ordinary owner-drawn popup menus (startmnu.c). It is
  * drawn in the Windows XP colours with the XP look (luna.c), otherwise in
  * the system colours ("classic" Windows XP).
+ *
+ * With the Windows 11 look (win11.c) the same panel takes the shape of the
+ * Windows 11 Start menu, centred above the taskbar:
+ *
+ *   +--------------------------------------+
+ *   | Pinned                  [All apps >] |
+ *   | [ic] [ic] [ic] [ic] [ic] [ic]        |  pinned programs, then the
+ *   | name name name name name name        |  first level of the menu
+ *   | Recommended                          |
+ *   | [i] program      [i] program         |  programs started last
+ *   +--------------------------------------+
+ *   | (user)                          (o)  |  Log Off, Shut Down
+ *   +--------------------------------------+
  */
 #include <stdlib.h>
 #include <string.h>
@@ -75,6 +89,20 @@
 #define COL_LEFT        0
 #define COL_RIGHT       1
 #define COL_FOOT        2
+#define COL_TILE        3       /* Windows 11 */
+#define COL_REC         4
+#define COL_TOP         5
+
+#define W11_TILE_W      66
+#define W11_TILE_H      60
+#define W11_COLS        6
+#define W11_ROWS        3
+#define W11_PAD         16
+#define W11_REC_H       32
+#define W11_FOOT_H      46
+#define W11_FACE        RGB(243, 243, 243)
+#define W11_FOOT        RGB(236, 237, 240)
+#define W11_LINE        RGB(214, 214, 214)
 
 typedef struct tagXPENTRY {
     BYTE bKind;
@@ -88,7 +116,9 @@ static XPENTRY *s_e;
 static int      s_nE;
 static HWND     s_hwnd, s_hwndOwner;
 static int      s_nHot = -1;
-static BOOL     s_bDone, s_bInSub, s_bLuna;
+static BOOL     s_bDone, s_bInSub, s_bLuna, s_b11;
+static int      s_yRecLabel;    /* Windows 11: where "Recommended" goes */
+static BOOL     s_bNoRecent;
 static UINT     s_uCmd;
 static HMENU    s_hmTop, s_hmPinned, s_hmRecent, s_hmAll;
 static HBITMAP  s_hbmUnder;     /* the screen under the panel (round corners) */
@@ -137,6 +167,9 @@ static COLORREF TextColor(int nCol, BOOL bSel)
 /* -------------------------------------------------------------------- */
 /* Layout                                                               */
 /* -------------------------------------------------------------------- */
+
+static BOOL Selectable(int i);
+static void SubArrow(HDC hdc, int x, int y, COLORREF clr);
 
 static int AddEntry(int nKind, int nCol, int n)
 {
@@ -263,6 +296,228 @@ static void HLine(HDC hdc, int x0, int x1, int y, COLORREF clr)
 
     SetRect(&rc, x0, y, x1, y + 1);
     FillSolid(hdc, &rc, clr);
+}
+
+/* -------------------------------------------------------------------- */
+/* Windows 11                                                           */
+/* -------------------------------------------------------------------- */
+
+/* Adds the items of hMenu as tiles from *pn on; FALSE when the grid is full */
+static BOOL AddTiles(HMENU hMenu, int *pn, int y0, BOOL bTop)
+{
+    int idx[48], i, n, k;
+
+    if (!hMenu)
+        return TRUE;
+    n = SmItems(hMenu, idx, 48);
+    for (i = 0; i < n; i++) {
+        UINT f = SmFlags(idx[i]);
+
+        if (f & (SF_SEP | SF_EMPTY))
+            continue;
+        if (bTop && (SmIsPrograms(idx[i]) || SmIsMacro(idx[i], "$ShutDown")))
+            continue;
+        if (*pn >= W11_COLS * W11_ROWS || (k = AddEntry(XE_ITEM, COL_TILE, idx[i])) < 0)
+            return FALSE;
+        SetRect(&s_e[k].rc, W11_PAD + (*pn % W11_COLS) * W11_TILE_W,
+                y0 + (*pn / W11_COLS) * W11_TILE_H,
+                W11_PAD + (*pn % W11_COLS + 1) * W11_TILE_W,
+                y0 + (*pn / W11_COLS + 1) * W11_TILE_H);
+        (*pn)++;
+    }
+    return TRUE;
+}
+
+static void Layout11(void)
+{
+    int y = W11_PAD, n = 0, i, k, idx[8], nRec, cxRec, rows;
+    HDC hdc = GetDC(NULL);
+    HFONT hfOld = SelectObject(hdc, SmFont(FALSE));
+
+    s_nE = 0;
+    s_cx = 2 * W11_PAD + W11_COLS * W11_TILE_W;
+    if (s_hmAll && (k = AddEntry(XE_ALL, COL_TOP, -1)) >= 0)
+        SetRect(&s_e[k].rc, s_cx - W11_PAD - TextWidth(hdc, "All apps") - 28, y - 4,
+                s_cx - W11_PAD, y + 18);
+    y += 26;
+    if (AddTiles(s_hmPinned, &n, y, FALSE))
+        AddTiles(s_hmTop, &n, y, TRUE);
+    rows = (n + W11_COLS - 1) / W11_COLS;
+    if (rows < 2)
+        rows = 2;
+    y += rows * W11_TILE_H + 10;
+
+    s_yRecLabel = y;
+    y += 26;
+    nRec = s_hmRecent ? SmItems(s_hmRecent, idx, 8) : 0;
+    s_bNoRecent = nRec == 0;
+    cxRec = (s_cx - 2 * W11_PAD) / 2;
+    for (i = 0; i < nRec && i < 6; i++)
+        if ((k = AddEntry(XE_ITEM, COL_REC, idx[i])) >= 0)
+            SetRect(&s_e[k].rc, W11_PAD + (i % 2) * cxRec, y + (i / 2) * W11_REC_H,
+                    W11_PAD + (i % 2 + 1) * cxRec, y + (i / 2 + 1) * W11_REC_H);
+    y += (nRec > 4 ? 3 : 2) * W11_REC_H + W11_PAD;
+
+    SetRect(&s_rcFoot, 0, y, s_cx, y + W11_FOOT_H);
+    s_cy = y + W11_FOOT_H;
+    /* the user (Log Off when there are users), the power button */
+    if ((k = AddEntry(XE_SHUTDOWN, COL_FOOT, -1)) >= 0)
+        SetRect(&s_e[k].rc, s_cx - W11_PAD - 32, y + 7, s_cx - W11_PAD, y + W11_FOOT_H - 7);
+    if (UsersEnabled() && (k = AddEntry(XE_LOGOFF, COL_FOOT, -1)) >= 0) {
+        SelectObject(hdc, s_hfName ? SmFont(TRUE) : SmFont(TRUE));
+        SetRect(&s_e[k].rc, W11_PAD + 16, y + 7,
+                W11_PAD + 16 + 36 + TextWidth(hdc, s_szName) + 12, y + W11_FOOT_H - 7);
+    }
+    SelectObject(hdc, hfOld);
+    ReleaseDC(NULL, hdc);
+}
+
+static void Label11(HDC hdc, int x, int y, LPCSTR lpText, BOOL bBold, COLORREF clr)
+{
+    RECT rc;
+    HFONT hfOld = SelectObject(hdc, SmFont(bBold));
+    COLORREF clrOld = SetTextColor(hdc, clr);
+
+    SetRect(&rc, x, y, s_cx - W11_PAD, y + 20);
+    DrawText(hdc, lpText, -1, &rc, DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_NOPREFIX);
+    SetTextColor(hdc, clrOld);
+    SelectObject(hdc, hfOld);
+}
+
+static void PaintEntry11(HDC hdc, int i)
+{
+    XPENTRY *e = &s_e[i];
+    BOOL bSel = (i == s_nHot);
+    RECT rc = e->rc, rcText;
+    HFONT hfOld;
+    char szText[48], szFit[48];
+
+    if (e->bCol == COL_TILE || e->bCol == COL_REC)
+        InflateRect(&rc, -2, -2);
+    Win11DrawButton(hdc, &rc, bSel, FALSE);
+    switch (e->bCol) {
+    case COL_TILE:
+        SmDrawIcon(hdc, e->n, rc.left + (rc.right - rc.left - 32) / 2, rc.top + 5, TRUE,
+                   bSel ? RGB(250, 251, 253) : W11_FACE);
+        hfOld = SelectObject(hdc, SmFont(FALSE));
+        {
+            LPCSTR lp;
+            int n = 0;
+
+            /* the name without '&', shortened to the tile */
+            for (lp = SmText(e->n); *lp && n < sizeof(szText) - 1; lp++)
+                if (*lp != '&' || lp[1] == '&')
+                    szText[n++] = *lp;
+            szText[n] = '\0';
+        }
+        FitText(hdc, szText, szFit, sizeof(szFit), rc.right - rc.left - 4);
+        SetRect(&rcText, rc.left, rc.top + 39, rc.right, rc.bottom - 2);
+        DrawText(hdc, szFit, -1, &rcText, DT_CENTER | DT_SINGLELINE | DT_NOPREFIX);
+        SelectObject(hdc, hfOld);
+        break;
+    case COL_REC:
+        SmDrawIcon(hdc, e->n, rc.left + 8, rc.top + (rc.bottom - rc.top - 16) / 2, FALSE,
+                   bSel ? RGB(250, 251, 253) : W11_FACE);
+        hfOld = SelectObject(hdc, SmFont(FALSE));
+        SetRect(&rcText, rc.left + 32, rc.top, rc.right - 4, rc.bottom);
+        DrawText(hdc, SmText(e->n), -1, &rcText, DT_LEFT | DT_SINGLELINE | DT_VCENTER);
+        SelectObject(hdc, hfOld);
+        break;
+    case COL_TOP:       /* All apps > */
+        if (!bSel) {
+            RECT rcB = rc;
+
+            LunaRoundRect(hdc, &rcB, 4, RGB(226, 228, 232));
+            InflateRect(&rcB, -1, -1);
+            LunaRoundRect(hdc, &rcB, 3, RGB(251, 251, 251));
+        }
+        hfOld = SelectObject(hdc, SmFont(FALSE));
+        SetRect(&rcText, rc.left + 10, rc.top, rc.right, rc.bottom);
+        DrawText(hdc, "&All apps", -1, &rcText, DT_LEFT | DT_SINGLELINE | DT_VCENTER);
+        SelectObject(hdc, hfOld);
+        SubArrow(hdc, rc.right - 12, rc.top + (rc.bottom - rc.top - 7) / 2, RGB(0, 0, 0));
+        break;
+    case COL_FOOT:
+        if (e->bKind == XE_SHUTDOWN)
+            DrawSmallImage(hdc, rc.left + 8, rc.top + (rc.bottom - rc.top - 16) / 2,
+                           SMI_SHUTDOWN);
+        break;
+    }
+}
+
+static void Paint11(HDC hdc)
+{
+    RECT rc;
+    HICON hIcon;
+    int i, nOldMode;
+
+    /* the panel: rounded corners over what was under it, a thin border */
+    SetRect(&rc, 0, 0, s_cx, s_cy);
+    LunaRoundRect(hdc, &rc, 8, RGB(190, 192, 196));
+    InflateRect(&rc, -1, -1);
+    LunaRoundRect(hdc, &rc, 7, W11_FACE);
+    rc = s_rcFoot;
+    InflateRect(&rc, -1, 0);
+    rc.bottom--;
+    LunaRoundRect(hdc, &rc, 7, W11_FOOT);
+    rc.bottom = rc.top + 8;
+    FillSolid(hdc, &rc, W11_FOOT);
+    HLine(hdc, 1, s_cx - 1, s_rcFoot.top, W11_LINE);
+
+    nOldMode = SetBkMode(hdc, TRANSPARENT);
+    SetTextColor(hdc, RGB(0, 0, 0));
+    Label11(hdc, W11_PAD + 8, W11_PAD - 4, "Pinned", TRUE, RGB(0, 0, 0));
+    Label11(hdc, W11_PAD + 8, s_yRecLabel, "Recommended", TRUE, RGB(0, 0, 0));
+    if (s_bNoRecent)
+        Label11(hdc, W11_PAD + 8, s_yRecLabel + 30,
+                "The programs you start appear here.", FALSE, RGB(96, 96, 96));
+    for (i = 0; i < s_nE; i++)
+        PaintEntry11(hdc, i);
+
+    /* the user: a round picture and the name */
+    hIcon = LoadIcon(g_hInst, MAKEINTRESOURCE(IDI_NEWSHELL));
+    SetRect(&rc, W11_PAD + 22, s_rcFoot.top + 7, W11_PAD + 22 + 32, s_rcFoot.bottom - 7);
+    rc.bottom = rc.top + 32;
+    LunaRoundRect(hdc, &rc, 16, RGB(255, 255, 255));
+    if (hIcon)
+        LunaIconSmall(hdc, rc.left + 8, rc.top + 8, hIcon);
+    Label11(hdc, rc.right + 10, rc.top + 6, s_szName, FALSE, RGB(0, 0, 0));
+    SetBkMode(hdc, nOldMode);
+}
+
+/* Windows 11: the arrows go to the nearest entry in that direction */
+static int Spatial(int i, int dx, int dy)
+{
+    int j, best = -1;
+    long lBest = 0, cx, cy;
+
+    if (!Selectable(i)) {
+        for (j = 0; j < s_nE; j++)
+            if (Selectable(j))
+                return j;
+        return -1;
+    }
+    cx = (s_e[i].rc.left + s_e[i].rc.right) / 2;
+    cy = (s_e[i].rc.top + s_e[i].rc.bottom) / 2;
+    for (j = 0; j < s_nE; j++) {
+        long ex, ey, along, across;
+
+        if (j == i || !Selectable(j))
+            continue;
+        ex = (s_e[j].rc.left + s_e[j].rc.right) / 2 - cx;
+        ey = (s_e[j].rc.top + s_e[j].rc.bottom) / 2 - cy;
+        along = dx ? ex * dx : ey * dy;
+        across = dx ? ey : ex;
+        if (across < 0)
+            across = -across;
+        if (along <= 0)
+            continue;
+        if (best < 0 || along + 3 * across < lBest) {
+            best = j;
+            lBest = along + 3 * across;
+        }
+    }
+    return best;
 }
 
 /* The header and footer without the XP look: the caption colour, lighter
@@ -429,6 +684,10 @@ static void Paint(HDC hdc)
         SelectObject(hdcMem, hbmOld);
         DeleteDC(hdcMem);
     }
+    if (s_b11) {
+        Paint11(hdc);
+        return;
+    }
     PaintHeader(hdc);
     FillSolid(hdc, &s_rcLeft, LeftFace());
     FillSolid(hdc, &s_rcRight, RightFace());
@@ -520,7 +779,7 @@ static void SetHot(int i)
     InvalidateRect(s_hwnd, NULL, FALSE);
     UpdateWindow(s_hwnd);
     KillTimer(s_hwnd, TIMER_HOVER);
-    if (OpensMenu(i))
+    if (OpensMenu(i) && !s_b11)     /* Windows 11 opens submenus on a click */
         SetTimer(s_hwnd, TIMER_HOVER, HOVER_MS, NULL);
 }
 
@@ -638,6 +897,21 @@ static void KeyDown(UINT vk)
 {
     int i = s_nHot, nCol = Selectable(i) ? s_e[i].bCol : COL_LEFT, j;
 
+    if (s_b11 && (vk == VK_LEFT || vk == VK_RIGHT || vk == VK_UP || vk == VK_DOWN
+                  || vk == VK_TAB)) {
+        if (vk == VK_RIGHT && OpensMenu(i)) {
+            OpenSubmenu(i);
+            return;
+        }
+        j = vk == VK_TAB ? (i + 1) % s_nE
+            : Spatial(i, vk == VK_LEFT ? -1 : vk == VK_RIGHT ? 1 : 0,
+                      vk == VK_UP ? -1 : vk == VK_DOWN ? 1 : 0);
+        while (vk == VK_TAB && !Selectable(j) && j != i)
+            j = (j + 1) % s_nE;
+        if (j >= 0)
+            SetHot(j);
+        return;
+    }
     switch (vk) {
     case VK_ESCAPE:
         Close(0);
@@ -855,7 +1129,7 @@ static void MakeNameFont(void)
 
 /* Shows the menu with its bottom-left corner at (x, y) and returns when
    it is closed; the command chosen is posted to hwndOwner */
-void StartXPShow(HWND hwndOwner, int x, int y)
+void StartXPShow(HWND hwndOwner, int x, int y, BOOL b11)
 {
     HWND hwndPrev = GetActiveWindow();
     int i, idx[32], n;
@@ -867,6 +1141,7 @@ void StartXPShow(HWND hwndOwner, int x, int y)
     if (!s_e && (s_e = (XPENTRY *)malloc(XP_MAXE * sizeof(XPENTRY))) == NULL)
         return;
     s_bLuna = LunaLook();
+    s_b11 = b11;
     s_hwndOwner = hwndOwner;
     MakeNameFont();
     CfgGetStr("Start Menu", "UserName", "", s_szName, sizeof(s_szName));
@@ -881,7 +1156,13 @@ void StartXPShow(HWND hwndOwner, int x, int y)
     for (i = 0; i < n && !s_hmAll; i++)
         if (SmIsPrograms(idx[i]))
             s_hmAll = SmSubmenu(idx[i]);
-    Layout();
+    if (s_b11) {
+        /* centred above the taskbar, with a gap */
+        Layout11();
+        x = (GetSystemMetrics(SM_CXSCREEN) - s_cx) / 2;
+        y -= 10;
+    } else
+        Layout();
 
     y -= s_cy;
     if (x + s_cx > GetSystemMetrics(SM_CXSCREEN))
@@ -893,7 +1174,7 @@ void StartXPShow(HWND hwndOwner, int x, int y)
 
     /* what is under the rounded corners */
     s_hbmUnder = NULL;
-    if (s_bLuna && (hdcScreen = GetDC(NULL)) != NULL) {
+    if ((s_bLuna || s_b11) && (hdcScreen = GetDC(NULL)) != NULL) {
         HDC hdcMem = CreateCompatibleDC(hdcScreen);
 
         s_hbmUnder = CreateCompatibleBitmap(hdcScreen, s_cx, s_cy);

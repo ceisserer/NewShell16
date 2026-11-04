@@ -41,7 +41,8 @@ OBJS    = $(OBJDIR)/main.obj     &
           $(OBJDIR)/system.obj   &
           $(OBJDIR)/users.obj    &
           $(OBJDIR)/options.obj  &
-          $(OBJDIR)/luna.obj
+          $(OBJDIR)/luna.obj     &
+          $(OBJDIR)/win11.obj
 
 RESFILES = $(RESDIR)/newshell.rc $(SRCDIR)/resource.h $(RESDIR)/*.ico &
            $(RESDIR)/*.cur $(RESDIR)/small.bmp
@@ -116,6 +117,7 @@ $(OBJDIR)/dde.obj      : $(SRCDIR)/dde.c
 $(OBJDIR)/taskbar.obj  : $(SRCDIR)/taskbar.c
 $(OBJDIR)/startmnu.obj : $(SRCDIR)/startmnu.c
 $(OBJDIR)/startxp.obj  : $(SRCDIR)/startxp.c
+$(OBJDIR)/win11.obj    : $(SRCDIR)/win11.c
 $(OBJDIR)/startprop.obj : $(SRCDIR)/startprop.c
 $(OBJDIR)/desktop.obj  : $(SRCDIR)/desktop.c
 $(OBJDIR)/shortcut.obj : $(SRCDIR)/shortcut.c

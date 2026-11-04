@@ -68,6 +68,13 @@ driver for 65536 colours, see [docs/testing.md](docs/testing.md)).
 
 ![NewShell16 with RedmondExperience on Windows 3.1, 800x600, 65536 colours](docs/images/luna.png)
 
+With Retheme16's Redmond-11 theme the taskbar becomes the Windows 11 one:
+a light bar with the Start button, Quick Launch and the programs as icons
+in the middle, the clock with the date, and the Windows 11 Start menu
+(pinned programs, All apps, Recommended, the power button).
+
+![NewShell16 with Redmond-11 on Windows 3.1, 800x600, 65536 colours](docs/images/win11.png)
+
 See [docs/design.md](docs/design.md) for internals, configuration and the
 roadmap, and [docs/calmira-parity.md](docs/calmira-parity.md) for what
 Calmira has that NewShell16 does not have yet.

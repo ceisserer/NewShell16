@@ -119,8 +119,14 @@ void CfgGetStr(LPCSTR lpSection, LPCSTR lpKey, LPCSTR lpDefault,
 void CfgSetStr(LPCSTR lpSection, LPCSTR lpKey, LPCSTR lpValue);
 
 /* ---- luna.c ---------------------------------------------------------- */
+#define LOOK_95     0
+#define LOOK_XP     1
+#define LOOK_11     2
 BOOL LunaRefresh(void);
+int  ShellLook(void);
 BOOL LunaLook(void);
+BOOL Win11Look(void);
+void LunaRoundRect(HDC hdc, const RECT FAR *lprc, int r, COLORREF clr);
 BOOL LunaCheckEngine(void);
 void LunaFree(void);
 void LunaDrawBar(HDC hdc, const RECT FAR *lprc);
@@ -243,7 +249,10 @@ void StartMenuFree(void);
 #define SF_SUBMENU      0x04
 #define SF_EMPTY        0x10
 BOOL  SmBegin(void);
-BOOL  SmTwoColumns(void);
+#define SMS_CLASSIC     0       /* SmStyle() */
+#define SMS_XP          1
+#define SMS_11          2
+int   SmStyle(void);
 HMENU SmBuild(LPCSTR lpSection, BOOL bTop);
 HMENU SmBuildPinned(void);
 HMENU SmBuildRecent(void);
@@ -256,8 +265,16 @@ BOOL  SmIsPrograms(int n);
 HFONT SmFont(BOOL bBold);
 void  SmDrawIcon(HDC hdc, int n, int x, int y, BOOL bLarge, COLORREF clrBk);
 
+/* win11.c */
+void Win11DrawBar(HDC hdc, const RECT FAR *lprc);
+void Win11DrawButton(HDC hdc, const RECT FAR *lprc, BOOL bHot, BOOL bDown);
+void Win11DrawStart(HDC hdc, const RECT FAR *lprc, BOOL bHot, BOOL bDown);
+void Win11DrawIndicator(HDC hdc, const RECT FAR *lprc, BOOL bActive);
+void Win11DrawClock(HDC hdc, const RECT FAR *lprc, LPCSTR lpTime);
+COLORREF Win11BarColor(void);
+
 /* startxp.c */
-void StartXPShow(HWND hwndOwner, int x, int y);
+void StartXPShow(HWND hwndOwner, int x, int y, BOOL b11);
 LRESULT CALLBACK NSEXPORT StartXPWndProc(HWND, UINT, WPARAM, LPARAM);
 
 /* ---- dde.c ---------------------------------------------------------- */

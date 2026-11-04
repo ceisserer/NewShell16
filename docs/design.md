@@ -11,7 +11,7 @@ executable, `NEWSHELL.EXE`.
 | `main.c` | `WinMain`, hidden main window, shell detection, hook DLL loading, start-up programs, second-instance forwarding |
 | `taskbar.c` | Taskbar window: Start button, Quick Launch, task buttons, clock, task system menus |
 | `startmnu.c` | Owner-drawn Start menu from `NSSTART.INI`, `$` macros, the programs started last |
-| `startxp.c` | The two-column Start menu of Windows XP (pinned and recent programs, All Programs, Log Off, Shut Down) |
+| `startxp.c` | The two-column Start menu of Windows XP (pinned and recent programs, All Programs, Log Off, Shut Down) and the Windows 11 Start menu |
 | `startprop.c` | Start Menu Properties: the Start menu as an editable tree, its look |
 | `progman.c` | `PROGMAN.INI` / `*.GRP` reader, `load=`/`run=`, StartUp group |
 | `dde.c` | Program Manager DDE server for setup programs |
@@ -35,7 +35,8 @@ executable, `NEWSHELL.EXE`.
 | `users.c` | Users: logon dialog, per-user settings |
 | `settings.c` | `NEWSHELL.INI` |
 | `util.c` | 3D drawing, small images, colours, hints, path helpers, launching, reading the active theme |
-| `luna.c` | The Windows XP ("Luna") look of the taskbar, Start button and Start menu |
+| `luna.c` | The Windows XP ("Luna") look of the taskbar, Start button and Start menu; which look is used |
+| `win11.c` | The Windows 11 look of the taskbar |
 | `nshook.c` | `NSHOOK.DLL`: system hooks (see below) |
 
 ## Windows 3.1 specifics
@@ -151,6 +152,27 @@ no bitmaps, the code is a separate discardable segment and the data
 segment grows by 16 bytes, so the classic look costs nothing extra. The
 gradients want a 15/16/24-bit display; GDI dithers them with 16 or 256
 colours.
+
+### The Windows 11 look
+
+With Retheme16's Redmond-11 theme (`[Shell] Style=11`, `THEMES\WIN11`), or
+`[Taskbar] Look=3`, `win11.c` draws the taskbar of Windows 11: a light bar
+8 pixels taller than the others (windows and desktop icons follow when the
+look changes), the Start button (four blue panes), the Quick Launch
+buttons and the task buttons as icons centred on the bar, light rounded
+squares under the mouse and behind the active task, a short grey line under
+running tasks and a longer blue one under the active task (the titles are
+in the hints), and the clock with the date below the time.
+
+The Start menu is then the Windows 11 one, centred above the taskbar: a
+grid of pinned programs (`[Pinned]`, then the first level of
+`NSSTART.INI` except Programs and Shut Down; up to 18), All apps (the
+Programs submenu), Recommended (the programs started last) and a footer
+with the user (Log Off when there are users) and the power button (Shut
+Down). It is the panel of the two-column menu with another layout; the
+arrow keys move to the nearest item in their direction.
+
+![NewShell16 with Redmond-11: the Windows 11 taskbar and Start menu](images/win11.png)
 
 ### The two-column Start menu
 
@@ -273,8 +295,8 @@ DocFirst=0         ; "README.TXT - Notepad"
 LowerDoc=0         ; ... "readme.txt - Notepad"
 Exclude=           ; programs (module names) without a button
 Tray=              ; programs shown as icons beside the clock
-Look=0             ; 0 as the theme says ([Shell] Style=XP), 1 Windows XP,
-                   ; 2 Windows 95
+Look=0             ; 0 as the theme says ([Shell] Style=XP or 11), 1 Windows
+                   ; XP, 2 Windows 95, 3 Windows 11
 QuickLaunch=1      ; the Quick Launch bar ([Quick Launch] in NSSTART.INI)
 
 [Desktop]
@@ -326,9 +348,11 @@ StatusBar=1        ; View > Status Bar
 RememberLast=1     ; open at the last folder (Last=)
 
 [Start Menu]
-Style=0            ; 0 two columns (Windows XP) with the XP look, else
-                   ; classic; 1 always classic; 2 always two columns
-UserName=          ; the name in the two-column menu (default: the user)
+Style=0            ; 0 as the taskbar look: two columns (Windows XP) with the
+                   ; XP look, Windows 11 with the Windows 11 look, else
+                   ; classic; 1 always classic; 2 always two columns;
+                   ; 3 always Windows 11
+UserName=          ; the name in the XP / 11 menus (default: the user)
 Win95Look=1        ; banner and 3D frame, else a plain menu
 ColouredBar=1
 BoldSelect=0

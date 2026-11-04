@@ -22,7 +22,11 @@
  * its THEME.INI, e.g. the RedmondExperience theme), or always / never with
  *
  *   [Taskbar]
- *   Look=0             ; 0: as the theme says, 1: Windows XP, 2: Windows 95
+ *   Look=0             ; 0: as the theme says, 1: Windows XP, 2: Windows 95,
+ *                      ; 3: Windows 11
+ *
+ * This module also decides the look of the taskbar as a whole: Style=11
+ * (the Redmond-11 theme) selects the Windows 11 look of win11.c.
  *
  * Everything is drawn procedurally (gradients and anti-aliased rounded
  * corners), so the look costs no bitmaps and no memory while it is not
@@ -69,7 +73,8 @@ static const LSTOP s_stBanner[] = {
 #define LC_BL   4
 #define LC_BR   8
 
-static BOOL    s_bKnown, s_bLuna, s_bEngineSeen;
+static BOOL    s_bKnown, s_bEngineSeen;
+static int     s_nLook;        /* LOOK_* */
 static HFONT   s_hfStart;
 
 /* -------------------------------------------------------------------- */
@@ -79,30 +84,49 @@ static HFONT   s_hfStart;
 /* Re-reads the setting and the active theme; TRUE if the look changed */
 BOOL LunaRefresh(void)
 {
-    BOOL bOld = s_bLuna, bWasKnown = s_bKnown;
+    int nOld = s_nLook;
+    BOOL bWasKnown = s_bKnown;
     int nLook = CfgGetInt("Taskbar", "Look", 0);
 
     s_bEngineSeen = ThemeEngineActive();
     if (nLook == 1)
-        s_bLuna = TRUE;
+        s_nLook = LOOK_XP;
     else if (nLook == 2)
-        s_bLuna = FALSE;
+        s_nLook = LOOK_95;
+    else if (nLook == 3)
+        s_nLook = LOOK_11;
     else {
         char szTheme[MAXPATHLEN], szValue[16];
 
-        s_bLuna = s_bEngineSeen && ThemeDirectory(szTheme, sizeof(szTheme))
-                  && ReadThemeString(szTheme, "Shell", "Style", szValue, sizeof(szValue))
-                  && lstrcmpi(szValue, "XP") == 0;
+        s_nLook = LOOK_95;
+        if (s_bEngineSeen && ThemeDirectory(szTheme, sizeof(szTheme))
+            && ReadThemeString(szTheme, "Shell", "Style", szValue, sizeof(szValue))) {
+            if (lstrcmpi(szValue, "XP") == 0)
+                s_nLook = LOOK_XP;
+            else if (lstrcmpi(szValue, "11") == 0)
+                s_nLook = LOOK_11;
+        }
     }
     s_bKnown = TRUE;
-    return bWasKnown && s_bLuna != bOld;
+    return bWasKnown && s_nLook != nOld;
+}
+
+/* LOOK_95, LOOK_XP or LOOK_11 */
+int ShellLook(void)
+{
+    if (!s_bKnown)
+        LunaRefresh();
+    return s_nLook;
 }
 
 BOOL LunaLook(void)
 {
-    if (!s_bKnown)
-        LunaRefresh();
-    return s_bLuna;
+    return ShellLook() == LOOK_XP;
+}
+
+BOOL Win11Look(void)
+{
+    return ShellLook() == LOOK_11;
 }
 
 /* Called from a timer: the theme engine was started or stopped */
@@ -375,6 +399,19 @@ void LunaDrawSeparator(HDC hdc, const RECT FAR *lprc)
     int y = lprc->top + (lprc->bottom - lprc->top) / 2;
 
     Line(hdc, lprc->left + 2, y, lprc->right - 2, y + 1, RGB(172, 168, 153));
+}
+
+/* A rounded rectangle in one colour, its corners blended into what is
+   there (radius r) */
+void LunaRoundRect(HDC hdc, const RECT FAR *lprc, int r, COLORREF clr)
+{
+    LSTOP st[1];
+
+    st[0].pos = 0;
+    st[0].r = GetRValue(clr);
+    st[0].g = GetGValue(clr);
+    st[0].b = GetBValue(clr);
+    Shape(hdc, lprc, st, 1, r, LC_TL | LC_TR | LC_BL | LC_BR);
 }
 
 /* The header (bTop: rounded top corners) and the footer of the two-column

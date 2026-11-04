@@ -37,6 +37,10 @@
  * ("Name=command;directory;showmode;iconfile;iconindex", '$' macros and
  * <images> included). It is read again when the section changes, so
  * editing NSSTART.INI (taskbar menu: Edit Quick Launch) takes effect at once.
+ *
+ * Three looks: Windows 95 (here), Windows XP (luna.c) and Windows 11
+ * (win11.c: a taller light bar with the Start button, Quick Launch and the
+ * task buttons as icons in the middle, the clock with the date).
  */
 #include <stdlib.h>
 #include <string.h>
@@ -94,6 +98,10 @@ static char    s_szClock[16];
 static BOOL    s_bStartDown;
 static BOOL    s_bStartPress;      /* Start pressed, opening on the release */
 static int     s_cyBar;
+static int     s_cyBase;           /* the height for the 95 and XP looks */
+static int     s_cxQl = QL_CX;     /* width of a Quick Launch button */
+static int     s_nTaskHot = -1;    /* Windows 11: the task button under the mouse */
+static BOOL    s_bStartHot;
 static HWND    s_hwndSysMenuTarget;
 static BOOL    s_bLiftMenu;        /* move the next popup above the taskbar */
 static HBRUSH  s_hbrChecker;
@@ -556,12 +564,12 @@ static int HitQl(POINT pt)
 {
     if (!s_nQl || !PtInRect(&s_rcQl, pt))
         return -1;
-    return (pt.x - s_rcQl.left) / QL_CX < s_nQl ? (pt.x - s_rcQl.left) / QL_CX : -1;
+    return (pt.x - s_rcQl.left) / s_cxQl < s_nQl ? (pt.x - s_rcQl.left) / s_cxQl : -1;
 }
 
 static void QlButtonRect(int i, RECT FAR *lprc)
 {
-    SetRect(lprc, s_rcQl.left + i * QL_CX, s_rcQl.top, s_rcQl.left + (i + 1) * QL_CX,
+    SetRect(lprc, s_rcQl.left + i * s_cxQl, s_rcQl.top, s_rcQl.left + (i + 1) * s_cxQl,
             s_rcQl.bottom);
 }
 
@@ -629,29 +637,35 @@ static void PaintQuickLaunch(HDC hdc)
     int i, off;
     BOOL bLuna = LunaLook();
 
+    BOOL b11 = Win11Look();
+
     if (!s_nQl)
         return;
     SetRect(&rcBar, s_rcQl.left, s_rcQl.top, s_rcQl.right, s_rcQl.bottom);
-    QlEdge(hdc, s_rcQl.left - QL_EDGE, &rcBar, TRUE);
-    QlEdge(hdc, s_rcQl.right + 2, &rcBar, FALSE);
+    if (!b11) {
+        QlEdge(hdc, s_rcQl.left - QL_EDGE, &rcBar, TRUE);
+        QlEdge(hdc, s_rcQl.right + 2, &rcBar, FALSE);
+    }
     for (i = 0; i < s_nQl; i++) {
         BOOL bDown = (i == s_nQlDown && s_bQlPressed);
         BOOL bHot = (i == s_nQlHot) || bDown;
         int x, y;
 
         QlButtonRect(i, &rc);
-        if (bHot) {
+        if (b11)
+            Win11DrawButton(hdc, &rc, bHot, bDown);
+        else if (bHot) {
             if (bLuna)
                 LunaDrawQuickButton(hdc, &rc, bDown);
             else
                 Draw3DEdge(hdc, &rc, bDown, FALSE);
         }
         off = bDown ? 1 : 0;
-        x = rc.left + (QL_CX - 16) / 2 + off;
+        x = rc.left + (s_cxQl - 16) / 2 + off;
         y = rc.top + (rc.bottom - rc.top - 16) / 2 + off;
         if (s_ql[i].nImage >= 0)
             DrawSmallImage(hdc, x, y, s_ql[i].nImage);
-        else if (bLuna)
+        else if (bLuna || b11)
             LunaIconSmall(hdc, x, y, s_ql[i].hIcon);
         else
             DrawIconSmall(hdc, x, y, s_ql[i].hIcon, NsColor(NSC_TASKBAR));
@@ -677,12 +691,67 @@ static void QlSetHot(HWND hwnd, int i)
     }
 }
 
+/*
+ * Windows 11: the clock and tray at the right, the Start button, Quick
+ * Launch and the task buttons (icons only) in the middle of the bar
+ */
+static void Layout11(HWND hwnd, HDC hdc)
+{
+    RECT rc;
+    HFONT hfOld = SelectObject(hdc, g_hfontUI);
+    int cyBtn, cxBtn, n, cxAll, x, i, xMax;
+
+    GetClientRect(hwnd, &rc);
+    cyBtn = rc.bottom - 6;
+    cxBtn = cyBtn + 6;
+    if (g_cfg.bClock || s_nTray) {
+        int cx = (g_cfg.bClock ? TextWidth(hdc, "88/88/8888") + 12 : 4) + s_nTray * TRAY_CX;
+
+        SetRect(&s_rcClock, rc.right - 6 - cx, 3, rc.right - 6, rc.bottom - 3);
+    } else
+        SetRect(&s_rcClock, rc.right, 3, rc.right, rc.bottom - 3);
+    SetRect(&s_rcTray, s_rcClock.left, s_rcClock.top, s_rcClock.left + s_nTray * TRAY_CX,
+            s_rcClock.bottom);
+    SelectObject(hdc, hfOld);
+
+    xMax = s_rcClock.left - 8;
+    n = 1 + s_nQl + s_nTasks;
+    if (n * cxBtn > xMax - 4) {
+        cxBtn = (xMax - 4) / n;
+        if (cxBtn < 20)
+            cxBtn = 20;
+    }
+    cxAll = n * cxBtn;
+    x = (rc.right - cxAll) / 2;
+    if (x + cxAll > xMax)
+        x = xMax - cxAll;
+    if (x < 4)
+        x = 4;
+    SetRect(&s_rcStart, x, 3, x + cxBtn, 3 + cyBtn);
+    x += cxBtn;
+    s_cxQl = cxBtn;
+    if (s_nQl) {
+        SetRect(&s_rcQl, x, 3, x + s_nQl * cxBtn, 3 + cyBtn);
+        x = s_rcQl.right;
+    } else
+        SetRectEmpty(&s_rcQl);
+    for (i = 0; i < s_nTasks; i++) {
+        SetRect(&s_rcTask[i], x, 3, x + cxBtn, 3 + cyBtn);
+        x += cxBtn;
+    }
+}
+
 static void Layout(HWND hwnd, HDC hdc)
 {
     RECT rc;
     HFONT hfOld;
     int xLeft, xRight, cxBtn, i, cyBtn;
 
+    if (Win11Look()) {
+        Layout11(hwnd, hdc);
+        return;
+    }
+    s_cxQl = QL_CX;
     GetClientRect(hwnd, &rc);
     cyBtn = rc.bottom - BTN_TOP - 2;
 
@@ -806,6 +875,38 @@ static void PaintLuna(HDC hdc, const RECT FAR *lprc)
     SelectObject(hdc, hfOld);
 }
 
+/* The taskbar in the Windows 11 look (win11.c) */
+static void Paint11(HDC hdc, const RECT FAR *lprc)
+{
+    HFONT hfOld;
+    int i;
+
+    Win11DrawBar(hdc, lprc);
+    Win11DrawStart(hdc, &s_rcStart, s_bStartHot, s_bStartDown);
+    PaintQuickLaunch(hdc);
+    for (i = 0; i < s_nTasks; i++) {
+        BOOL bActive = (s_tasks[i].hwnd == s_hwndActive);
+        RECT rcB = s_rcTask[i];
+
+        Win11DrawButton(hdc, &rcB, bActive || i == s_nTaskHot, FALSE);
+        LunaIconSmall(hdc, rcB.left + (rcB.right - rcB.left - 16) / 2,
+                      rcB.top + (rcB.bottom - rcB.top - 16) / 2 - 1, s_tasks[i].hIcon);
+        Win11DrawIndicator(hdc, &rcB, bActive);
+    }
+    hfOld = SelectObject(hdc, g_hfontUI);
+    for (i = 0; i < s_nTray; i++)
+        LunaIconSmall(hdc, s_rcTray.left + 2 + i * TRAY_CX,
+                      s_rcTray.top + (s_rcTray.bottom - s_rcTray.top - 16) / 2, s_hTrayIcon[i]);
+    if (g_cfg.bClock) {
+        RECT rcTime = s_rcClock;
+
+        rcTime.left = s_rcTray.right;
+        rcTime.right -= 4;
+        Win11DrawClock(hdc, &rcTime, s_szClock);
+    }
+    SelectObject(hdc, hfOld);
+}
+
 static void PaintTaskbar(HWND hwnd, HDC hdcWin)
 {
     HDC hdc;
@@ -820,8 +921,11 @@ static void PaintTaskbar(HWND hwnd, HDC hdcWin)
     hbm = CreateCompatibleBitmap(hdcWin, rc.right, rc.bottom);
     hbmOld = SelectObject(hdc, hbm);
     Layout(hwnd, hdc);
-    if (LunaLook()) {
-        PaintLuna(hdc, &rc);
+    if (LunaLook() || Win11Look()) {
+        if (LunaLook())
+            PaintLuna(hdc, &rc);
+        else
+            Paint11(hdc, &rc);
         BitBlt(hdcWin, 0, 0, rc.right, rc.bottom, hdc, 0, 0, SRCCOPY);
         SelectObject(hdc, hbmOld);
         DeleteObject(hbm);
@@ -1227,9 +1331,10 @@ void TaskbarApplySettings(void)
         return;
     }
     s_bHidden = CfgGetInt("Taskbar", "AutoHide", 0);
+    s_cyBar = s_cyBase + (Win11Look() ? 8 : 0);     /* Windows 11: a taller bar */
     SetWindowPos(g_hwndTaskbar, HWND_TOPMOST, 0, s_bHidden ? cyScreen - HIDDEN_CY
                                                            : cyScreen - s_cyBar,
-                 0, 0, SWP_NOSIZE | SWP_NOACTIVATE);
+                 GetSystemMetrics(SM_CXSCREEN), s_cyBar, SWP_NOACTIVATE);
     if (!IsWindowVisible(g_hwndTaskbar))
         ShowWindow(g_hwndTaskbar, SW_SHOWNOACTIVATE);
     UpdateTasks();
@@ -1299,6 +1404,16 @@ static void ShowBarHint(HWND hwnd)
     HintShow(szText, pt.x, rcBar.top - 2 - (i == -1 ? 34 : 20));
 }
 
+/* The look changed: the Windows 11 bar is taller, so windows and desktop
+   icons need to know the new height */
+static void LookChanged(void)
+{
+    if (s_cyBar != s_cyBase + (Win11Look() ? 8 : 0)) {
+        TaskbarApplySettings();
+        HookApplySettings();
+    }
+}
+
 LRESULT CALLBACK NSEXPORT TaskbarWndProc(HWND hwnd, UINT msg, WPARAM wParam,
                                          LPARAM lParam)
 {
@@ -1352,7 +1467,21 @@ LRESULT CALLBACK NSEXPORT TaskbarWndProc(HWND hwnd, UINT msg, WPARAM wParam,
             if (HitQl(ptNow) != s_nQlHot)
                 QlSetHot(hwnd, -1);
         }
-        i |= LunaCheckEngine();     /* the theme engine started or stopped */
+        if (LunaCheckEngine()) {    /* the theme engine started or stopped */
+            LookChanged();
+            i = TRUE;
+        }
+        if (s_nTaskHot >= 0 || s_bStartHot) {
+            POINT ptNow;
+
+            GetCursorPos(&ptNow);
+            ScreenToClient(hwnd, &ptNow);
+            if (HitTask(ptNow) != s_nTaskHot || (s_bStartHot && !PtInRect(&s_rcStart, ptNow))) {
+                s_nTaskHot = -1;
+                s_bStartHot = FALSE;
+                i = TRUE;
+            }
+        }
         if (i)
             InvalidateRect(hwnd, NULL, FALSE);
         CheckAutoHide(hwnd);
@@ -1417,6 +1546,16 @@ LRESULT CALLBACK NSEXPORT TaskbarWndProc(HWND hwnd, UINT msg, WPARAM wParam,
         }
         if (s_nQl)
             QlSetHot(hwnd, HitQl(pt));
+        if (Win11Look()) {
+            int nHot = HitTask(pt);
+            BOOL bStart = PtInRect(&s_rcStart, pt);
+
+            if (nHot != s_nTaskHot || bStart != s_bStartHot) {
+                s_nTaskHot = nHot;
+                s_bStartHot = bStart;
+                InvalidateRect(hwnd, NULL, FALSE);
+            }
+        }
         if (CfgGetInt("Taskbar", "Hints", 1) && !s_bStartPress) {
             if (HintVisible())
                 ShowBarHint(hwnd);
@@ -1520,7 +1659,8 @@ LRESULT CALLBACK NSEXPORT TaskbarWndProc(HWND hwnd, UINT msg, WPARAM wParam,
     case WM_SYSCOLORCHANGE:
     case WM_WININICHANGE:
         /* a theme setting system colours was started, stopped or changed */
-        LunaRefresh();
+        if (LunaRefresh())
+            LookChanged();
         s_szClock[0] = '\0';
         UpdateClock();
         InvalidateRect(hwnd, NULL, FALSE);
@@ -1565,9 +1705,10 @@ BOOL TaskbarCreate(void)
     GetTextMetrics(hdc, &tm);
     SelectObject(hdc, hfOld);
     ReleaseDC(NULL, hdc);
-    s_cyBar = tm.tmHeight + 15;
-    if (s_cyBar < 28)
-        s_cyBar = 28;
+    s_cyBase = tm.tmHeight + 15;
+    if (s_cyBase < 28)
+        s_cyBase = 28;
+    s_cyBar = s_cyBase + (Win11Look() ? 8 : 0);
 
     g_hwndTaskbar = CreateWindowEx(WS_EX_TOPMOST, CLS_TASKBAR, "", WS_POPUP,
                                    0, cyScreen - s_cyBar, cxScreen, s_cyBar,

@@ -566,22 +566,26 @@ BOOL SmBegin(void)
 
 /*
  * Which Start menu: [Start Menu] Style=0 follows the taskbar look (the
- * two-column menu of Windows XP with the XP look), 1 is always the classic
- * (Calmira) menu, 2 always the two-column menu.
+ * two-column menu of Windows XP with the XP look, the Windows 11 menu with
+ * the Windows 11 look), 1 is always the classic (Calmira) menu, 2 always
+ * the two-column menu, 3 always the Windows 11 menu. Returns SMS_*.
  */
-BOOL SmTwoColumns(void)
+int SmStyle(void)
 {
-    int n = CfgGetInt("Start Menu", "Style", 0);
-
-    return n == 2 || (n == 0 && LunaLook());
+    switch (CfgGetInt("Start Menu", "Style", 0)) {
+    case 1:  return SMS_CLASSIC;
+    case 2:  return SMS_XP;
+    case 3:  return SMS_11;
+    }
+    return LunaLook() ? SMS_XP : Win11Look() ? SMS_11 : SMS_CLASSIC;
 }
 
 void StartMenuShow(HWND hwndOwner, int x, int y)
 {
     HMENU hMenu;
 
-    if (SmTwoColumns()) {
-        StartXPShow(hwndOwner, x, y);
+    if (SmStyle() != SMS_CLASSIC) {
+        StartXPShow(hwndOwner, x, y, SmStyle() == SMS_11);
         return;
     }
     if (!SmBegin())
