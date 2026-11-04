@@ -195,6 +195,12 @@ and the keyboard (arrows move in a column, Left/Right change columns,
 Enter, Esc, mnemonics). Submenus (All Programs, Settings...) are the
 ordinary owner-drawn popup menus of the classic Start menu, opened by a
 click, the Right key or after resting the mouse on the item for a moment.
+A click opens them when the button is released (a popup menu opened while
+the button is down would close again on the release), and they open above
+the taskbar, All Programs upwards from the bottom of the panel as in
+Windows XP. With the XP look the green arrow of All Programs, the user
+picture's frame and the icons of Log Off and Shut Down are drawn in
+`luna.c`, in true colour.
 The command chosen is posted to the taskbar after the window is gone.
 Without the XP look the menu uses the system colours (caption gradient,
 window and Start menu colours), like the classic style of Windows XP.

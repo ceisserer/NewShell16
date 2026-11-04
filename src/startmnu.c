@@ -662,6 +662,16 @@ int SmItems(HMENU hMenu, int FAR *lpn, int nMax)
     return n;
 }
 
+/* The height of the popup menu hMenu (without its frame) */
+int SmMenuHeight(HMENU hMenu)
+{
+    int idx[64], i, n = SmItems(hMenu, idx, 64), cy = 0;
+
+    for (i = 0; i < n; i++)
+        cy += ItemHeight(&s_lpItems[idx[i]]);
+    return cy;
+}
+
 LPCSTR SmText(int n)
 {
     return s_lpItems[n].szText;

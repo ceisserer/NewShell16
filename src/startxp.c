@@ -68,12 +68,14 @@
 
 #define XP_LEFT_W       196
 #define XP_RIGHT_W      176
-#define XP_HEAD_H       54
-#define XP_FOOT_H       38
+#define XP_HEAD_H       60
+#define XP_FOOT_H       40
 #define XP_ROW_L        40      /* left column: 32x32 icons */
 #define XP_ROW_R        24      /* right column: 16x16 icons */
 #define XP_SEP_H        9
 #define XP_ALL_H        30
+#define XP_ARROW        18      /* the green arrow of All Programs (XP look) */
+#define XP_FOOT_ICON    22      /* the icons of Log Off and Shut Down (XP look) */
 #define XP_PAD          6
 #define XP_MAXE         64
 #define TIMER_HOVER     1
@@ -116,6 +118,7 @@ static XPENTRY *s_e;
 static int      s_nE;
 static HWND     s_hwnd, s_hwndOwner;
 static int      s_nHot = -1;
+static int      s_nNoOpen = -1; /* its submenu was closed by this press */
 static BOOL     s_bDone, s_bInSub, s_bLuna, s_b11;
 static int      s_yRecLabel;    /* Windows 11: where "Recommended" goes */
 static BOOL     s_bNoRecent;
@@ -220,9 +223,14 @@ static int AddItems(HMENU hMenu, int nCol, BOOL bBold, int y, int x0, int cx, BO
     return y - y0;
 }
 
+static int FootIcon(void)
+{
+    return s_bLuna ? XP_FOOT_ICON : 16;
+}
+
 static int FootButtonWidth(HDC hdc, LPCSTR lpText)
 {
-    return 4 + 16 + 6 + TextWidth(hdc, lpText) + 8;
+    return 4 + FootIcon() + 6 + TextWidth(hdc, lpText) + 8;
 }
 
 static void Layout(void)
@@ -547,7 +555,7 @@ static void PaintHeader(HDC hdc)
     HICON hIcon = LoadIcon(g_hInst, MAKEINTRESOURCE(IDI_NEWSHELL));
     RECT rc;
     HFONT hfOld;
-    int y = (XP_HEAD_H - 40) / 2;
+    int y = (XP_HEAD_H - 2 - 46) / 2;
 
     if (s_bLuna) {
         LunaDrawPanelBar(hdc, &s_rcHead, TRUE);
@@ -557,17 +565,27 @@ static void PaintHeader(HDC hdc)
     } else
         ClassicBar(hdc, &s_rcHead);
 
-    /* the "user picture": the NewShell16 icon on a white tile */
-    SetRect(&rc, 8, y, 8 + 40, y + 40);
-    FillSolid(hdc, &rc, s_bLuna ? RGB(214, 228, 248) : GetSysColor(COLOR_BTNHIGHLIGHT));
-    InflateRect(&rc, -1, -1);
-    FillSolid(hdc, &rc, RGB(255, 255, 255));
+    /* the "user picture": the NewShell16 icon on a tile, in Windows XP
+       with a white rounded frame and a shadow */
+    SetRect(&rc, 7, y, 7 + 46, y + 46);
+    if (s_bLuna) {
+        OffsetRect(&rc, 1, 1);
+        LunaRoundRect(hdc, &rc, 5, RGB(18, 62, 160));
+        OffsetRect(&rc, -1, -1);
+        LunaRoundRect(hdc, &rc, 5, RGB(255, 255, 255));
+        InflateRect(&rc, -3, -3);
+        LunaRoundRect(hdc, &rc, 2, RGB(224, 236, 252));
+    } else {
+        FillSolid(hdc, &rc, GetSysColor(COLOR_BTNHIGHLIGHT));
+        InflateRect(&rc, -1, -1);
+        FillSolid(hdc, &rc, RGB(255, 255, 255));
+    }
     if (hIcon)
-        DrawIcon(hdc, rc.left + 3, rc.top + 3, hIcon);
+        DrawIcon(hdc, 7 + 7, y + 7, hIcon);
 
     SetBkMode(hdc, TRANSPARENT);
     hfOld = SelectObject(hdc, s_hfName ? s_hfName : SmFont(TRUE));
-    SetRect(&rc, 58, 0, s_cx - 6, XP_HEAD_H - 2);
+    SetRect(&rc, 62, 0, s_cx - 6, XP_HEAD_H - 2);
     if (s_bLuna) {
         OffsetRect(&rc, 1, 1);
         DrawText1(hdc, s_szName, &rc, RGB(12, 50, 130), DT_LEFT | DT_NOPREFIX);
@@ -602,9 +620,11 @@ static void PaintEntry(HDC hdc, int i)
     if (e->bKind == XE_SEP) {
         int y = rc.top + XP_SEP_H / 2;
 
-        if (s_bLuna)
-            HLine(hdc, rc.left + 8, rc.right - 8, y,
-                  e->bCol == COL_RIGHT ? RGB(149, 189, 236) : RGB(222, 222, 222));
+        if (s_bLuna && e->bCol == COL_RIGHT)
+            HLine(hdc, rc.left + 8, rc.right - 8, y, RGB(149, 189, 236));
+        else if (s_bLuna)
+            LunaDrawFadeLine(hdc, rc.left + 4, rc.right - 4, y, RGB(208, 208, 200),
+                             LeftFace());
         else {
             HLine(hdc, rc.left + 6, rc.right - 6, y - 1, GetSysColor(COLOR_BTNSHADOW));
             HLine(hdc, rc.left + 6, rc.right - 6, y, GetSysColor(COLOR_BTNHIGHLIGHT));
@@ -622,10 +642,14 @@ static void PaintEntry(HDC hdc, int i)
             else
                 Draw3DEdge(hdc, &rc, FALSE, FALSE);
         }
-        DrawSmallImage(hdc, rc.left + 4, rc.top + (rc.bottom - rc.top - 16) / 2,
-                       e->bKind == XE_LOGOFF ? SMI_LOGOFF : SMI_SHUTDOWN);
+        if (s_bLuna)
+            LunaDrawFootIcon(hdc, rc.left + 4, rc.top + (rc.bottom - rc.top - XP_FOOT_ICON) / 2,
+                             XP_FOOT_ICON, e->bKind == XE_SHUTDOWN);
+        else
+            DrawSmallImage(hdc, rc.left + 4, rc.top + (rc.bottom - rc.top - 16) / 2,
+                           e->bKind == XE_LOGOFF ? SMI_LOGOFF : SMI_SHUTDOWN);
         hfOld = SelectObject(hdc, SmFont(FALSE));
-        SetRect(&rcText, rc.left + 26, rc.top, rc.right, rc.bottom);
+        SetRect(&rcText, rc.left + 4 + FootIcon() + 6, rc.top, rc.right, rc.bottom);
         DrawText1(hdc, lpText, &rcText, TextColor(COL_FOOT, FALSE), DT_LEFT);
         SelectObject(hdc, hfOld);
         SetBkMode(hdc, nOldMode);
@@ -640,15 +664,19 @@ static void PaintEntry(HDC hdc, int i)
 
     if (e->bKind == XE_ALL) {
         static const char szAll[] = "&All Programs";
-        int cx, x;
+        int cxArrow = s_bLuna ? XP_ARROW : 16, cx, x;
 
         hfOld = SelectObject(hdc, SmFont(TRUE));
-        cx = TextWidth(hdc, "All Programs") + 8 + 16;
+        cx = TextWidth(hdc, "All Programs") + 8 + cxArrow;
         x = rc.left + (rc.right - rc.left - cx) / 2;
         SetRect(&rcText, x, rc.top, x + cx, rc.bottom);
         DrawText1(hdc, szAll, &rcText, TextColor(COL_LEFT, bSel), DT_LEFT);
-        DrawSmallImage(hdc, x + cx - 16, rc.top + (rc.bottom - rc.top - 16) / 2,
-                       SMI_ALLPROGRAMS);
+        if (s_bLuna)
+            LunaDrawArrowButton(hdc, x + cx - cxArrow, rc.top + (rc.bottom - rc.top - cxArrow) / 2,
+                                cxArrow);
+        else
+            DrawSmallImage(hdc, x + cx - 16, rc.top + (rc.bottom - rc.top - 16) / 2,
+                           SMI_ALLPROGRAMS);
         SelectObject(hdc, hfOld);
         SetBkMode(hdc, nOldMode);
         return;
@@ -799,15 +827,24 @@ static void OpenSubmenu(int i)
     POINT pt;
     MSG msg;
     RECT rcWin;
+    BOOL bDown;
+    int cy;
 
     KillTimer(s_hwnd, TIMER_HOVER);
     if (!hMenu)
         return;
     SetHot(i);
     KillTimer(s_hwnd, TIMER_HOVER);
+    /* beside the entry, but above the taskbar (the bottom of the panel):
+       All Programs goes up from there as in Windows XP */
     pt.x = s_e[i].rc.right - 2;
     pt.y = s_e[i].rc.top;
+    cy = SmMenuHeight(hMenu) + 2 * GetSystemMetrics(SM_CYBORDER) + 4;
+    if (!s_b11 && pt.y > s_cy - cy)
+        pt.y = s_cy - cy;
     ClientToScreen(s_hwnd, &pt);
+    if (pt.y < 0)
+        pt.y = 0;
     if (GetCapture() == s_hwnd)
         ReleaseCapture();
     s_bInSub = TRUE;
@@ -820,11 +857,15 @@ static void OpenSubmenu(int i)
     /* closed by a click outside the menu and the panel: close the panel too */
     GetCursorPos(&pt);
     GetWindowRect(s_hwnd, &rcWin);
-    if (!PtInRect(&rcWin, pt) && (GetAsyncKeyState(VK_LBUTTON) < 0
-                                  || GetAsyncKeyState(VK_RBUTTON) < 0)) {
+    bDown = GetAsyncKeyState(VK_LBUTTON) < 0 || GetAsyncKeyState(VK_RBUTTON) < 0;
+    if (!PtInRect(&rcWin, pt) && bDown) {
         Close(0);
         return;
     }
+    /* closed by a click on its own entry: the release must not open it
+       again (a second click closes the submenu, as in a menu bar) */
+    ScreenToClient(s_hwnd, &pt);
+    s_nNoOpen = bDown && HitTest(pt.x, pt.y) == i ? i : -1;
     SetCapture(s_hwnd);
 }
 
@@ -1016,22 +1057,34 @@ LRESULT CALLBACK NSEXPORT StartXPWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPA
             Close(0);       /* a click outside, also on the Start button */
             return 0;
         }
-        i = HitTest(pt.x, pt.y);
-        SetHot(i);
-        if (OpensMenu(i))
-            OpenSubmenu(i);
+        s_nNoOpen = -1;
+        SetHot(HitTest(pt.x, pt.y));
         return 0;
 
     case WM_LBUTTONUP:
-        /* runs the item under the mouse; the release of the press that
-           opened the menu (on the Start button) is outside and ignored */
+    case WM_RBUTTONUP:
+        /* runs the item under the mouse or opens its submenu, on the
+           release: a submenu opened while the button is down would close
+           when it is released. The release of the press that opened the
+           panel (on the Start button) is outside and ignored. */
         i = HitTest((int)(short)LOWORD(lParam), (int)(short)HIWORD(lParam));
-        if (i >= 0 && !OpensMenu(i))
+        if (i >= 0 && i == s_nNoOpen)
+            i = -1;
+        s_nNoOpen = -1;
+        if (OpensMenu(i))
+            OpenSubmenu(i);
+        else if (i >= 0 && msg == WM_LBUTTONUP)
             Activate(i);
         return 0;
 
     case WM_TIMER:
         KillTimer(hwnd, TIMER_HOVER);
+        if (GetAsyncKeyState(VK_LBUTTON) < 0 || GetAsyncKeyState(VK_RBUTTON) < 0) {
+            /* not while a button is down (see WM_LBUTTONUP) */
+            if (OpensMenu(s_nHot))
+                SetTimer(hwnd, TIMER_HOVER, HOVER_MS, NULL);
+            return 0;
+        }
         if (OpensMenu(s_nHot)) {
             GetCursorPos(&pt);
             ScreenToClient(hwnd, &pt);
@@ -1190,6 +1243,7 @@ void StartXPShow(HWND hwndOwner, int x, int y, BOOL b11)
     }
 
     s_nHot = -1;
+    s_nNoOpen = -1;
     s_bDone = FALSE;
     s_bInSub = FALSE;
     s_uCmd = 0;

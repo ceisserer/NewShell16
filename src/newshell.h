@@ -140,6 +140,9 @@ COLORREF LunaBannerColor(int y, int cy);
 void LunaDrawSeparator(HDC hdc, const RECT FAR *lprc);
 void LunaDrawPanelBar(HDC hdc, const RECT FAR *lprc, BOOL bTop);
 void LunaDrawQuickButton(HDC hdc, const RECT FAR *lprc, BOOL bDown);
+void LunaDrawArrowButton(HDC hdc, int x, int y, int cx);
+void LunaDrawFootIcon(HDC hdc, int x, int y, int cx, BOOL bPower);
+void LunaDrawFadeLine(HDC hdc, int x0, int x1, int y, COLORREF clr, COLORREF clrFace);
 
 /* ---- util.c ---------------------------------------------------------- */
 void FillSolid(HDC hdc, const RECT FAR *lprc, COLORREF clr);
@@ -257,6 +260,7 @@ HMENU SmBuild(LPCSTR lpSection, BOOL bTop);
 HMENU SmBuildPinned(void);
 HMENU SmBuildRecent(void);
 int   SmItems(HMENU hMenu, int FAR *lpn, int nMax);
+int   SmMenuHeight(HMENU hMenu);
 LPCSTR SmText(int n);
 UINT  SmFlags(int n);
 HMENU SmSubmenu(int n);
