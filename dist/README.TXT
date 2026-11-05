@@ -109,7 +109,9 @@ address bar, search), following the theme, with long file names. The
 program gets 8.3 names back: saving under a new long name creates the file
 first, so it has its 8.3 alias (as Windows 95 does). Programs that bring a
 dialog template or hook of their own (Write, Paintbrush...) keep the
-Windows 3.1 dialog. Options, page Files, "Open and Save As" chooses the
+Windows 3.1 dialog, with their own additions, but it shows long names too:
+in the file and folder lists, the folder line and the name box, and a long
+name can be typed. Options, page Files, "Open and Save As" chooses the
 look, or the Windows 3.1 dialogs for every program.
 
 
