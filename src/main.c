@@ -35,6 +35,7 @@
 #include "newshell.h"
 #include <dde.h>
 #include "nshook.h"
+#include "nsdlg.h"
 
 #define TIMER_FILECHANGE    1
 #define FILECHANGE_DELAY    600
@@ -105,6 +106,64 @@ static void LoadHookDll(void)
         FreeLibrary(s_hHookDll);
         s_hHookDll = NULL;
     }
+}
+
+/*
+ * NSDLG.DLL: the Open and Save As dialogs of Windows 95, XP or 11 for every
+ * program. [FileDialog] Style= 0 follows the look of the shell (the
+ * theme), 1 Windows 95, 2 XP, 3 11, 4 leaves the Windows 3.1 dialogs.
+ */
+static HINSTANCE s_hDlgDll;
+static NSDLGINSTALLPROC s_lpfnDlgInstall;
+
+void FileDlgApply(void)
+{
+    static const int s_aLook[] = { NSDLG_95, NSDLG_XP, NSDLG_11 };
+    int nStyle = CfgGetInt("FileDialog", "Style", 0), nLook;
+
+    if (!s_hDlgDll) {
+        char szPath[MAXPATHLEN];
+        UINT uOldMode;
+
+        if (nStyle == 4)
+            return;
+        GetModuleFileName(g_hInst, szPath, sizeof(szPath));
+        *PathFileName(szPath) = '\0';
+        lstrcat(szPath, "NSDLG.DLL");
+        uOldMode = SetErrorMode(0x8000);
+        s_hDlgDll = LoadLibrary(szPath);
+        SetErrorMode(uOldMode);
+        if ((UINT)s_hDlgDll < 32) {
+            s_hDlgDll = NULL;
+            return;
+        }
+        s_lpfnDlgInstall = (NSDLGINSTALLPROC)GetProcAddress(s_hDlgDll, "NSDLGINSTALL");
+        if (!s_lpfnDlgInstall) {
+            FreeLibrary(s_hDlgDll);
+            s_hDlgDll = NULL;
+            return;
+        }
+    }
+    if (nStyle >= 1 && nStyle <= 3)
+        nLook = nStyle;
+    else if (nStyle == 4)
+        nLook = NSDLG_OFF;
+    else
+        nLook = s_aLook[ShellLook()];
+    s_lpfnDlgInstall(nLook, g_cfg.bLongNames ? NSDF_LONGNAMES : 0, NS_INIFILE);
+}
+
+static void FileDlgFree(void)
+{
+    NSDLGREMOVEPROC lpfnRemove;
+
+    if (!s_hDlgDll)
+        return;
+    lpfnRemove = (NSDLGREMOVEPROC)GetProcAddress(s_hDlgDll, "NSDLGREMOVE");
+    if (lpfnRemove)
+        lpfnRemove();
+    FreeLibrary(s_hDlgDll);
+    s_hDlgDll = NULL;
 }
 
 /*
@@ -602,6 +661,7 @@ int PASCAL WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     g_bIsShell = DetectShell();
     if (g_bIsShell)
         LogonDialog();
+    LfnInit();                      /* before CfgLoad switches it on or off */
     CfgLoad();
 
     g_hfontUI = CreateUIFont(8, FALSE);
@@ -627,6 +687,7 @@ int PASCAL WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     DesktopCreate();
     LoadHookDll();
     HookApplySettings();
+    FileDlgApply();
 
     if (g_bIsShell) {
         PlayEventSound("Startup");
@@ -649,8 +710,10 @@ int PASCAL WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
         DispatchMessage(&msg);
     }
 
+    FileDlgFree();
     StartMenuFree();
     IconsFree();
+    LfnTerm();
     DeleteObject(g_hfontUI);
     DeleteObject(g_hfontBold);
     return msg.wParam;

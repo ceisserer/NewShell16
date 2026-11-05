@@ -79,6 +79,7 @@ typedef struct tagFITEM {
     WORD  wDesc;            /* offset + 1 in the description pool, 0 = none */
     BYTE  bAlias;           /* an .ALS file: drawn with the shortcut arrow */
     HICON hIcon;
+    WORD  wLong;            /* long name: offset + 1 in the name pool, 0 = none */
 } FITEM, FAR *LPFITEM;
 
 typedef struct tagFVIEW {
@@ -101,6 +102,8 @@ typedef struct tagFVIEW {
     int     nVisCols;               /* list: visible columns */
     LPSTR   lpDesc;                 /* descriptions (DESCRIPT.ION) */
     WORD    cbDesc, cbDescCap;
+    LPSTR   lpLong;                 /* long names (when they differ) */
+    WORD    cbLong, cbLongCap;
     int     nSizing;                /* column being resized, -1 = none */
     int     xSizeDown, cxSizeDown;
     DWORD   dwTotal;
@@ -137,16 +140,23 @@ static LPFVIEW GetView(HWND hwnd)
     return (LPFVIEW)GetWindowLong(hwnd, 0);
 }
 
+/* The long name of an item, else its 8.3 name */
+static LPCSTR s_lpSortPool;         /* the name pool while sorting */
+#define LONGNAME(pool, p)   ((p)->wLong ? (LPCSTR)((pool) + (p)->wLong - 1) \
+                                        : (LPCSTR)(p)->szName)
+#define ItemLong(v, p)      LONGNAME((v)->lpLong, p)
+
 /* The name as shown: "Calc.exe" when names are capitalised */
-static LPCSTR ShownName(LPFITEM p)
+static LPCSTR ShownName(LPFVIEW v, LPFITEM p)
 {
-    static char szName[16];
+    static char szName[LFN_MAXNAME];
     LPSTR lpDot;
 
     if ((!g_cfg.bCapitalize && !g_cfg.bHideExt) || p->bKind == FK_DRIVE)
-        return p->szName;
-    lstrcpy(szName, p->szName);
-    if (g_cfg.bCapitalize)
+        return ItemLong(v, p);
+    lstrcpy(szName, ItemLong(v, p));
+    /* long names have a case of their own */
+    if (g_cfg.bCapitalize && !p->wLong)
         AnsiLower(szName + 1);
     /* programs that show their own icon are recognised without .EXE */
     if (g_cfg.bHideExt && p->bKind == FK_FILE && p->hIcon != IconStock(IDI_APP)
@@ -232,7 +242,8 @@ static int CompareItems(const void *a, const void *b)
         return (int)q->bKind - (int)p->bKind;   /* drives, dirs, files */
     switch (s_nSortMode) {
     case FS_TYPE:
-        n = lstrcmpi(PathExtension(p->szName), PathExtension(q->szName));
+        n = lstrcmpi(PathExtension((LPSTR)LONGNAME(s_lpSortPool, p)),
+                     PathExtension((LPSTR)LONGNAME(s_lpSortPool, q)));
         if (n)
             return n;
         break;
@@ -247,12 +258,13 @@ static int CompareItems(const void *a, const void *b)
             return p->wTime < q->wTime ? 1 : -1;
         break;
     }
-    return lstrcmpi(p->szName, q->szName);
+    return lstrcmpi(LONGNAME(s_lpSortPool, p), LONGNAME(s_lpSortPool, q));
 }
 
 static void SortItems(LPFVIEW v)
 {
     s_nSortMode = v->nSort;
+    s_lpSortPool = v->lpLong;
     if (v->nItems > 1)
         qsort(v->lpItems, v->nItems, sizeof(FITEM), CompareItems);
 }
@@ -276,9 +288,34 @@ static void ReadDrives(LPFVIEW v)
     }
 }
 
+/* Adds a long name to the pool; returns its offset + 1, 0 if full */
+static WORD AddLong(LPFVIEW v, LPCSTR lpName)
+{
+    WORD wOff, cb = (WORD)lstrlen(lpName);
+
+    if (v->cbLong + cb + 1 > v->cbLongCap) {
+        WORD cbCap = v->cbLongCap ? v->cbLongCap * 2 : 1024;
+        LPSTR lpNew;
+
+        while (cbCap < 32768U && v->cbLong + cb + 1 > cbCap)
+            cbCap *= 2;
+        if (cbCap > 32768U || v->cbLong + cb + 1 > cbCap)
+            return 0;
+        lpNew = (LPSTR)realloc(v->lpLong, cbCap);
+        if (!lpNew)
+            return 0;
+        v->lpLong = lpNew;
+        v->cbLongCap = cbCap;
+    }
+    wOff = v->cbLong;
+    lstrcpy(v->lpLong + wOff, lpName);
+    v->cbLong += cb + 1;
+    return wOff + 1;
+}
+
 static void ReadDirectory(LPFVIEW v)
 {
-    struct find_t ft;
+    LFNFIND ft;
     char szPattern[MAXPATHLEN + 4];
     char szFull[MAXPATHLEN + 14];
     unsigned uAttr = _A_NORMAL | _A_RDONLY | _A_SUBDIR | _A_ARCH;
@@ -293,27 +330,32 @@ static void ReadDirectory(LPFVIEW v)
     lstrcpy(szPattern, v->szPath);
     PathAppend(szPattern, "*.*");
     uOldMode = SetErrorMode(1);
-    if (_dos_findfirst(szPattern, uAttr, &ft) == 0) {
+    if (LfnFindFirst(szPattern, uAttr, &ft) == 0) {
         do {
-            if (ft.name[0] == '.')
+            if (ft.szShort[0] == '.')
                 continue;
-            if (!v->bHidden && (ft.attrib & (_A_HIDDEN | _A_SYSTEM)))
+            if (!v->bHidden && (ft.bAttr & (_A_HIDDEN | _A_SYSTEM)))
                 continue;
-            if (!bAll && !(ft.attrib & _A_SUBDIR) && !MatchSpecList(ft.name, v->szFilter))
+            /* filters match the long or the short name */
+            if (!bAll && !(ft.bAttr & _A_SUBDIR) && !MatchSpecList(ft.szShort, v->szFilter)
+                && !MatchSpecList(ft.szName, v->szFilter))
                 continue;
             p = AddItem(v);
             if (!p)
                 break;
-            lstrcpyn(p->szName, ft.name, sizeof(p->szName));
-            p->bAttr = ft.attrib;
-            p->dwSize = ft.size;
-            p->wDate = ft.wr_date;
-            p->wTime = ft.wr_time;
-            p->bKind = (ft.attrib & _A_SUBDIR) ? FK_DIR : FK_FILE;
+            lstrcpyn(p->szName, ft.szShort, sizeof(p->szName));
+            if (lstrcmp(ft.szName, ft.szShort) != 0)
+                p->wLong = AddLong(v, ft.szName);
+            p->bAttr = ft.bAttr;
+            p->dwSize = ft.dwSize;
+            p->wDate = ft.wDate;
+            p->wTime = ft.wTime;
+            p->bKind = (ft.bAttr & _A_SUBDIR) ? FK_DIR : FK_FILE;
             if (p->bKind == FK_FILE)
-                v->dwTotal += ft.size;
-        } while (_dos_findnext(&ft) == 0);
+                v->dwTotal += ft.dwSize;
+        } while (LfnFindNext(&ft) == 0);
     }
+    LfnFindClose(&ft);
     SetErrorMode(uOldMode);
 
     /* icons are looked up after reading so FindExecutable cannot upset the
@@ -411,6 +453,7 @@ static void ReadFolder(LPFVIEW v)
     v->nItems = 0;
     v->dwTotal = 0;
     v->cbDesc = 0;
+    v->cbLong = 0;
     if (v->szPath[0] == '\0') {
         ReadDrives(v);
     } else {
@@ -435,7 +478,7 @@ static int SmallCellWidth(HWND hwnd, LPFVIEW v)
     int i, cx, cxCell = 80;
 
     for (i = 0; i < v->nItems; i++) {
-        cx = TextWidth(hdc, ShownName(&v->lpItems[i])) + 30;
+        cx = TextWidth(hdc, ShownName(v, &v->lpItems[i])) + 30;
         if (cx > cxCell)
             cxCell = cx;
     }
@@ -540,7 +583,7 @@ static void HotRect(HWND hwnd, LPFVIEW v, int i, RECT FAR *lprc)
     } else {
         HDC hdc = GetDC(hwnd);
         HFONT hfOld = SelectObject(hdc, g_hfontUI);
-        int cx = 22 + TextWidth(hdc, ShownName(&v->lpItems[i])) + 4;
+        int cx = 22 + TextWidth(hdc, ShownName(v, &v->lpItems[i])) + 4;
 
         SelectObject(hdc, hfOld);
         ReleaseDC(hwnd, hdc);
@@ -655,7 +698,7 @@ static void PaintItem(HWND hwnd, HDC hdc, LPFVIEW v, int i)
 {
     RECT rc, rcText;
     LPFITEM p = &v->lpItems[i];
-    char szLabel[48];
+    char szLabel[96];
     int cx, x;
 
     CellRect(v, i, &rc);
@@ -667,7 +710,7 @@ static void PaintItem(HWND hwnd, HDC hdc, LPFVIEW v, int i)
             DrawShortcutArrow(hdc, x, rc.top + 2 + 21);
         if (p->bSel && g_cfg.bShadeSelected)
             ShadeArea(hdc, x, rc.top + 2, 32, 32, GetSysColor(COLOR_WINDOW));
-        FitText(hdc, ShownName(p), szLabel, sizeof(szLabel), v->cxCell - 6);
+        FitText(hdc, ShownName(v, p), szLabel, sizeof(szLabel), v->cxCell - 6);
         cx = TextWidth(hdc, szLabel);
         rcText.left = rc.left + (v->cxCell - cx) / 2 - 2;
         rcText.right = rcText.left + cx + 4;
@@ -687,7 +730,7 @@ static void PaintItem(HWND hwnd, HDC hdc, LPFVIEW v, int i)
         ShadeArea(hdc, rc.left + 2, rc.top + 1, 16, 16, GetSysColor(COLOR_WINDOW));
     x = rc.left + 22;
     cx = (v->nMode == FV_DETAILS ? s_cxCol[DC_NAME] : v->cxCell) - 26;
-    FitText(hdc, ShownName(p), szLabel, sizeof(szLabel), cx);
+    FitText(hdc, ShownName(v, p), szLabel, sizeof(szLabel), cx);
     SetRect(&rcText, x, rc.top + 1, x + TextWidth(hdc, szLabel) + 4,
             rc.bottom - 1);
     if (i != v->nRenaming) {
@@ -1153,7 +1196,7 @@ static void DoProperties(HWND hwnd, LPFVIEW v)
 
 static void EndRename(HWND hwnd, LPFVIEW v, BOOL bCommit)
 {
-    char szOld[MAXPATHLEN], szNew[16];
+    char szOld[MAXPATHLEN], szNew[LFN_MAXNAME];
     HWND hwndEdit = v->hwndEdit;
     int i = v->nRenaming;
 
@@ -1166,11 +1209,20 @@ static void EndRename(HWND hwnd, LPFVIEW v, BOOL bCommit)
     InvalidateItem(hwnd, v, i);
     if (!bCommit || i < 0 || i >= v->nItems)
         return;
-    if (lstrcmpi(szNew, v->lpItems[i].szName) == 0 || szNew[0] == '\0')
+    if (lstrcmp(szNew, ItemLong(v, &v->lpItems[i])) == 0 || szNew[0] == '\0')
         return;
     ItemPath(v, i, szOld);
-    if (FileOpRename(hwnd, szOld, szNew))
+    if (FileOpRename(hwnd, szOld, szNew)) {
+        char szShort[14];
         FViewRefreshPath(v->szPath);
+        /* the focus stays on the item under its new name */
+        if (LfnShortOf(v->szPath, szNew, szShort) == 0)
+            for (i = 0; i < v->nItems; i++)
+                if (lstrcmpi(v->lpItems[i].szName, szShort) == 0) {
+                    MoveFocusTo(hwnd, v, i, FALSE, FALSE);
+                    break;
+                }
+    }
 }
 
 LRESULT CALLBACK NSEXPORT RenameEditProc(HWND hwnd, UINT msg, WPARAM wParam,
@@ -1198,6 +1250,7 @@ LRESULT CALLBACK NSEXPORT RenameEditProc(HWND hwnd, UINT msg, WPARAM wParam,
 static void BeginRename(HWND hwnd, LPFVIEW v)
 {
     RECT rc;
+    BOOL bLong;
     int i = v->nFocus;
 
     if (i < 0 || v->lpItems[i].bKind == FK_DRIVE || v->hwndEdit)
@@ -1212,8 +1265,12 @@ static void BeginRename(HWND hwnd, LPFVIEW v)
         rc.right = rc.left + 100;
     }
     v->nRenaming = i;
-    v->hwndEdit = CreateWindow("EDIT", v->lpItems[i].szName,
-                               WS_CHILD | WS_BORDER | ES_AUTOHSCROLL | ES_UPPERCASE,
+    bLong = LfnDrive(v->szPath);
+    if (bLong && v->nMode != FV_LARGE)
+        rc.right = rc.left + 180;
+    v->hwndEdit = CreateWindow("EDIT", ItemLong(v, &v->lpItems[i]),
+                               WS_CHILD | WS_BORDER | ES_AUTOHSCROLL
+                               | (bLong ? 0 : ES_UPPERCASE),
                                rc.left, rc.top, rc.right - rc.left,
                                rc.bottom - rc.top, hwnd, (HMENU)ID_RENAME,
                                g_hInst, NULL);
@@ -1226,7 +1283,7 @@ static void BeginRename(HWND hwnd, LPFVIEW v)
     s_lpfnOldEdit = (WNDPROC)SetWindowLong(v->hwndEdit, GWL_WNDPROC,
                                            (LONG)s_lpfnEditProc);
     SendMessage(v->hwndEdit, WM_SETFONT, (WPARAM)g_hfontUI, 0L);
-    SendMessage(v->hwndEdit, EM_LIMITTEXT, 12, 0L);
+    SendMessage(v->hwndEdit, EM_LIMITTEXT, bLong ? LFN_MAXNAME - 1 : 12, 0L);
     SendMessage(v->hwndEdit, EM_SETSEL, 0, MAKELONG(0, -1));
     ShowWindow(v->hwndEdit, SW_SHOW);
     SetFocus(v->hwndEdit);
@@ -1434,7 +1491,10 @@ static void OnDropFiles(HWND hwnd, LPFVIEW v, HDROP hDrop)
 
     n = DragQueryFile(hDrop, (UINT)-1, NULL, 0);
     for (i = 0; i < n; i++) {
-        DragQueryFile(hDrop, i, szFile, sizeof(szFile));
+        char szDropped[LFN_MAXPATH];
+        DragQueryFile(hDrop, i, szDropped, sizeof(szDropped));
+        if (!LfnShortPath(szDropped, szFile, sizeof(szFile)))
+            lstrcpyn(szFile, szDropped, sizeof(szFile));
         PathListAdd(&hList, szFile);
     }
     DragFinish(hDrop);
@@ -1544,7 +1604,9 @@ static void DoSelectFiles(HWND hwnd, LPFVIEW v)
     if (n == IDCANCEL)
         return;
     for (i = 0; i < v->nItems; i++)
-        if (v->lpItems[i].bKind != FK_DRIVE && MatchSpecList(v->lpItems[i].szName, szSpec))
+        if (v->lpItems[i].bKind != FK_DRIVE
+            && (MatchSpecList(v->lpItems[i].szName, szSpec)
+                || MatchSpecList(ItemLong(v, &v->lpItems[i]), szSpec)))
             SelectItem(hwnd, v, i, n == IDOK);
     Notify(hwnd, FVN_SELCHANGE, 0L);
 }
@@ -1884,7 +1946,8 @@ static void OnChar(HWND hwnd, LPFVIEW v, WPARAM ch)
     ch = (WPARAM)(DWORD)AnsiUpper((LPSTR)(DWORD)ch);
     for (n = 1; n <= v->nItems; n++) {
         i = (v->nFocus + n) % v->nItems;
-        if ((WPARAM)(BYTE)v->lpItems[i].szName[0] == ch) {
+        if ((WPARAM)(BYTE)(DWORD)AnsiUpper((LPSTR)(DWORD)(BYTE)
+                ItemLong(v, &v->lpItems[i])[0]) == ch) {
             MoveFocusTo(hwnd, v, i, FALSE, FALSE);
             return;
         }
@@ -1980,13 +2043,15 @@ static void HideHint(HWND hwnd, LPFVIEW v)
 
 static void ShowHint(LPFVIEW v, int i)
 {
-    char szHint[200], szSize[24], szDate[16], szTime[16], szType[32];
+    char szHint[LFN_MAXNAME + 200], szSize[24], szDate[16], szTime[16], szType[32];
     LPFITEM p = &v->lpItems[i];
     POINT pt;
     int n = 0;
 
     TypeName(p, szType);
-    n = wsprintf(szHint, "%s", (LPSTR)ShownName(p));
+    n = wsprintf(szHint, "%s", (LPSTR)ShownName(v, p));
+    if (p->wLong)                   /* and the name for MS-DOS programs */
+        n += wsprintf(szHint + n, " (%s)", (LPSTR)p->szName);
     if (p->wDesc)
         n += wsprintf(szHint + n, "\n%s", v->lpDesc + p->wDesc - 1);
     n += wsprintf(szHint + n, "\n%s", (LPSTR)szType);
@@ -2461,6 +2526,8 @@ LRESULT CALLBACK NSEXPORT FViewWndProc(HWND hwnd, UINT msg, WPARAM wParam,
                 free(v->lpItems);
             if (v->lpDesc)
                 free(v->lpDesc);
+            if (v->lpLong)
+                free(v->lpLong);
             free(v);
             SetWindowLong(hwnd, 0, 0L);
         }

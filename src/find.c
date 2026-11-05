@@ -97,7 +97,7 @@ static BOOL ContainsText(LPCSTR lpPath)
 
 static BOOL Matches(LPCSTR lpName)
 {
-    char szName[16];
+    char szName[LFN_MAXNAME + 1];
     int n, m, i;
 
     if (s_bWild) {
@@ -145,47 +145,61 @@ static void SetStatus(LPCSTR lpText)
 
 static BOOL Search(LPCSTR lpDir, BOOL bSubdirs)
 {
-    struct find_t ft;
+    LPLFNFIND f;
     char szPath[MAXPATHLEN];
+    BOOL bOK = TRUE;
 
     if (!PumpFind())
         return FALSE;
-    SetStatus(lpDir);
+    {
+        char szShown[LFN_MAXPATH];
+        LfnDisplayPath(lpDir, szShown, sizeof(szShown));
+        SetStatus(szShown);
+    }
+    /* a search per folder level, from the heap */
+    f = (LPLFNFIND)malloc(sizeof(LFNFIND));
+    if (!f)
+        return FALSE;
     lstrcpy(szPath, lpDir);
     PathAppend(szPath, "*.*");
-    if (_dos_findfirst(szPath, _A_NORMAL | _A_RDONLY | _A_SUBDIR | _A_ARCH
-                       | (g_cfg.bShowHidden ? _A_HIDDEN | _A_SYSTEM : 0), &ft) != 0)
-        return TRUE;
-    do {
-        if (ft.name[0] == '.')
-            continue;
-        lstrcpy(szPath, lpDir);
-        PathAppend(szPath, ft.name);
-        if (Matches(ft.name)
-            && (!s_szText[0] || (!(ft.attrib & _A_SUBDIR) && ContainsText(szPath))))
-            AddResult(szPath);
-        if (!s_hwndFind)
-            return FALSE;
-        if (s_nResults >= MAX_RESULTS)
-            return FALSE;
-        if ((ft.attrib & _A_SUBDIR) && bSubdirs) {
-            /* _dos_find state lives in ft, so recursing is safe */
-            if (!Search(szPath, TRUE))
-                return FALSE;
-        }
-    } while (_dos_findnext(&ft) == 0);
-    return TRUE;
+    if (LfnFindFirst(szPath, _A_NORMAL | _A_RDONLY | _A_SUBDIR | _A_ARCH
+                     | (g_cfg.bShowHidden ? _A_HIDDEN | _A_SYSTEM : 0), f) == 0) {
+        do {
+            if (f->szShort[0] == '.')
+                continue;
+            lstrcpy(szPath, lpDir);
+            PathAppend(szPath, f->szShort);
+            /* the long name or the 8.3 name matches */
+            if ((Matches(f->szName) || Matches(f->szShort))
+                && (!s_szText[0] || (!(f->bAttr & _A_SUBDIR) && ContainsText(szPath))))
+                AddResult(szPath);
+            if (!s_hwndFind || s_nResults >= MAX_RESULTS) {
+                bOK = FALSE;
+                break;
+            }
+            if ((f->bAttr & _A_SUBDIR) && bSubdirs && !Search(szPath, TRUE)) {
+                bOK = FALSE;
+                break;
+            }
+        } while (LfnFindNext(f) == 0);
+    }
+    LfnFindClose(f);
+    free(f);
+    return bOK;
 }
 
 static void StartSearch(HWND hDlg)
 {
-    char szDir[MAXPATHLEN], szStatus[48];
+    char szDir[MAXPATHLEN], szStatus[48], szTyped[LFN_MAXPATH];
     LPSTR p;
 
     if (s_bSearching)
         return;
     GetDlgItemText(hDlg, IDC_FINDNAME, s_szPattern, sizeof(s_szPattern));
-    GetDlgItemText(hDlg, IDC_FINDDIR, szDir, sizeof(szDir));
+    GetDlgItemText(hDlg, IDC_FINDDIR, szTyped, sizeof(szTyped));
+    /* a long path is looked up as its 8.3 path */
+    if (!LfnShortPath(szTyped, szDir, sizeof(szDir)))
+        lstrcpyn(szDir, szTyped, sizeof(szDir));
     GetDlgItemText(hDlg, IDC_FINDTEXT, s_szText, sizeof(s_szText));
     s_bCase = IsDlgButtonChecked(hDlg, IDC_FINDCASE);
     CfgSetInt("Find", "MatchCase", s_bCase);
@@ -387,7 +401,7 @@ static void DrawResult(DRAWITEMSTRUCT FAR *lpdis)
 {
     HDC hdc = lpdis->hDC;
     RECT rc = lpdis->rcItem, rcText;
-    char szPath[RESULT_LEN];
+    char szPath[RESULT_LEN], szShown[LFN_MAXPATH], szName[LFN_MAXNAME];
     BOOL bSel = (lpdis->itemState & ODS_SELECTED) != 0;
     HFONT hfOld;
 
@@ -401,18 +415,22 @@ static void DrawResult(DRAWITEMSTRUCT FAR *lpdis)
                   GetSysColor(COLOR_WINDOW));
     hfOld = SelectObject(hdc, g_hfontUI);
     SetBkMode(hdc, TRANSPARENT);
+    /* long names, shortened to the column */
+    LfnLongName(szPath, szShown, sizeof(szShown));
+    FitText(hdc, szShown, szName, sizeof(szName), COL_NAME_CX - 28);
     SetRect(&rcText, rc.left + 20, rc.top + 1,
-            rc.left + 24 + TextWidth(hdc, PathFileName(szPath)), rc.bottom - 1);
+            rc.left + 24 + TextWidth(hdc, szName), rc.bottom - 1);
     if (bSel)
         FillSolid(hdc, &rcText, GetSysColor(COLOR_HIGHLIGHT));
     SetTextColor(hdc, GetSysColor(bSel ? COLOR_HIGHLIGHTTEXT : COLOR_WINDOWTEXT));
     rcText.left += 2;
-    DrawText(hdc, PathFileName(szPath), -1, &rcText,
+    DrawText(hdc, szName, -1, &rcText,
              DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
     SetTextColor(hdc, GetSysColor(COLOR_WINDOWTEXT));
     PathParent(szPath);
+    LfnDisplayPath(szPath, szShown, sizeof(szShown));
     SetRect(&rcText, rc.left + COL_NAME_CX, rc.top, rc.right, rc.bottom);
-    DrawText(hdc, szPath, -1, &rcText, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+    DrawText(hdc, szShown, -1, &rcText, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
     SelectObject(hdc, hfOld);
 }
 

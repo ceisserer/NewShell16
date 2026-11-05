@@ -26,6 +26,43 @@ tools/emu/winemu.py --windir ~/win31/Win/WINDOWS --work /tmp/nsemu --out shots \
   comma separated), `type:TEXT` (`_` for spaces), `move:DX,DY`,
   `goto:X,Y`, `click:N`, `dclick:N`, `down:N`, `up:N`.
 
+`--lfn` starts DOSBox-X's DOS as version 7.1 with long file names
+(`[dos] lfn=true`), the same LFN API that DOSLFN, LFNDOS or Windows 95
+give: files made in the scratch drive (`WORK/c`) from Linux keep their
+long names. Without it NewShell16 runs with 8.3 names. Example: the Open
+dialog of Notepad in the Windows XP look:
+
+```sh
+mkdir -p "/tmp/nsemu/c/My Documents" && echo hi > "/tmp/nsemu/c/My Documents/A long name.txt"
+tools/emu/winemu.py --lfn --windir ~/win31/Win/WINDOWS --work /tmp/nsemu --out shots \
+    --set 'WIN.INI:windows:run=NOTEPAD.EXE' --set 'NEWSHELL.INI:FileDialog:Style=2' \
+    --script "sleep:30 key:alt+f key:o sleep:3 type:C:\\My_Documents key:Return sleep:2 shot:open.png"
+```
+
+`tools/emu/ofntest/ofntest.c` checks what the dialogs return: it calls
+`GetOpenFileName` (multiple selection), `GetSaveFileName` (default
+extension `TXT`) and `GetOpenFileName` with `C:\MYDOCU~1\*.WRI`, and
+writes the results to `C:\OFN.TXT`:
+
+```sh
+wcc -q -bt=windows -ml -zW -2 -i=$WATCOM/h -i=$WATCOM/h/win tools/emu/ofntest/ofntest.c -fo=/tmp/ofn.obj
+wlink system windows name /tmp/OFN.EXE option quiet library commdlg.lib file /tmp/ofn.obj
+wrc -q -bt=windows -31 /tmp/OFN.EXE
+tools/emu/winemu.py --lfn ... --install /tmp/OFN.EXE=OFN.EXE --set 'WIN.INI:windows:run=C:\OFN.EXE' \
+    --script 'sleep:30 type:C:\\My_Documents key:Return sleep:2 type:"A_long_name.txt"_"Another_one.txt" key:Return ...'
+```
+
+```
+OPEN r=1 file=[C:\MYDOCU~1 LETTER~1.TXT NOTESF~1.TXT] title=[] off=12 ext=0 idx=1 flags=00001204
+SAVE r=1 file=[C:\MYDOCU~1\REPORT~1.TXT] title=[REPORT~1.TXT] off=12 ext=21 idx=1 flags=00000006
+```
+
+With `--set 'SYSTEM.INI:boot:display.drv=vbesvga.drv'` and the other
+settings of `tools/emu/mkvbe.py` in Retheme16 (the files of
+[vbesvga.drv](https://github.com/PluMGMK/vbesvga.drv) installed into
+`WINDOWS/SYSTEM` with `--install`), DOSBox-X runs Windows at 800x600 with
+65536 colours, for the XP and 11 looks with long names.
+
 Setting `taskman.exe=` to NewShell16 makes Ctrl+Esc open NewShell16's Task
 Manager (or, with `--set 'NEWSHELL.INI:Taskbar:CtrlEscStart=1'`, the Start
 menu), which allows driving most of the shell from the keyboard.

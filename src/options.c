@@ -106,6 +106,8 @@ static const OPTDEF s_opts[] = {
     { 3, OT_CHECK,    "&Ask Move, Copy or Alias after every drag", "Folders", "AskOnDrop", 0 },
     { 3, OT_CHECK,    "Drags c&opy (Shift moves)", "Folders", "DragCopy", 0 },
     { 3, OT_CHECK,    "&Icons next to the results of Find", "Find", "Icons", 1 },
+    { 3, OT_CHECK,    "&Long file names (Windows 95, DOSLFN or LFNDOS)", "Folders", "LongNames", 1 },
+    { 3, OT_COMBO,    "Open and Sa&ve As:", "FileDialog", "Style", 0 },
 
     { 4, OT_CHECK,    "Run &StartUp programs (when NewShell16 is the shell)", "Startup", "Run", 1 },
     { 4, OT_CHECK,    "Let setup programs add &groups (Program Manager DDE)", "Startup", "ProgmanDDE", 1 },
@@ -192,6 +194,12 @@ static void MakeControls(HWND hDlg)
                     SendMessage(hwnd, CB_ADDSTRING, 0, (LPARAM)(LPSTR)"Windows XP");
                     SendMessage(hwnd, CB_ADDSTRING, 0, (LPARAM)(LPSTR)"Windows 95");
                     SendMessage(hwnd, CB_ADDSTRING, 0, (LPARAM)(LPSTR)"Windows 11");
+                } else if (lstrcmp(o->lpSection, "FileDialog") == 0) {   /* NSDLG.DLL */
+                    SendMessage(hwnd, CB_ADDSTRING, 0, (LPARAM)(LPSTR)"as the taskbar look");
+                    SendMessage(hwnd, CB_ADDSTRING, 0, (LPARAM)(LPSTR)"Windows 95");
+                    SendMessage(hwnd, CB_ADDSTRING, 0, (LPARAM)(LPSTR)"Windows XP");
+                    SendMessage(hwnd, CB_ADDSTRING, 0, (LPARAM)(LPSTR)"Windows 11");
+                    SendMessage(hwnd, CB_ADDSTRING, 0, (LPARAM)(LPSTR)"Windows 3.1 (as they were)");
                 } else if (lstrcmp(o->lpKey, "Style") == 0) {    /* startxp.c */
                     SendMessage(hwnd, CB_ADDSTRING, 0, (LPARAM)(LPSTR)"as the taskbar look");
                     SendMessage(hwnd, CB_ADDSTRING, 0, (LPARAM)(LPSTR)"classic");
@@ -332,6 +340,7 @@ static void ApplyOptions(void)
     DesktopCreate();
     FViewApplyOptions();
     FolderBarsChanged();
+    FileDlgApply();
     if (g_hwndTaskbar)
         InvalidateRect(g_hwndTaskbar, NULL, FALSE);
 }

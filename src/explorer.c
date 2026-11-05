@@ -51,7 +51,10 @@ typedef struct tagTNODE {
     BYTE bLevel;
     BYTE bFlags;
     BYTE bIcon;                     /* IDI_* for drives */
+    WORD wLong;                     /* long name: offset + 1 in the pool */
 } TNODE, FAR *LPTNODE;
+
+#define TREEPOOL_SIZE   16000
 
 typedef struct tagEXPLORER {
     LPTNODE lpNodes;
@@ -65,6 +68,8 @@ typedef struct tagEXPLORER {
     HWND    hwndToolbar;
     BOOL    bToolbar, bStatusBar;   /* View > Toolbar, Status Bar */
     BOOL    bTreeOnly;              /* Browse Folders: only the tree */
+    LPSTR   lpLong;                 /* long names of the nodes */
+    WORD    cbLong;
 } EXPLORER, FAR *LPEXPLORER;
 
 #define WM_NS_TREEMENU  (WM_USER + 140)     /* tree right click, lParam = point */
@@ -138,9 +143,51 @@ static void DeleteNodes(LPEXPLORER e, int nAt, int nCount)
         SendMessage(e->hwndTree, LB_DELETESTRING, nAt, 0L);
 }
 
+static LPCSTR s_lpSortPool;
+#define NODENAME(pool, n)   ((n)->wLong ? (LPCSTR)((pool) + (n)->wLong - 1) \
+                                        : (LPCSTR)(n)->szName)
+
 static int CompareNodes(const void *a, const void *b)
 {
-    return lstrcmpi(((LPTNODE)a)->szName, ((LPTNODE)b)->szName);
+    return lstrcmpi(NODENAME(s_lpSortPool, (LPTNODE)a), NODENAME(s_lpSortPool, (LPTNODE)b));
+}
+
+/* Drops the long names of collapsed branches from the pool */
+static void CompactPool(LPEXPLORER e)
+{
+    LPSTR lpNew;
+    int i;
+
+    if (!e->lpLong || !(lpNew = (LPSTR)malloc(TREEPOOL_SIZE)))
+        return;
+    e->cbLong = 0;
+    for (i = 0; i < e->nNodes; i++)
+        if (e->lpNodes[i].wLong) {
+            LPCSTR lp = e->lpLong + e->lpNodes[i].wLong - 1;
+            lstrcpy(lpNew + e->cbLong, lp);
+            e->lpNodes[i].wLong = e->cbLong + 1;
+            e->cbLong += lstrlen(lp) + 1;
+        }
+    free(e->lpLong);
+    e->lpLong = lpNew;
+}
+
+/* Stores a long name; 0 when the pool is full (the 8.3 name is shown) */
+static WORD AddLongName(LPEXPLORER e, LPCSTR lpName)
+{
+    WORD cb = (WORD)lstrlen(lpName) + 1, w;
+
+    if (!e->lpLong) {
+        e->lpLong = (LPSTR)malloc(TREEPOOL_SIZE);
+        if (!e->lpLong)
+            return 0;
+    }
+    if (e->cbLong + cb > TREEPOOL_SIZE)
+        return 0;
+    w = e->cbLong + 1;
+    lstrcpy(e->lpLong + e->cbLong, lpName);
+    e->cbLong += cb;
+    return w;
 }
 
 static BOOL HasSubdirs(LPCSTR lpPath)
@@ -148,6 +195,7 @@ static BOOL HasSubdirs(LPCSTR lpPath)
     struct find_t ft;
     char szPattern[MAXPATHLEN + 4];
 
+    /* the 8.3 names are enough here */
     lstrcpy(szPattern, lpPath);
     PathAppend(szPattern, "*.*");
     if (_dos_findfirst(szPattern, _A_SUBDIR | _A_HIDDEN | _A_SYSTEM | _A_RDONLY, &ft) != 0)
@@ -172,7 +220,7 @@ static void Collapse(LPEXPLORER e, int i)
 
 static void Expand(LPEXPLORER e, int i)
 {
-    struct find_t ft;
+    LFNFIND ft;
     char szPath[MAXPATHLEN], szPattern[MAXPATHLEN + 4], szChild[MAXPATHLEN];
     LPTNODE lpNew;
     int nNew = 0, j, nDrive;
@@ -187,6 +235,8 @@ static void Expand(LPEXPLORER e, int i)
         return;
     if (g_cfg.bShowHidden)
         uAttr |= _A_HIDDEN | _A_SYSTEM;
+    if (e->cbLong > TREEPOOL_SIZE / 2)
+        CompactPool(e);
 
     NodePath(e, i, szPath);
     nDrive = (szPath[0] & ~0x20) - 'A';
@@ -194,19 +244,23 @@ static void Expand(LPEXPLORER e, int i)
     lstrcpy(szPattern, szPath);
     PathAppend(szPattern, "*.*");
     uOldMode = SetErrorMode(1);
-    if (_dos_findfirst(szPattern, uAttr, &ft) == 0) {
+    if (LfnFindFirst(szPattern, uAttr, &ft) == 0) {
         do {
-            if (!(ft.attrib & _A_SUBDIR) || ft.name[0] == '.')
+            if (!(ft.bAttr & _A_SUBDIR) || ft.szShort[0] == '.')
                 continue;
-            if (!g_cfg.bShowHidden && (ft.attrib & (_A_HIDDEN | _A_SYSTEM)))
+            if (!g_cfg.bShowHidden && (ft.bAttr & (_A_HIDDEN | _A_SYSTEM)))
                 continue;
             _fmemset(&lpNew[nNew], 0, sizeof(TNODE));
-            lstrcpyn(lpNew[nNew].szName, ft.name, sizeof(lpNew[0].szName));
+            lstrcpyn(lpNew[nNew].szName, ft.szShort, sizeof(lpNew[0].szName));
+            if (lstrcmp(ft.szName, ft.szShort) != 0)
+                lpNew[nNew].wLong = AddLongName(e, ft.szName);
             lpNew[nNew].bLevel = (BYTE)(e->lpNodes[i].bLevel + 1);
             if (++nNew >= 256)
                 break;
-        } while (_dos_findnext(&ft) == 0);
+        } while (LfnFindNext(&ft) == 0);
     }
+    LfnFindClose(&ft);
+    s_lpSortPool = e->lpLong;
     if (nNew > 1)
         qsort(lpNew, nNew, sizeof(TNODE), CompareNodes);
     if (bLocal)
@@ -369,13 +423,14 @@ static void DrawNode(LPEXPLORER e, DRAWITEMSTRUCT FAR *lpdis)
 
     hfOld = SelectObject(hdc, g_hfontUI);
     SetBkMode(hdc, TRANSPARENT);
-    SetRect(&rcText, x, rc.top + 1, x + TextWidth(hdc, n->szName) + 4, rc.bottom - 1);
+    SetRect(&rcText, x, rc.top + 1, x + TextWidth(hdc, NODENAME(e->lpLong, n)) + 4,
+            rc.bottom - 1);
     if (bSel)
         FillSolid(hdc, &rcText, GetSysColor(GetFocus() == e->hwndTree
                                             ? COLOR_HIGHLIGHT : COLOR_BTNFACE));
     SetTextColor(hdc, GetSysColor(bSel && GetFocus() == e->hwndTree
                                   ? COLOR_HIGHLIGHTTEXT : COLOR_WINDOWTEXT));
-    DrawText(hdc, n->szName, -1, &rcText,
+    DrawText(hdc, NODENAME(e->lpLong, n), -1, &rcText,
              DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
     if (lpdis->itemState & ODS_FOCUS)
         DrawItemFocus(hdc, &rcText, bSel && GetFocus() == e->hwndTree);
@@ -447,15 +502,17 @@ static void ShowBars(HWND hwnd, LPEXPLORER e)
 
 static void SetTitle(HWND hwnd, LPEXPLORER e)
 {
-    char szTitle[MAXPATHLEN + 16];
+    char szTitle[LFN_MAXPATH + 24], szPath[LFN_MAXPATH];
     LPCSTR lpPath = FViewGetPath(e->hwndView);
 
     if (e->bTreeOnly) {
-        wsprintf(szTitle, "Browse Folders - %s", *lpPath ? lpPath : (LPCSTR)"Computer");
+        LfnDisplayPath(lpPath, szPath, sizeof(szPath));
+        wsprintf(szTitle, "Browse Folders - %s", *lpPath ? (LPCSTR)szPath : (LPCSTR)"Computer");
         SetWindowText(hwnd, szTitle);
         return;
     }
-    wsprintf(szTitle, "File System - %s", *lpPath ? lpPath : (LPCSTR)"Computer");
+    LfnDisplayPath(lpPath, szPath, sizeof(szPath));
+    wsprintf(szTitle, "File System - %s", *lpPath ? (LPCSTR)szPath : (LPCSTR)"Computer");
     SetWindowText(hwnd, szTitle);
 }
 
@@ -937,6 +994,8 @@ LRESULT CALLBACK NSEXPORT ExplorerWndProc(HWND hwnd, UINT msg, WPARAM wParam,
             CfgSetStr("Explorer", "Last", FViewGetPath(e->hwndView));
         if (e) {
             free(e->lpNodes);
+            if (e->lpLong)
+                free(e->lpLong);
             free(e);
             SetWindowLong(hwnd, 0, 0L);
         }

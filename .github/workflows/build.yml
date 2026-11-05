@@ -125,6 +125,7 @@ jobs:
           path: |
             build/newshell.exe
             build/nshook.dll
+            build/nsdlg.dll
             build/*.map
 
   snapshot:

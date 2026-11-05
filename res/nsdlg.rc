@@ -1,0 +1,34 @@
+/*
+ * NewShell16 - Copyright (C) 2026 NewShell16 contributors
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ *
+ * nsdlg.rc - resources of NSDLG.DLL (the Open and Save As dialogs)
+ */
+#include <windows.h>
+#include "nsdlgres.h"
+
+IDI_DCOMPUTER   ICON    "computer.ico"
+IDI_DFLOPPY     ICON    "floppy.ico"
+IDI_DHDD        ICON    "hdd.ico"
+IDI_DCDROM      ICON    "cdrom.ico"
+IDI_DNETDRV     ICON    "netdrv.ico"
+IDI_DFOLDER     ICON    "folder.ico"
+IDI_DDOCS       ICON    "sm_documents.ico"
+IDI_DDOCUMENT   ICON    "document.ico"
+
+IDB_DLGSMALL    BITMAP  "small.bmp"
+
+/* the controls are made by the dialog procedure, for the look chosen */
+IDD_NSFILE DIALOG 20, 20, 280, 170
+STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Open"
+FONT 8, "MS Sans Serif"
+BEGIN
+END
+
+IDD_NSFILESIZE DIALOG 20, 20, 340, 200
+STYLE WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME
+CAPTION "Open"
+FONT 8, "MS Sans Serif"
+BEGIN
+END

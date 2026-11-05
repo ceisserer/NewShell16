@@ -85,6 +85,7 @@ static const CFGENTRY s_entries[] = {
     { "Folders",     "DragCopy",      &g_cfg.bDragCopy,        FALSE },
     { "Folders",     "FlatToolbar",   &g_cfg.bFlatToolbar,     FALSE },
     { "Folders",     "HideExtensions", &g_cfg.bHideExt,        FALSE },
+    { "Folders",     "LongNames",     &g_cfg.bLongNames,       TRUE  },
 };
 
 void CfgLoad(void)
@@ -95,6 +96,7 @@ void CfgLoad(void)
         *s_entries[i].pValue = CfgGetInt(s_entries[i].lpSection,
                                          s_entries[i].lpKey,
                                          s_entries[i].bDefault) != 0;
+    LfnEnable(g_cfg.bLongNames);
 }
 
 void CfgSave(void)

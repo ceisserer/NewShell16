@@ -34,6 +34,7 @@ typedef struct tagPROPDATA {
     char     szPath[MAXPATHLEN];    /* the single item, if nCount == 1 */
     unsigned uAttr;
     BOOL     bAttrValid;
+    BOOL     bLong;             /* the item has a long name */
     BOOL     bDrive;
     DWORD    dwUsed, dwFree;
 } PROPDATA;
@@ -313,7 +314,18 @@ static void FillItem(HWND hDlg)
 
     SendDlgItemMessage(hDlg, IDC_PROPICON, STM_SETICON,
                        (WPARAM)IconForFile(s_pd.szPath, bDir), 0L);
-    SetDlgItemText(hDlg, IDC_PROPNAME, ft.name);
+    {
+        /* the long name, and the 8.3 name programs for MS-DOS and Windows
+           3.1 know it by */
+        char szLong[LFN_MAXNAME + 16];
+        if (LfnLongName(s_pd.szPath, szLong, LFN_MAXNAME) && lstrcmp(szLong, ft.name) != 0) {
+            if (bDir)
+                wsprintf(szLong + lstrlen(szLong), " (%s)", (LPSTR)ft.name);
+            SetDlgItemText(hDlg, IDC_PROPNAME, szLong);
+            s_pd.bLong = TRUE;
+        } else
+            SetDlgItemText(hDlg, IDC_PROPNAME, ft.name);
+    }
     if (bDir)
         lstrcpy(szText, "Folder");
     else {
@@ -324,7 +336,11 @@ static void FillItem(HWND hDlg)
     SetLine(hDlg, 0, "Type:", szText);
     lstrcpy(szDir, s_pd.szPath);
     PathParent(szDir);
-    SetLine(hDlg, 1, "Location:", szDir);
+    {
+        char szLong[LFN_MAXPATH];
+        LfnDisplayPath(szDir, szLong, sizeof(szLong));
+        SetLine(hDlg, 1, "Location:", szLong);
+    }
     if (bDir) {
         FileOpMeasure(s_pd.szPath, &dwSize, &nFiles, &nDirs);
         FormatBytes(dwSize, szSize);
@@ -338,7 +354,10 @@ static void FillItem(HWND hDlg)
         else
             lstrcpy(szText, szSize);
         SetLine(hDlg, 2, "Size:", szText);
-        SetLine(hDlg, 3, "", "");
+        if (s_pd.bLong)
+            SetLine(hDlg, 3, "MS-DOS name:", ft.name);
+        else
+            SetLine(hDlg, 3, "", "");
     }
     FormatDate(ft.wr_date, ft.wr_time, szText);
     SetLine(hDlg, 4, "Modified:", szText);

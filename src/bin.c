@@ -52,6 +52,7 @@ typedef struct tagBINITEM {
     char  szOrig[MAXPATHLEN];
     DWORD dwSize;
     BOOL  bDir;
+    WORD  wLong;            /* the long original path: offset + 1 in the pool */
 } BINITEM, FAR *LPBINITEM;
 
 static HWND      s_hwndBin;
@@ -59,6 +60,15 @@ static HWND      s_hwndList;
 static LPBINITEM s_lpItems;
 static int       s_nItems;
 static int       s_cyHeader, s_cyStatus;
+static LPSTR     s_lpLongPool;      /* long paths ([Long] in NSBIN.INI) */
+static WORD      s_cbLongPool;
+#define LONGPOOL_MAX    24000
+
+/* The original path as shown: the long one if known */
+static LPCSTR OrigShown(LPBINITEM b)
+{
+    return b->wLong ? s_lpLongPool + b->wLong - 1 : b->szOrig;
+}
 
 static void BinDir(char cDrive, LPSTR lpBuf)
 {
@@ -124,8 +134,17 @@ BOOL BinSend(LPCSTR lpPath)
             dwSize = ft.size;
     }
 
-    if (!FileOpMoveTo(NULL, szPath, szDest))
-        return FALSE;
+    {
+        /* the long path, to restore the long name (the item loses it in
+           the Bin, where it has its generated name) */
+        char szLong[LFN_MAXPATH];
+        if (LfnLongPath(szPath, szLong, sizeof(szLong)) && lstrcmp(szLong, szPath) != 0) {
+            if (!FileOpMoveTo(NULL, szPath, szDir, szName))
+                return FALSE;
+            WritePrivateProfileString("Long", szName, szLong, szIni);
+        } else if (!FileOpMoveTo(NULL, szPath, szDir, szName))
+            return FALSE;
+    }
     WritePrivateProfileString("Files", szName, szPath, szIni);
     wsprintf(szSize, "%lu%s", dwSize, (LPSTR)(bDir ? ",D" : ""));
     WritePrivateProfileString("Sizes", szName, szSize, szIni);
@@ -161,6 +180,16 @@ static void LoadDrive(char cDrive)
             for (q = szSize; *q >= '0' && *q <= '9'; q++)
                 b->dwSize = b->dwSize * 10 + (*q - '0');
             b->bDir = (*q == ',');
+            b->wLong = 0;
+            if (s_lpLongPool) {
+                char szLong[LFN_MAXPATH];
+                int cb = GetPrivateProfileString("Long", p, "", szLong, sizeof(szLong), szIni);
+                if (cb > 0 && s_cbLongPool + cb + 1 < LONGPOOL_MAX) {
+                    lstrcpy(s_lpLongPool + s_cbLongPool, szLong);
+                    b->wLong = s_cbLongPool + 1;
+                    s_cbLongPool += cb + 1;
+                }
+            }
             if (b->szOrig[0])
                 s_nItems++;
         }
@@ -175,6 +204,9 @@ static void LoadBin(void)
     if (!s_lpItems)
         s_lpItems = (LPBINITEM)malloc(MAX_BIN * sizeof(BINITEM));
     s_nItems = 0;
+    if (!s_lpLongPool)
+        s_lpLongPool = (LPSTR)malloc(LONGPOOL_MAX);
+    s_cbLongPool = 0;
     if (!s_lpItems)
         return;
     for (d = 2; d < 26; d++)
@@ -210,31 +242,38 @@ static void Forget(LPBINITEM b)
     BinIni(b->szOrig[0], szIni);
     WritePrivateProfileString("Files", b->szBinName, NULL, szIni);
     WritePrivateProfileString("Sizes", b->szBinName, NULL, szIni);
+    WritePrivateProfileString("Long", b->szBinName, NULL, szIni);
 }
 
 /* Creates the missing folders of a path */
 static void MakeParents(LPCSTR lpPath)
 {
-    char szDir[MAXPATHLEN];
-    unsigned uAttr;
+    char szDir[LFN_MAXPATH];
+    WORD wAttr;
 
     lstrcpy(szDir, lpPath);
-    if (!PathParent(szDir) || _dos_getfileattr(szDir, &uAttr) == 0)
+    if (!PathParent(szDir) || LfnGetAttr(szDir, &wAttr) == 0)
         return;
     MakeParents(szDir);
-    mkdir(szDir);
+    LfnMkDir(szDir);
 }
 
 static void Restore(HWND hwnd, LPBINITEM b)
 {
-    char szFrom[MAXPATHLEN], szDir[MAXPATHLEN];
+    char szFrom[MAXPATHLEN], szDir[MAXPATHLEN], szOrig[LFN_MAXPATH];
+    char szName[LFN_MAXNAME];
 
     BinItemPath(b, szFrom);
-    MakeParents(b->szOrig);
-    if (FileOpMoveTo(hwnd, szFrom, b->szOrig)) {
+    /* the long path where the drive still has long names */
+    lstrcpy(szOrig, b->wLong && LfnDrive(b->szOrig) ? OrigShown(b) : b->szOrig);
+    MakeParents(szOrig);
+    lstrcpyn(szName, PathFileName(szOrig), sizeof(szName));
+    PathParent(szOrig);
+    if (!LfnShortPath(szOrig, szDir, sizeof(szDir)))
+        lstrcpyn(szDir, szOrig, sizeof(szDir));
+    if (FileOpMoveTo(hwnd, szFrom, szDir, szName)) {
         Forget(b);
-        lstrcpy(szDir, b->szOrig);
-        if (PathParent(szDir)) {
+        {
             FViewRefreshPath(szDir);
             ExplorerRefreshPath(szDir);
         }
@@ -345,7 +384,7 @@ static void DrawEntry(DRAWITEMSTRUCT FAR *lpdis)
     HDC hdc = lpdis->hDC;
     RECT rc = lpdis->rcItem, rcText;
     LPBINITEM b;
-    char szName[MAXPATHLEN], szSize[24];
+    char szName[LFN_MAXPATH], szSize[24];
     BOOL bSel = (lpdis->itemState & ODS_SELECTED) != 0;
     HFONT hfOld;
 
@@ -361,7 +400,7 @@ static void DrawEntry(DRAWITEMSTRUCT FAR *lpdis)
     DrawIconSmall(hdc, rc.left + 2, rc.top + 1,
                   b->bDir ? IconStock(IDI_FOLDER) : IconForFile(b->szOrig, FALSE),
                   GetSysColor(COLOR_WINDOW));
-    lstrcpy(szName, b->szOrig);
+    lstrcpy(szName, OrigShown(b));
     SetRect(&rcText, rc.left + 20, rc.top, rc.left + COL_NAME_CX, rc.bottom);
     {
         RECT rcSel = rcText;

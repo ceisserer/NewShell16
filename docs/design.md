@@ -38,6 +38,8 @@ executable, `NEWSHELL.EXE`.
 | `luna.c` | The Windows XP ("Luna") look of the taskbar, Start button and Start menu; which look is used |
 | `win11.c` | The Windows 11 look of the taskbar |
 | `nshook.c` | `NSHOOK.DLL`: system hooks (see below) |
+| `lfn.c` | Long file names: the LFN API of INT 21h (71xxh), with 8.3 fallbacks (also in `NSDLG.DLL`) |
+| `nsdlg.c` | `NSDLG.DLL`: the Open and Save As dialogs of Windows 95, XP and 11 for every program |
 
 ## Windows 3.1 specifics
 
@@ -218,6 +220,119 @@ Notepad. The taskbar's right-click menu switches it on and off and opens
 when it changes. With the XP look the buttons sit on the blue bar and use
 the rounded task button shape.
 
+## Long file names
+
+Windows 3.1 has no long file names, but DOS can have them: Windows 95's
+MS-DOS 7, and under MS-DOS 6 the drivers
+[LFNDOS](https://www.ibiblio.org/pub/micro/pc-stuff/freedos/files/repositories/latest/pkg-html/lfndos.html)
+(GPL) and [DOSLFN](https://github.com/adoxa/doslfn) (freeware with source)
+provide the LFN API of INT 21h (functions 71xxh: find first/next with long
+and short names, 7160h for the long and short form of a path, rename,
+create, delete...). This is what Calmira LFN used. DOSBox-X has it built
+in (`[dos] lfn=true`).
+
+`lfn.c` calls these functions in real mode through DPMI ("simulate real
+mode interrupt", INT 31h 0300h) with the strings in a 1 KB buffer from
+`GlobalDosAlloc`: Windows 3.1 translates the pointers of the DOS functions
+it knows only, and a driver loaded before Windows lives in real mode. Under
+Windows 95 the same calls reach IFSMgr. Whether a drive has long names is
+asked with 71A0h (volume information, bit 14) once per drive; floppies are
+asked again while they say no.
+
+Every function falls back to the DOS function of 8.3 names when there is
+no driver, the drive has no long names (network, CD-ROM without Joliet
+support) or `[Folders] LongNames=0`, so the rest of the shell has one code
+path.
+
+**8.3 paths stay the shell's own.** Internally, in the INI files, in
+shortcuts and towards Windows (`WinExec`, `ShellExecute`, file handles)
+NewShell16 keeps using 8.3 paths, which every Windows 3.1 program
+understands. Long names are what the user sees and types:
+
+- Folder views read with 714Eh and keep each item's long name in a pool
+  next to its 8.3 name; they show, sort, type-ahead and filter by it. The
+  hint shows the 8.3 name too. Window titles show the long path (7160h).
+- Rename takes a long name on drives with long names (7156h), else an 8.3
+  name as before. New Folder makes "New Folder", "New Folder (2)"...
+- Copy and move give the copy the long name of the original: the file is
+  created under it (716Ch), then filled through its 8.3 name; folders with
+  7139h. A move on the same drive is a rename (7156h), which keeps it.
+  Delete uses 7141h/713Ah, so no orphaned long name entries are left.
+- The Bin records the long path (`[Long]` in `NSBIN.INI`) and restores the
+  item under its long name, also into folders that have to be made again.
+- The File System tree, Find (matches long or 8.3 names), Properties (the
+  long name and the MS-DOS name), desktop shortcuts (the caption), Go To,
+  Find's folder and Run (`"C:\Long Folder\Program.exe" args`) take or show
+  long names; dropped long paths are turned into 8.3 ones.
+
+With Windows for Workgroups 3.11, 32-bit file access must be off when a
+DOS driver provides the long names (VFAT would bypass it).
+
+## The Open and Save As dialogs (NSDLG.DLL)
+
+`NSDLG.DLL` replaces the Open and Save As dialogs of every program with
+those of Windows 95, Windows XP or Windows 11, following the look of the
+shell (the Retheme16 theme's `[Shell] Style=`) or `[FileDialog] Style=`.
+
+**Patch.** `NsDlgInstall()`, called by NEWSHELL.EXE, loads COMMDLG.DLL
+and writes `JMP FAR` over the first five bytes of `GetOpenFileName`
+(ordinal 1) and `GetSaveFileName` (2), as Retheme16 patches USER and GDI:
+the code segment is fixed and page-locked and written through a data
+alias from `AllocSelector`/`PrestoChangoSelector`. The handlers run in the
+calling program's task and on its stack, so the dialog's state (about
+13 KB), its items and the long name pool are on the global heap. The DLL's
+own code and data are fixed. NewShell16 removes the patch when it ends; if
+it crashes, Windows unloads the DLL and its WEP removes it.
+
+**Compatibility.** A program with `OFN_ENABLEHOOK`, `OFN_ENABLETEMPLATE`
+or `OFN_ENABLETEMPLATEHANDLE` (Write, Paintbrush...) expects COMMDLG's
+controls: it gets the original dialog (the JMP is lifted while it runs).
+Everything else is answered as COMMDLG would: `lpstrFile` with an 8.3
+path, the Windows 3.1 format of multiple selection (`C:\DIR A.TXT
+B.TXT`), `nFileOffset`, `nFileExtension`, `lpstrFileTitle`,
+`nFilterIndex`, `lpstrCustomFilter`, `OFN_READONLY`,
+`OFN_EXTENSIONDIFFERENT`, `lpstrDefExt`, `OFN_FILEMUSTEXIST`,
+`OFN_PATHMUSTEXIST`, `OFN_CREATEPROMPT`, `OFN_OVERWRITEPROMPT`,
+`OFN_HIDEREADONLY`, `OFN_SHOWHELP` (the `commdlg_help` message),
+`OFN_NOCHANGEDIR`; the current directory is set as COMMDLG sets it.
+The controls have COMMDLG's ids (`edt1`, `cmb1`, `lst1`, `chx1`).
+
+**Long names to 8.3 names.** Names are shown and typed long; what the
+program gets is the 8.3 alias. Saving under a new long name creates the
+file first (716Ch, empty) so that it has an alias, as Windows 95's
+dialog does for 16-bit programs; the program then overwrites it by its
+8.3 name, which keeps the long name. Without long names the dialog is the
+same with 8.3 names, and names that are not valid 8.3 names are refused.
+
+**Looks.**
+
+- *95*: Look in (an owner-drawn list of the drives and the path), Up One
+  Level, Create New Folder, List and Details, the file list, File name,
+  Files of type, Open as read-only. Fixed size, as in Windows 95.
+- *XP*: the same with Back, a Views button and the places bar (My
+  Computer, My Documents, Windows and `[FileDialog] Place1..6=Caption|Path`);
+  resizable, its size is kept.
+- *11*: Back and Up, an address bar whose parts can be clicked, a search
+  box (filters the folder as you type), New folder and the view, a
+  navigation pane (Quick access, This PC with the drives), details view,
+  the name and type on one line, the buttons below; resizable.
+
+The list (class `NsDlgList`) shows list or details view with icons (the
+program's own for `.EXE`, the associated program's for documents, looked
+up once per extension), multiple selection with Ctrl and Shift,
+type-ahead, Backspace (up), F2 (rename) and F5. My Documents is
+`[FileDialog] Documents=`, else `C:\My Documents` or `C:\DOCS`.
+
+```ini
+[FileDialog]
+Style=0            ; 0 as the shell look, 1 Windows 95, 2 XP, 3 11,
+                   ; 4 the Windows 3.1 dialogs
+Documents=         ; the My Documents place
+Place1=Projects|D:\Projects  ; more places (up to 6)
+View95=0           ; 0 list, 1 details (also ViewXP, View11)
+WidthXP=           ; the size of the resizable dialogs (also Width11...)
+```
+
 ## Command line
 
 | | |
@@ -334,6 +449,7 @@ HiddenColumns=0    ; bit n switches column n off (View > Columns)
 Sort=0             ; 0 name, 1 type, 2 size, 3 date
 Capitalize=0       ; "Calc.exe"
 HideExtensions=0   ; no .EXE for programs with their own icon
+LongNames=1        ; long file names where a driver provides them
 ShadeSelected=1
 FileHints=1
 WindowPos=0        ; new windows: 0 Windows, 1 cascaded, 2 like the last one

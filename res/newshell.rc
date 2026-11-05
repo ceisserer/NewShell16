@@ -161,7 +161,7 @@ BEGIN
         MENUITEM "&Delete",                     CMD_BIN_DELETE
         MENUITEM SEPARATOR
         MENUITEM "&Empty Bin",                  CMD_BIN_EMPTY
-        MENUITEM "P&roperties...",              CMD_BIN_PROPS
+        MENUITEM "Propert&ies...",              CMD_BIN_PROPS
         MENUITEM SEPARATOR
         MENUITEM "&Close",                      CMD_F_CLOSE
     END

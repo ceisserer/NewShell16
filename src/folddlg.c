@@ -151,31 +151,36 @@ static void AddHistory(LPCSTR lpPath)
 BOOL CALLBACK NSEXPORT GotoDlgProc(HWND hDlg, UINT msg, WPARAM wParam,
                                    LPARAM lParam)
 {
-    char szKey[8], szPath[MAXPATHLEN];
+    char szKey[8], szPath[LFN_MAXPATH], szShort[MAXPATHLEN];
     int i;
 
     (void)lParam;
     switch (msg) {
     case WM_INITDIALOG:
+        SendDlgItemMessage(hDlg, IDC_GOTOPATH, CB_LIMITTEXT, LFN_MAXPATH - 1, 0L);
         for (i = 1; i <= GOTO_HISTORY; i++) {
             wsprintf(szKey, "%d", i);
             CfgGetStr("Go To", szKey, "", szPath, sizeof(szPath));
             if (szPath[0])
                 SendDlgItemMessage(hDlg, IDC_GOTOPATH, CB_ADDSTRING, 0, (LPARAM)(LPSTR)szPath);
         }
-        SetDlgItemText(hDlg, IDC_GOTOPATH, s_lpBuf);
+        LfnDisplayPath(s_lpBuf, szPath, sizeof(szPath));
+        SetDlgItemText(hDlg, IDC_GOTOPATH, szPath);
         SendDlgItemMessage(hDlg, IDC_GOTOPATH, CB_SETEDITSEL, 0, MAKELPARAM(0, -1));
         return TRUE;
     case WM_COMMAND:
         if (wParam == IDOK) {
             GetDlgItemText(hDlg, IDC_GOTOPATH, szPath, sizeof(szPath));
-            PathNormalize(szPath);
-            if (!PathIsDirectory(szPath)) {
+            /* a long path goes by its 8.3 path */
+            if (!LfnShortPath(szPath, szShort, sizeof(szShort)))
+                lstrcpyn(szShort, szPath, sizeof(szShort));
+            PathNormalize(szShort);
+            if (!PathIsDirectory(szShort)) {
                 MessageBox(hDlg, "This folder does not exist.", "Go To",
                            MB_OK | MB_ICONEXCLAMATION);
                 return TRUE;
             }
-            lstrcpyn(s_lpBuf, szPath, s_cbBuf);
+            lstrcpyn(s_lpBuf, szShort, s_cbBuf);
             AddHistory(szPath);
             EndDialog(hDlg, IDOK);
             return TRUE;

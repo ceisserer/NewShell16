@@ -76,10 +76,45 @@ USING NEWSHELL16
                  (docs/design.md in the source).
 
 
+LONG FILE NAMES
+
+NewShell16 shows and keeps long file names ("Letter to the tax
+office.txt") when a long file name driver is loaded before Windows:
+
+  - LFNDOS (free, GPL; https://www.ibiblio.org/pub/micro/pc-stuff/freedos/
+    files/repositories/latest/pkg-html/lfndos.html): LFNDOS in AUTOEXEC.BAT
+  - DOSLFN (freeware with source, by Henrik Haftmann and Jason Hood):
+    DOSLFN in AUTOEXEC.BAT
+  - or Windows 95's own MS-DOS 7, and DOSBox-X ([dos] lfn=true)
+
+Folder windows, the File System tree, Find, Properties, the Bin, Go To and
+Run then use long names: renaming, New Folder ("New Folder"), copying and
+moving keep them. Windows 3.1 programs still see the 8.3 names
+(LETTER~1.TXT). Without a driver everything works with 8.3 names, as
+before. Options, page Files, "Long file names" switches them off.
+
+With Windows for Workgroups 3.11, turn 32-bit file access off (Control
+Panel > 386 Enhanced > Virtual Memory > Change) when a DOS long file name
+driver is used: Windows' own file system would bypass the driver.
+
+
+OPEN AND SAVE AS DIALOGS
+
+NSDLG.DLL gives every Windows 3.1 program the Open and Save As dialogs of
+Windows 95, Windows XP (places bar) or Windows 11 (navigation pane,
+address bar, search), following the theme, with long file names. The
+program gets 8.3 names back: saving under a new long name creates the file
+first, so it has its 8.3 alias (as Windows 95 does). Programs that bring a
+dialog template or hook of their own (Write, Paintbrush...) keep the
+Windows 3.1 dialog. Options, page Files, "Open and Save As" chooses the
+look, or the Windows 3.1 dialogs for every program.
+
+
 FILES
 
   NEWSHELL.EXE   the shell
   NSHOOK.DLL     its system hooks
+  NSDLG.DLL      the Open and Save As dialogs of Windows 95, XP and 11
   RETHEME\       Retheme16 (RETHEME.EXE, RETHEME.DLL, THEMES.EXE, GALLERY.EXE,
                  themes)
 
