@@ -643,7 +643,7 @@ static BOOL CopyTree(LPCSTR lpFrom, LPCSTR lpDestDir, LPCSTR lpName, BOOL bMove)
         }
         if (bMove && SameDrive(lpFrom, szTo) && DosRename(lpFrom, szNew))
             return TRUE;
-        if (!bExists && lstrcmp(szTo, szNew) != 0) {
+        if (!bExists && LfnDrive(lpDestDir)) {
             /* a long name: create the file under it, fill it by its 8.3 name */
             if (LfnCreateEmpty(szNew, szTo, sizeof(szTo)) != 0) {
                 OpError("Cannot create '%s'.", szNew);
