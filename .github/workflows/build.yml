@@ -8,7 +8,7 @@
 #   push of a tag vX.Y.Z        publishes the release vX.Y.Z (0.x as
 #                               pre-release); the tag must match VERSION
 #
-# Win16Setup and Retheme16 are built at the head of their main branches
+# Win16Setup, Retheme16 and LFNTSR are built at the head of their main branches
 # (.gitmodules: branch = main), not at the submodule commits.
 name: Build
 
@@ -35,7 +35,7 @@ jobs:
 
       - name: Update Win16Setup and Retheme16 to main
         run: |
-          git submodule update --init --remote external/win16setup external/retheme16
+          git submodule update --init --remote external/win16setup external/retheme16 external/lfntsr
           git submodule status
 
       - name: Version
@@ -57,7 +57,7 @@ jobs:
       - name: Install packages
         run: |
           sudo apt-get update -q
-          sudo apt-get install -y -q mtools python3-pil
+          sudo apt-get install -y -q mtools python3-pil nasm
 
       # Open Watcom only publishes the rolling "Current-build" snapshot; the
       # cache key follows its upload time, so a new snapshot is picked up on

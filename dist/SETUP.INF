@@ -26,16 +26,16 @@ Restart=1
 Ini1=%WINDIR%\SYSTEM.INI,boot,shell,%DIR%\NEWSHELL.EXE
 Ini2=%WINDIR%\SYSTEM.INI,boot,taskman.exe,%DIR%\NEWSHELL.EXE
 
-; DOSLFN in AUTOEXEC.BAT: long file names for NewShell16 and the Open and
+; LFNTSR in AUTOEXEC.BAT: long file names for NewShell16 and the Open and
 ; Save As dialogs (Win16Setup removes the line again when the option is
-; turned off or NewShell16 is removed)
+; turned off or NewShell16 is removed, and replaces the DOSLFN line of
+; earlier versions)
 [Option.Lfn]
-Label=&Long file names in DOS (DOSLFN; restarts the computer)
+Label=&Long file names in DOS (LFNTSR; restarts the computer)
 Switch=LFN
 Default=0
-MinCPU=386
 Reboot=1
-Autoexec1=%DIR%\DOSLFN\DOSLFN.COM
+Autoexec1=%DIR%\LFNTSR\LFNTSR.COM /Q
 
 ; the bundled Retheme16 engine, started through load=
 [Option.Theme]

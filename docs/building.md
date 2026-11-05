@@ -53,16 +53,17 @@ not been found yet.
 
 The installer is built with [Win16Setup](https://github.com/ceisserer/Win16Setup)
 and bundles the [Retheme16](https://github.com/ceisserer/win31_theme_engine)
-theme engine. Both are git submodules in `external/`:
+theme engine and the [LFNTSR](https://github.com/ceisserer/lnf286) long file
+name driver for DOS. All three are git submodules in `external/`:
 
 ```sh
 git submodule update --init
-git submodule update --remote    # both follow their main branch
+git submodule update --remote    # they follow their main branch
 wmake release        # or: python3 tools/release/mkrelease.py
 ```
 
-Besides Open Watcom this needs gcc (Retheme16's host previewer renders the
-theme preview images), GNU make, Python 3 with Pillow and mtools (floppy
+Besides Open Watcom this needs NASM (LFNTSR), gcc (Retheme16's host
+previewer renders the theme preview images), GNU make, Python 3 with Pillow and mtools (floppy
 image). The result is in `build/release/`:
 
 ```

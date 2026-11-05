@@ -109,7 +109,7 @@ in the Options dialog (see [design.md](design.md)).
 | Separate Browse Folders tree window with its own menu | Yes | |
 | Tree context menu: explore, open in new window, find, refresh, expand one level / branch / all, collapse | Yes | |
 | Drive icons in the tree with open/closed folders and drive states | Partly | Drive icons and open and closed folders; no drive states. |
-| Long filenames per drive (Windows 95 LFN API under DOS 7) | Yes | As Calmira LFN: with any provider of the LFN API of INT 21h (DOSLFN, LFNDOS, Windows 95's MS-DOS 7, DOSBox-X), per drive; 8.3 names otherwise. See [design.md](design.md#long-file-names). |
+| Long filenames per drive (Windows 95 LFN API under DOS 7) | Yes | As Calmira LFN: with any provider of the LFN API of INT 21h (LFNTSR, which Setup installs, DOSLFN, LFNDOS, Windows 95's MS-DOS 7, DOSBox-X), per drive; 8.3 names otherwise. See [design.md](design.md#long-file-names). |
 | Share as / stop sharing | Yes | With Windows for Workgroups. |
 | Open the Explorer at the last folder explored (option) | Yes | `[Explorer] RememberLast=1`. |
 

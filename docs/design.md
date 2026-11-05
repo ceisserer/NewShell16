@@ -223,7 +223,8 @@ the rounded task button shape.
 ## Long file names
 
 Windows 3.1 has no long file names, but DOS can have them: Windows 95's
-MS-DOS 7, and under MS-DOS 6 the drivers
+MS-DOS 7, and under MS-DOS 3.10 to 6 the drivers
+[LFNTSR](https://github.com/ceisserer/lnf286) (GPL, 8086, bundled),
 [LFNDOS](https://www.ibiblio.org/pub/micro/pc-stuff/freedos/files/repositories/latest/pkg-html/lfndos.html)
 (GPL) and [DOSLFN](https://github.com/adoxa/doslfn) (freeware with source)
 provide the LFN API of INT 21h (functions 71xxh: find first/next with long
@@ -268,16 +269,25 @@ understands. Long names are what the user sees and types:
 With Windows for Workgroups 3.11, 32-bit file access must be off when a
 DOS driver provides the long names (VFAT would bypass it).
 
-**DOSLFN in Setup.** The release carries DOSLFN 0.42a (`DOSLFN.COM`,
-`LFNXLAT.386`, its documentation; `dist/DOSLFN`, unchanged from its
-release). Setup's option "Long file names in DOS" (`/LFN`, off by default,
-greyed out on a 286) adds `C:\NEWSHELL\DOSLFN\DOSLFN.COM` to
-`AUTOEXEC.BAT` before the line starting Windows and offers to restart the
-computer; Win16Setup keeps `AUTOEXEC.W16` and removes exactly that line
-when the option is turned off or NewShell16 is removed (`Autoexec1=`,
-`Reboot=1`, `MinCPU=386` in `dist/SETUP.INF`). Under Windows 3.1 DOSLFN
-loads `LFNXLAT.386` from its directory by itself; with WfW's 32-bit file
-access it gives hard disks no long names instead of bypassing VFAT.
+**LFNTSR in Setup.** The release carries
+[LFNTSR](https://github.com/ceisserer/lnf286) (submodule `external/lfntsr`,
+built with NASM by `mkrelease.py`): `LFNTSR\LFNTSR.COM`, a README
+(`dist/LFNTSR.TXT`) and, as it is GPL software, its source in
+`LFNTSR\SRC`. It is 8086 code (any PC) for DOS 3.10 and newer, about
+19 KB resident. Setup's option "Long file names in DOS" (`/LFN`, off by
+default) adds `C:\NEWSHELL\LFNTSR\LFNTSR.COM /Q` to `AUTOEXEC.BAT` before
+the line starting Windows and offers to restart the computer; Win16Setup
+keeps `AUTOEXEC.W16` and removes exactly that line when the option is
+turned off or NewShell16 is removed (`Autoexec1=`, `Reboot=1` in
+`dist/SETUP.INF`), and replaces the DOSLFN line of earlier versions.
+NewShell16 calls it through DPMI in real mode, so it needs no Windows
+driver of its own.
+
+LFNTSR only provides the 71xxh functions: it has no "tunnelling" (Windows
+95 and DOSLFN give a file deleted or renamed and created again under the
+same 8.3 name its long name back) and does not remove the long name
+entries of files deleted or renamed by 8.3 name. Programs that save that
+way (Write) lose the long name and leave orphaned entries behind.
 
 ## The Open and Save As dialogs (NSDLG.DLL)
 

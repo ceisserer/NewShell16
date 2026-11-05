@@ -46,7 +46,7 @@ Silent installation (for scripts and network installs):
   /NOSHELL     keep Program Manager as the shell
   /NOTHEME     no Windows 95 look
   /T=theme     theme directory name: WIN95, WIN98, WINME, WINXP or SLATE
-  /LFN         long file names in DOS: DOSLFN in AUTOEXEC.BAT (restarts the
+  /LFN         long file names in DOS: LFNTSR in AUTOEXEC.BAT (restarts the
                computer with /RESTART)
   /NOGROUP     no Program Manager group
   /NOSTART     do not start Retheme16 after installing
@@ -83,9 +83,11 @@ LONG FILE NAMES
 NewShell16 shows and keeps long file names ("Letter to the tax
 office.txt") when a long file name driver is loaded before Windows:
 
-  - DOSLFN, which comes with NewShell16: Setup's option "Long file names
-    in DOS" adds C:\NEWSHELL\DOSLFN\DOSLFN.COM to AUTOEXEC.BAT and
-    restarts the computer (DOSLFN\README.TXT; needs a 386)
+  - LFNTSR, which comes with NewShell16 (free, GPL): Setup's option "Long
+    file names in DOS" adds C:\NEWSHELL\LFNTSR\LFNTSR.COM to
+    AUTOEXEC.BAT and restarts the computer (LFNTSR\README.TXT; any PC,
+    8086 and 286 included)
+  - DOSLFN (freeware with source, https://github.com/adoxa/doslfn)
   - LFNDOS (free, GPL; https://www.ibiblio.org/pub/micro/pc-stuff/freedos/
     files/repositories/latest/pkg-html/lfndos.html): LFNDOS in AUTOEXEC.BAT
   - or Windows 95's own MS-DOS 7, and DOSBox-X ([dos] lfn=true)
@@ -120,8 +122,8 @@ FILES
   NEWSHELL.EXE   the shell
   NSHOOK.DLL     its system hooks
   NSDLG.DLL      the Open and Save As dialogs of Windows 95, XP and 11
-  DOSLFN\        DOSLFN 0.42a, long file names for DOS (freeware with source,
-                 https://github.com/adoxa/doslfn)
+  LFNTSR\        LFNTSR, long file names for DOS (GPL; source in LFNTSR\SRC,
+                 https://github.com/ceisserer/lnf286)
   RETHEME\       Retheme16 (RETHEME.EXE, RETHEME.DLL, THEMES.EXE, GALLERY.EXE,
                  themes)
 
