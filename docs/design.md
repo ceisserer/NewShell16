@@ -268,6 +268,17 @@ understands. Long names are what the user sees and types:
 With Windows for Workgroups 3.11, 32-bit file access must be off when a
 DOS driver provides the long names (VFAT would bypass it).
 
+**DOSLFN in Setup.** The release carries DOSLFN 0.42a (`DOSLFN.COM`,
+`LFNXLAT.386`, its documentation; `dist/DOSLFN`, unchanged from its
+release). Setup's option "Long file names in DOS" (`/LFN`, off by default,
+greyed out on a 286) adds `C:\NEWSHELL\DOSLFN\DOSLFN.COM` to
+`AUTOEXEC.BAT` before the line starting Windows and offers to restart the
+computer; Win16Setup keeps `AUTOEXEC.W16` and removes exactly that line
+when the option is turned off or NewShell16 is removed (`Autoexec1=`,
+`Reboot=1`, `MinCPU=386` in `dist/SETUP.INF`). Under Windows 3.1 DOSLFN
+loads `LFNXLAT.386` from its directory by itself; with WfW's 32-bit file
+access it gives hard disks no long names instead of bypassing VFAT.
+
 ## The Open and Save As dialogs (NSDLG.DLL)
 
 `NSDLG.DLL` replaces the Open and Save As dialogs of every program with

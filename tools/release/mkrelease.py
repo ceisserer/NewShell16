@@ -120,6 +120,17 @@ def stage(version, files, rt_dir, host_dir, preview_dir):
         with open(os.path.join(files, "RETHEME", "README.TXT"), "wb") as f:
             f.write(crlf(text))
 
+    # DOSLFN (Setup option "Long file names in DOS"): the release files
+    dst = os.path.join(files, "DOSLFN")
+    os.makedirs(dst)
+    for f in sorted(os.listdir(os.path.join(ROOT, "dist", "DOSLFN"))):
+        src = os.path.join(ROOT, "dist", "DOSLFN", f)
+        if f.endswith(".TXT"):
+            with open(src, "rb") as fi, open(os.path.join(dst, f), "wb") as fo:
+                fo.write(crlf(fi.read().decode("latin-1")))
+        else:
+            shutil.copy(src, os.path.join(dst, f))
+
     tl = themes()
     for t in tl:
         dst = os.path.join(files, "RETHEME", "THEMES", t)

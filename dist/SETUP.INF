@@ -14,6 +14,7 @@ WelcomeInstalled=NewShell16 %VERSION% is installed in %DIR%.\n\nChange the optio
 [Options]
 1=Shell
 2=Theme
+3=Lfn
 
 ; SYSTEM.INI shell= and taskman.exe= (Ctrl+Esc); the old values come back
 ; when the option is turned off or NewShell16 is removed
@@ -24,6 +25,17 @@ Default=1
 Restart=1
 Ini1=%WINDIR%\SYSTEM.INI,boot,shell,%DIR%\NEWSHELL.EXE
 Ini2=%WINDIR%\SYSTEM.INI,boot,taskman.exe,%DIR%\NEWSHELL.EXE
+
+; DOSLFN in AUTOEXEC.BAT: long file names for NewShell16 and the Open and
+; Save As dialogs (Win16Setup removes the line again when the option is
+; turned off or NewShell16 is removed)
+[Option.Lfn]
+Label=&Long file names in DOS (DOSLFN; restarts the computer)
+Switch=LFN
+Default=0
+MinCPU=386
+Reboot=1
+Autoexec1=%DIR%\DOSLFN\DOSLFN.COM
 
 ; the bundled Retheme16 engine, started through load=
 [Option.Theme]

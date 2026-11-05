@@ -120,7 +120,7 @@ def ini_set(windir, spec):
         f.write(("\r\n".join(out) + "\r\n").encode("latin-1"))
 
 
-def write_conf(work, cdrive, lfn=False):
+def write_conf(work, cdrive, lfn=False, win_args=""):
     conf = os.path.join(work, "dosbox.conf")
     with open(conf, "w") as f:
         f.write(f"""[sdl]
@@ -141,7 +141,7 @@ mount c "{cdrive}"
 c:
 set PATH=C:\\WINDOWS
 cd \\WINDOWS
-win
+win {win_args}
 """)
     return conf
 
@@ -221,6 +221,7 @@ def main():
     ap.add_argument("--install", action="append", default=[], metavar="SRC=DEST",
                     help="copy a file or directory to DEST (relative to drive C:)")
     ap.add_argument("--out", default=".", help="directory for screenshots")
+    ap.add_argument("--win-args", default="", help="arguments for WIN (a program to start)")
     ap.add_argument("--lfn", action="store_true",
                     help="DOS 7.1 with long file names (the LFN API of INT 21h 71xxh)")
     args = ap.parse_args()
@@ -239,7 +240,7 @@ def main():
             shutil.copy(src, target)
     for spec in args.set:
         ini_set(os.path.join(cdrive, "WINDOWS"), spec)
-    conf = write_conf(args.work, cdrive, args.lfn)
+    conf = write_conf(args.work, cdrive, args.lfn, args.win_args)
 
     xvfb = None
     display = os.environ.get("DISPLAY")
