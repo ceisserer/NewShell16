@@ -2428,8 +2428,16 @@ static int CheckName(LPFDLG d, LPCSTR lpTyped, LPSTR lpDir, LPSTR lpShort)
     /* the default extension */
     if (LfnShortOf(lpDir, szName, lpShort) != 0 && ofn->lpstrDefExt && *ofn->lpstrDefExt
         && !_fstrchr(szName, '.') && lstrlen(szName) + 4 < (int)sizeof(szName)) {
+        LPSTR lpExt;
+        BOOL bLower = FALSE;
+        for (lpExt = szName; *lpExt; lpExt++)
+            if (IsCharLower(*lpExt))
+                bLower = TRUE;
         lstrcat(szName, ".");
+        lpExt = szName + lstrlen(szName);
         lstrcat(szName, ofn->lpstrDefExt);
+        if (bLower)                     /* "Report.txt" for "Report" */
+            AnsiLower(lpExt);
     }
     if (LfnShortOf(lpDir, szName, lpShort) == 0) {
         /* it exists */
