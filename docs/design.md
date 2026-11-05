@@ -274,7 +274,7 @@ DOS driver provides the long names (VFAT would bypass it).
 built with NASM by `mkrelease.py`): `LFNTSR\LFNTSR.COM`, a README
 (`dist/LFNTSR.TXT`) and, as it is GPL software, its source in
 `LFNTSR\SRC`. It is 8086 code (any PC) for DOS 3.10 and newer, about
-19 KB resident. Setup's option "Long file names in DOS" (`/LFN`, off by
+23 KB resident (19 KB with `/T:0`). Setup's option "Long file names in DOS" (`/LFN`, off by
 default) adds `C:\NEWSHELL\LFNTSR\LFNTSR.COM /Q` to `AUTOEXEC.BAT` before
 the line starting Windows and offers to restart the computer; Win16Setup
 keeps `AUTOEXEC.W16` and removes exactly that line when the option is
@@ -283,11 +283,20 @@ turned off or NewShell16 is removed (`Autoexec1=`, `Reboot=1` in
 NewShell16 calls it through DPMI in real mode, so it needs no Windows
 driver of its own.
 
-LFNTSR only provides the 71xxh functions: it has no "tunnelling" (Windows
-95 and DOSLFN give a file deleted or renamed and created again under the
-same 8.3 name its long name back) and does not remove the long name
-entries of files deleted or renamed by 8.3 name. Programs that save that
-way (Write) lose the long name and leave orphaned entries behind.
+Besides the 71xxh functions, LFNTSR watches the plain DOS create (3Ch,
+5Bh, 6C00h), delete (41h, FCB 13h) and rename (56h, FCB 17h) calls, as
+Windows 95 and DOSLFN do: it removes the long name entries of files
+deleted or renamed by 8.3 name and "tunnels" their long name and creation
+time for 15 seconds (`/T:n` entries), so a program that saves by deleting
+or renaming the old file and creating it again under the same 8.3 name
+(Write) keeps the long name. Under Windows 386 enhanced mode it holds the
+critical section (INT 2Fh 1681h/1682h) while working; a 71xxh call that
+re-enters it fails with error 5, not 7100h, so `lfn.c` reports the error
+instead of falling back to the 8.3 function and losing the long name.
+Find handles (`/H:n`, default 8) carry a generation count: a handle taken
+over by LRU reuse gets error 6. Windows programs that call 71xxh from
+protected mode get no long names under LFNTSR (no `LFNXLAT.386`), which is
+why NewShell16 calls it through DPMI in real mode.
 
 ## The Open and Save As dialogs (NSDLG.DLL)
 
