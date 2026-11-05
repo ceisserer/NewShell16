@@ -27,7 +27,7 @@ tools/emu/winemu.py --windir ~/win31/Win/WINDOWS --work /tmp/nsemu --out shots \
   `goto:X,Y`, `click:N`, `dclick:N`, `down:N`, `up:N`.
 
 `--lfn` starts DOSBox-X's DOS as version 7.1 with long file names
-(`[dos] lfn=true`), the same LFN API that DOSLFN, LFNDOS or Windows 95
+(`[dos] lfn=true`), the same LFN API that LFNTSR, DOSLFN, LFNDOS or Windows 95
 give: files made in the scratch drive (`WORK/c`) from Linux keep their
 long names. Without it NewShell16 runs with 8.3 names. Example: the Open
 dialog of Notepad in the Windows XP look:

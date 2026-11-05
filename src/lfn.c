@@ -21,8 +21,8 @@
  * The functions are called in real mode (DPMI "simulate real mode
  * interrupt", INT 31h AX=0300h) with the strings in a buffer from
  * GlobalDosAlloc: Windows 3.1 only translates the pointers of the DOS
- * functions it knows, and an LFN driver loaded before Windows (DOSLFN,
- * LFNDOS) only exists in real mode. Under Windows 95 the same calls reach
+ * functions it knows, and an LFN driver loaded before Windows (LFNTSR,
+ * DOSLFN, LFNDOS) only exists in real mode. Under Windows 95 the same calls reach
  * IFSMgr. Compiled into NEWSHELL.EXE and NSDLG.DLL, each with its own
  * buffer.
  */

@@ -7,8 +7,8 @@
  * lfn.h - long file names (the LFN API of INT 21h, functions 71xxh)
  *
  * Windows 95 (also for 16-bit programs and in DOS boxes), DOS 7 and the
- * DOS drivers DOSLFN and LFNDOS provide the same set of INT 21h functions
- * for long file names. NewShell16 and NSDLG.DLL call them in real mode
+ * DOS drivers LFNTSR, DOSLFN and LFNDOS provide the same set of INT 21h
+ * functions for long file names. NewShell16 and NSDLG.DLL call them in real mode
  * through DPMI (INT 31h 0300h) with a buffer in conventional memory, as
  * Windows 3.1 does not translate their pointers in protected mode.
  *

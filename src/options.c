@@ -106,7 +106,7 @@ static const OPTDEF s_opts[] = {
     { 3, OT_CHECK,    "&Ask Move, Copy or Alias after every drag", "Folders", "AskOnDrop", 0 },
     { 3, OT_CHECK,    "Drags c&opy (Shift moves)", "Folders", "DragCopy", 0 },
     { 3, OT_CHECK,    "&Icons next to the results of Find", "Find", "Icons", 1 },
-    { 3, OT_CHECK,    "&Long file names (Windows 95, DOSLFN or LFNDOS)", "Folders", "LongNames", 1 },
+    { 3, OT_CHECK,    "&Long file names (LFNTSR, DOSLFN or Windows 95)", "Folders", "LongNames", 1 },
     { 3, OT_COMBO,    "Open and Sa&ve As:", "FileDialog", "Style", 0 },
 
     { 4, OT_CHECK,    "Run &StartUp programs (when NewShell16 is the shell)", "Startup", "Run", 1 },

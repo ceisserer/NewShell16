@@ -6,3 +6,7 @@
 	path = external/retheme16
 	url = https://github.com/ceisserer/win31_theme_engine.git
 	branch = main
+[submodule "external/lfntsr"]
+	path = external/lfntsr
+	url = https://github.com/ceisserer/lnf286.git
+	branch = main
