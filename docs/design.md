@@ -297,7 +297,8 @@ it crashes, Windows unloads the DLL and its WEP removes it.
 
 **Compatibility.** A program with `OFN_ENABLEHOOK`, `OFN_ENABLETEMPLATE`
 or `OFN_ENABLETEMPLATEHANDLE` (Write, Paintbrush...) expects COMMDLG's
-controls: it gets the original dialog (the JMP is lifted while it runs).
+controls: it gets the original dialog (the JMP is lifted while it runs),
+with long names (below, "The Windows 3.1 dialog with long names").
 Everything else is answered as COMMDLG would: `lpstrFile` with an 8.3
 path, the Windows 3.1 format of multiple selection (`C:\DIR A.TXT
 B.TXT`), `nFileOffset`, `nFileExtension`, `lpstrFileTitle`,
@@ -343,6 +344,33 @@ Place1=Projects|D:\Projects  ; more places (up to 6)
 View95=0           ; 0 list, 1 details (also ViewXP, View11)
 WidthXP=           ; the size of the resizable dialogs (also Width11...)
 ```
+
+### The Windows 3.1 dialog with long names
+
+For those programs NSDLG puts a hook of its own in front of theirs: it sets
+`OFN_ENABLEHOOK` and its `lpfnHook` for the call and gives the program its
+structure back unchanged afterwards (COMMDLG's results kept). The
+program's hook still gets every message first where it matters. Only what
+is shown changes, so COMMDLG and the program keep reading 8.3 names:
+
+- The file list (`lst1`) and the folder list (`lst2`) are owner-drawn by
+  COMMDLG in its standard template (`LBS_OWNERDRAWFIXED |
+  LBS_HASSTRINGS`); NSDLG paints them on `WM_DRAWITEM` with the long names
+  (one read of the folder, refreshed when COMMDLG changes the current
+  directory) and lower case otherwise, as COMMDLG. The entries stay 8.3.
+  Templates without owner-drawn lists keep 8.3 names.
+- The folder line (`stc1`) is subclassed to paint the long path. Windows
+  3.1 statics paint on `WM_SETTEXT` itself, so that is handled too.
+- After a file is chosen in the list (single selection), the name box
+  shows its long name (posted, after COMMDLG has put the 8.3 name there).
+- On OK, before COMMDLG checks it, a long name in the name box becomes
+  its 8.3 path, with `lpstrDefExt` added as COMMDLG would. In Save As a
+  new long name is created first; COMMDLG's overwrite question is turned
+  off for that file, and the file is deleted again (if still empty) when
+  the dialog is cancelled or another file is chosen.
+
+Write's Save As (Backup) and Paintbrush's Open (Info) work unchanged. A
+program without long names on the drive sees COMMDLG's dialog as it was.
 
 ## Command line
 

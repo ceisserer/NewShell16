@@ -3192,11 +3192,550 @@ static BOOL RegisterClasses(void)
     return TRUE;
 }
 
-/* Programs that rely on COMMDLG's own dialog get it */
+/* -------------------------------------------------------------------- */
+/* The Windows 3.1 dialog with long names (programs with hooks)         */
+/* -------------------------------------------------------------------- */
+
+/*
+ * Programs with a template or hook of their own (Write, Paintbrush...)
+ * get COMMDLG's dialog, whose controls they use. NSDLG puts its own hook
+ * in front of theirs (theirs still gets every message) and only changes
+ * what is shown:
+ *
+ *   - the file and folder lists (owner-drawn by COMMDLG in its standard
+ *     template) are painted with long names; their entries stay the 8.3
+ *     names COMMDLG and the program read
+ *   - the current folder line (stc1) paints the long path, its text stays
+ *   - a file chosen in the list shows its long name in the name box
+ *     (single selection only: COMMDLG splits multiple names at blanks)
+ *   - on OK, a long name typed or shown is turned into its 8.3 path before
+ *     COMMDLG checks it; a new long name in Save As is created first so it
+ *     has an alias (and is deleted again if the dialog is cancelled)
+ *
+ * Without long names on the drive everything is left to COMMDLG.
+ */
+
+#define MAX_CLASSIC     6
+#define CLASSIC_POOL    16000U
+#define WM_NS_LONGEDIT  (WM_USER + 0x5E0)   /* posted: the name box shows the long name */
+#define PROP_CLASSIC    "NsDlgClassic"
+#define PROP_OLDLO      "NsDlgOldLo"
+#define PROP_OLDHI      "NsDlgOldHi"
+
+typedef UINT (CALLBACK *CLASSICHOOK)(HWND, UINT, WPARAM, LPARAM);
+
+/* one per COMMDLG call in progress */
+typedef struct tagCLASSICREG {
+    LPOPENFILENAME ofn;
+    CLASSICHOOK    lpfnHook;        /* the program's, NULL if none */
+    BOOL  bSave;
+    BOOL  bOverwriteCleared;        /* OFN_OVERWRITEPROMPT taken away for a file we made */
+    char  szCreated[SPATH];         /* file created for a new long name */
+} CLASSICREG;
+
+static CLASSICREG s_reg[MAX_CLASSIC];
+static int        s_nPending = -1;  /* registered, dialog not yet initialised */
+
+typedef struct tagCLASSIC {
+    int   nReg;                     /* index in s_reg */
+    char  szDir[SPATH];             /* the folder whose names are cached */
+    LPSTR lpPool;                   /* "SHORT\0Long\0" pairs */
+    HGLOBAL hPool;
+    WORD  cbPool;
+    char  szWork[LFN_MAXPATH];
+    char  szWork2[LFN_MAXPATH];
+} CLASSIC, FAR *LPCLASSIC;
+
+static LPCLASSIC ClassicOf(HWND hDlg)
+{
+    HANDLE h = GetProp(hDlg, PROP_CLASSIC);
+    return h ? (LPCLASSIC)MK_FP((WORD)h, 0) : NULL;
+}
+
+static CLASSICREG *RegOf(HWND hDlg)
+{
+    LPCLASSIC c = ClassicOf(hDlg);
+
+    if (c)
+        return &s_reg[c->nReg];
+    return s_nPending >= 0 ? &s_reg[s_nPending] : NULL;
+}
+
+static BOOL IsEmptyFile(LPCSTR lpPath)
+{
+    struct find_t ft;
+    char sz[SPATH];
+
+    lstrcpyn(sz, lpPath, sizeof(sz));
+    return _dos_findfirst(sz, _A_NORMAL | _A_RDONLY | _A_ARCH, &ft) == 0 && ft.size == 0;
+}
+
+/* The task's current directory: COMMDLG changes it to the folder shown */
+static void CurrentDir(LPSTR lpDir)
+{
+    union REGS r;
+    struct SREGS s;
+    char sz[SPATH];
+
+    r.h.ah = 0x19;
+    intdos(&r, &r);
+    wsprintf(sz, "%c:\\", 'A' + r.h.al);
+    segread(&s);
+    r.h.ah = 0x47;
+    r.h.dl = 0;
+    s.ds = FP_SEG((LPSTR)sz);
+    r.x.si = FP_OFF((LPSTR)(sz + 3));
+    intdosx(&r, &r, &s);
+    if (r.x.cflag)
+        sz[3] = '\0';
+    lstrcpy(lpDir, sz);
+    AnsiUpper(lpDir);
+}
+
+/* Reads the long names of the current folder, if it changed */
+static void ClassicNames(LPCLASSIC c)
+{
+    LFNFIND FAR *f;
+    HGLOBAL hFind;
+    char szDir[SPATH];
+    UINT uOld;
+
+    CurrentDir(szDir);
+    if (lstrcmp(szDir, c->szDir) == 0)
+        return;
+    lstrcpy(c->szDir, szDir);
+    c->cbPool = 0;
+    if (!c->lpPool || !LfnDrive(szDir))
+        return;
+    hFind = GlobalAlloc(GMEM_MOVEABLE, sizeof(LFNFIND));
+    if (!hFind)
+        return;
+    f = (LFNFIND FAR *)GlobalLock(hFind);
+    lstrcpy(c->szWork, szDir);
+    CatPath(c->szWork, "*.*", sizeof(c->szWork));
+    uOld = SetErrorMode(1);
+    if (LfnFindFirst(c->szWork, _A_NORMAL | _A_RDONLY | _A_ARCH | _A_SUBDIR | _A_HIDDEN
+                                | _A_SYSTEM, f) == 0)
+        do {
+            int cbS = lstrlen(f->szShort) + 1, cbL = lstrlen(f->szName) + 1;
+            if (f->szShort[0] == '.' || lstrcmpi(f->szName, f->szShort) == 0)
+                continue;
+            if (c->cbPool + cbS + cbL + 1 > CLASSIC_POOL)
+                break;
+            lstrcpy(c->lpPool + c->cbPool, f->szShort);
+            lstrcpy(c->lpPool + c->cbPool + cbS, f->szName);
+            c->cbPool += cbS + cbL;
+        } while (LfnFindNext(f) == 0);
+    LfnFindClose(f);
+    SetErrorMode(uOld);
+    GlobalUnlock(hFind);
+    GlobalFree(hFind);
+}
+
+/* The long name of an 8.3 name in the current folder, or the name itself */
+static LPCSTR ClassicLong(LPCLASSIC c, LPCSTR lpShort)
+{
+    WORD o = 0;
+
+    while (o < c->cbPool) {
+        LPCSTR lpS = c->lpPool + o, lpL = lpS + lstrlen(lpS) + 1;
+        if (lstrcmpi(lpS, lpShort) == 0)
+            return lpL;
+        o = (WORD)(lpL + lstrlen(lpL) + 1 - c->lpPool);
+    }
+    return lpShort;
+}
+
+/* Paints an entry of the file list (lst1) or the folder list (lst2) */
+static BOOL ClassicDrawItem(HWND hDlg, LPCLASSIC c, DRAWITEMSTRUCT FAR *lpdis)
+{
+    HDC hdc = lpdis->hDC;
+    RECT rc = lpdis->rcItem, rcText;
+    char szItem[LFN_MAXPATH], szFit[LFN_MAXNAME];
+    LPCSTR lpText;
+    BOOL bSel = (lpdis->itemState & ODS_SELECTED) != 0;
+    int x = rc.left + 2, nDepth = 0, nIcon = -1;
+    LPSTR p;
+
+    if (lpdis->CtlType != ODT_LISTBOX || (lpdis->CtlID != lst1 && lpdis->CtlID != lst2))
+        return FALSE;
+    ClassicNames(c);
+    if (!LfnDrive(c->szDir))
+        return FALSE;                   /* COMMDLG's own painting */
+    if ((int)lpdis->itemID < 0) {
+        if (lpdis->itemState & ODS_FOCUS)
+            DrawFocusRect(hdc, &rc);
+        return TRUE;
+    }
+    if (!(lpdis->itemAction & (ODA_DRAWENTIRE | ODA_SELECT | ODA_FOCUS)))
+        return TRUE;
+    SendMessage(lpdis->hwndItem, LB_GETTEXT, lpdis->itemID, (LPARAM)(LPSTR)szItem);
+    lpText = szItem;
+    if (lpdis->CtlID == lst2) {
+        /* the path first ("c:\", "windows"...), then the subfolders */
+        for (p = c->szDir + 3, nDepth = 1; *p; p++)
+            if (*p == '\\')
+                nDepth++;
+        if (lstrlen(c->szDir) > 3)
+            nDepth++;
+        if ((int)lpdis->itemID < nDepth) {
+            int i, n = 0;
+            nIcon = SMI_FOLDEROPEN;
+            x += (int)lpdis->itemID * 8;
+            if (lpdis->itemID > 0) {
+                /* the path down to this entry, then its long name */
+                for (p = c->szDir, i = 0; *p && i <= (int)lpdis->itemID; p++)
+                    if (*p == '\\' && ++i > (int)lpdis->itemID)
+                        break;
+                n = (int)(p - c->szDir);
+                lstrcpyn(c->szWork2, c->szDir, n + 1);
+                if (LfnLongName(c->szWork2, c->szWork, sizeof(c->szWork)))
+                    lpText = c->szWork;
+            }
+        } else {
+            nIcon = SMI_FOLDER;
+            x += nDepth * 8;
+            lpText = ClassicLong(c, szItem);
+        }
+    } else
+        lpText = ClassicLong(c, szItem);
+
+    /* names without a long one in lower case, as COMMDLG shows them */
+    if (lpText == (LPCSTR)szItem || lstrcmpi(lpText, szItem) == 0) {
+        lstrcpy(szItem, lpText);
+        AnsiLower(szItem);
+        lpText = szItem;
+    }
+    FillSolid(hdc, &rc, GetSysColor(COLOR_WINDOW));
+    if (nIcon >= 0) {
+        DrawSmall(hdc, x, rc.top + (rc.bottom - rc.top - 16) / 2, nIcon);
+        x += 18;
+    }
+    SetBkMode(hdc, TRANSPARENT);
+    FitText(hdc, lpText, szFit, sizeof(szFit), rc.right - x - 4);
+    SetRect(&rcText, x, rc.top, x + TextWidth(hdc, szFit) + 4, rc.bottom);
+    if (bSel)
+        FillSolid(hdc, &rcText, GetSysColor(COLOR_HIGHLIGHT));
+    SetTextColor(hdc, GetSysColor(bSel ? COLOR_HIGHLIGHTTEXT : COLOR_WINDOWTEXT));
+    rcText.left += 2;
+    DrawText(hdc, szFit, -1, &rcText, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+    rcText.left -= 2;
+    if (lpdis->itemState & ODS_FOCUS)
+        DrawFocusRect(hdc, &rcText);
+    (void)hDlg;
+    return TRUE;
+}
+
+/* The current folder line: paints the long path, its text stays */
+LRESULT CALLBACK __export NsClassicStaticProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
+{
+    WNDPROC lpfnOld = (WNDPROC)MAKELONG((WORD)GetProp(hwnd, PROP_OLDLO),
+                                        (WORD)GetProp(hwnd, PROP_OLDHI));
+
+    if (msg == WM_PAINT) {
+        PAINTSTRUCT ps;
+        RECT rc;
+        char szShort[SPATH], szLong[LFN_MAXPATH], szFit[LFN_MAXPATH];
+        HDC hdc = BeginPaint(hwnd, &ps);
+        HFONT hf = (HFONT)SendMessage(hwnd, WM_GETFONT, 0, 0L), hfOld = NULL;
+        HBRUSH hbr;
+
+        GetClientRect(hwnd, &rc);
+        hbr = (HBRUSH)SendMessage(GetParent(hwnd), WM_CTLCOLOR, (WPARAM)hdc,
+                                  MAKELPARAM(hwnd, CTLCOLOR_STATIC));
+        FillRect(hdc, &rc, hbr ? hbr : (HBRUSH)GetStockObject(WHITE_BRUSH));
+        if (hf)
+            hfOld = SelectObject(hdc, hf);
+        GetWindowText(hwnd, szShort, sizeof(szShort));
+        /* COMMDLG writes "c:\windows": the long path, the drive as it was */
+        if (!LfnLongPath(szShort, szLong, sizeof(szLong)) || lstrcmpi(szLong, szShort) == 0)
+            lstrcpy(szLong, szShort);
+        else if (szShort[0])
+            szLong[0] = szShort[0];
+        if (TextWidth(hdc, szLong) > rc.right) {
+            /* "...\the end of the path" */
+            LPSTR p = szLong;
+            while (*p && TextWidth(hdc, p) + TextWidth(hdc, "...") > rc.right)
+                p++;
+            wsprintf(szFit, "...%s", p);
+        } else
+            lstrcpy(szFit, szLong);
+        SetBkMode(hdc, TRANSPARENT);
+        DrawText(hdc, szFit, -1, &rc, DT_LEFT | DT_SINGLELINE | DT_NOPREFIX);
+        if (hfOld)
+            SelectObject(hdc, hfOld);
+        EndPaint(hwnd, &ps);
+        return 0;
+    }
+    if (msg == WM_SETTEXT) {
+        /* a Windows 3.1 static paints its new text at once: set it
+           without painting, and paint it here */
+        LRESULT lr = DefWindowProc(hwnd, msg, wParam, lParam);
+        InvalidateRect(hwnd, NULL, TRUE);
+        UpdateWindow(hwnd);
+        return lr;
+    }
+    if (msg == WM_DESTROY) {
+        SetWindowLong(hwnd, GWL_WNDPROC, (LONG)lpfnOld);
+        RemoveProp(hwnd, PROP_OLDLO);
+        RemoveProp(hwnd, PROP_OLDHI);
+    }
+    return CallWindowProc(lpfnOld, hwnd, msg, wParam, lParam);
+}
+
+/* The name box shows the long name of the file chosen in the list */
+static void ClassicLongEdit(HWND hDlg, LPCLASSIC c)
+{
+    char szName[LFN_MAXPATH];
+    LPCSTR lpLong;
+
+    GetDlgItemText(hDlg, edt1, szName, sizeof(szName));
+    if (!szName[0] || _fstrchr(szName, '\\') || _fstrchr(szName, ':') || HasWildcards(szName))
+        return;
+    ClassicNames(c);
+    lpLong = ClassicLong(c, szName);
+    if (lpLong != (LPCSTR)szName && lstrcmp(lpLong, szName) != 0) {
+        SetDlgItemText(hDlg, edt1, lpLong);
+        SendDlgItemMessage(hDlg, edt1, EM_SETSEL, 0, MAKELPARAM(0, -1));
+    }
+}
+
+/*
+ * OK: a long name in the name box becomes its 8.3 path before COMMDLG
+ * checks it. Existing files and folders by their alias; for Save As a new
+ * long name is created first (with the default extension), so it has one.
+ */
+static void ClassicConvert(HWND hDlg, LPCLASSIC c, CLASSICREG *r)
+{
+    char szText[LFN_MAXPATH], szShort[SPATH], szDir[SPATH], szName[LFN_MAXNAME];
+    LPSTR lpName, p;
+    WORD wAttr;
+    BOOL bAllShort = TRUE;
+
+    if (r->bOverwriteCleared) {         /* back for a second try */
+        r->ofn->Flags |= OFN_OVERWRITEPROMPT;
+        r->bOverwriteCleared = FALSE;
+    }
+    GetDlgItemText(hDlg, edt1, szText, sizeof(szText));
+    p = szText;
+    while (*p == ' ')
+        p++;
+    if (p != szText)
+        lstrcpy(szText, p);
+    if (!szText[0] || HasWildcards(szText) || _fstrchr(szText, '"'))
+        return;
+    CurrentDir(szDir);
+    /* only names that COMMDLG cannot handle */
+    for (p = szText; *p; ) {
+        char szPart[LFN_MAXNAME];
+        int n = 0;
+        while (*p && *p != '\\' && n < (int)sizeof(szPart) - 1)
+            szPart[n++] = *p++;
+        szPart[n] = '\0';
+        if (*p)
+            p++;
+        if (n && !(n == 2 && szPart[1] == ':') && lstrcmp(szPart, ".") && lstrcmp(szPart, "..")
+            && !LfnIsShortName(szPart))
+            bAllShort = FALSE;
+    }
+    if (bAllShort)
+        return;
+    /* the full long path */
+    if (szText[0] && szText[1] == ':')
+        lstrcpy(c->szWork, szText);
+    else if (szText[0] == '\\')
+        wsprintf(c->szWork, "%c:%s", szDir[0], (LPSTR)szText);
+    else {
+        lstrcpy(c->szWork, szDir);
+        CatPath(c->szWork, szText, sizeof(c->szWork));
+    }
+    if (!LfnDrive(c->szWork))
+        return;
+    /* several names (multiple selection): COMMDLG's business */
+    if ((r->ofn->Flags & OFN_ALLOWMULTISELECT) && _fstrchr(szText, ' ')
+        && LfnGetAttr(c->szWork, &wAttr) != 0)
+        return;
+    if (LfnGetAttr(c->szWork, &wAttr) == 0 && LfnShortPath(c->szWork, szShort, sizeof(szShort))) {
+        SetDlgItemText(hDlg, edt1, szShort);
+        return;
+    }
+    /* not there: its folder must be, and for Save As it is created */
+    lstrcpy(c->szWork2, c->szWork);
+    lpName = FileNameOf(c->szWork2);
+    lstrcpyn(szName, lpName, sizeof(szName));
+    if (lpName > (LPSTR)c->szWork2)
+        lpName[lpName - 1 > (LPSTR)c->szWork2 + 2 ? -1 : 0] = '\0';
+    if (!LfnShortPath(c->szWork2, szDir, sizeof(szDir)))
+        return;                         /* COMMDLG says the path is wrong */
+    if (!_fstrchr(szName, '.') && r->ofn->lpstrDefExt && *r->ofn->lpstrDefExt
+        && lstrlen(szName) + 4 < (int)sizeof(szName)) {
+        /* "Report" is "Report.wri": COMMDLG would add it to the alias */
+        BOOL bLower = FALSE;
+        for (p = szName; *p; p++)
+            if (IsCharLower(*p))
+                bLower = TRUE;
+        lstrcat(szName, ".");
+        p = szName + lstrlen(szName);
+        lstrcat(szName, r->ofn->lpstrDefExt);
+        if (bLower)
+            AnsiLower(p);
+        if (LfnShortOf(szDir, szName, szShort) == 0) {
+            lstrcpy(c->szWork, szDir);
+            CatPath(c->szWork, szShort, sizeof(c->szWork));
+            SetDlgItemText(hDlg, edt1, c->szWork);
+            return;
+        }
+    }
+    if (!r->bSave || !LfnValidName(szName, TRUE))
+        return;                         /* COMMDLG reports it */
+    lstrcpy(c->szWork, szDir);
+    CatPath(c->szWork, szName, sizeof(c->szWork));
+    if (LfnCreateEmpty(c->szWork, szShort, sizeof(szShort)) != 0)
+        return;
+    AnsiUpper(szShort);
+    lstrcpy(r->szCreated, szShort);
+    /* the file is ours, new: COMMDLG must not ask to replace it */
+    if (r->ofn->Flags & OFN_OVERWRITEPROMPT) {
+        r->ofn->Flags &= ~OFN_OVERWRITEPROMPT;
+        r->bOverwriteCleared = TRUE;
+    }
+    SetDlgItemText(hDlg, edt1, szShort);
+}
+
+UINT CALLBACK __export NsClassicHook(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam)
+{
+    CLASSICREG *r = RegOf(hDlg);
+    LPCLASSIC c = ClassicOf(hDlg);
+    UINT uRet;
+
+    switch (msg) {
+    case WM_INITDIALOG:
+        {
+            int i;
+            HGLOBAL h;
+            HWND hwndPath;
+            for (i = 0; i < MAX_CLASSIC; i++)
+                if (s_reg[i].ofn == (LPOPENFILENAME)lParam)
+                    break;
+            if (i == MAX_CLASSIC)
+                i = s_nPending;
+            if (i < 0)
+                return TRUE;
+            r = &s_reg[i];
+            if (s_nPending == i)
+                s_nPending = -1;
+            h = GlobalAlloc(GMEM_MOVEABLE | GMEM_ZEROINIT, sizeof(CLASSIC));
+            if (h) {
+                c = (LPCLASSIC)GlobalLock(h);
+                c->nReg = i;
+                c->hPool = GlobalAlloc(GMEM_MOVEABLE, CLASSIC_POOL);
+                if (c->hPool)
+                    c->lpPool = (LPSTR)GlobalLock(c->hPool);
+                SetProp(hDlg, PROP_CLASSIC, (HANDLE)FP_SEG(c));
+                hwndPath = GetDlgItem(hDlg, stc1);
+                if (hwndPath) {
+                    LONG l = GetWindowLong(hwndPath, GWL_WNDPROC);
+                    SetProp(hwndPath, PROP_OLDLO, (HANDLE)LOWORD(l));
+                    SetProp(hwndPath, PROP_OLDHI, (HANDLE)HIWORD(l));
+                    SetWindowLong(hwndPath, GWL_WNDPROC, (LONG)(FARPROC)NsClassicStaticProc);
+                }
+            }
+            return r->lpfnHook ? r->lpfnHook(hDlg, msg, wParam, lParam) : TRUE;
+        }
+    case WM_DRAWITEM:
+        if (r && r->lpfnHook && (uRet = r->lpfnHook(hDlg, msg, wParam, lParam)) != 0)
+            return uRet;
+        if (c && ClassicDrawItem(hDlg, c, (DRAWITEMSTRUCT FAR *)lParam))
+            return TRUE;
+        return FALSE;
+    case WM_COMMAND:
+        if (c && r && wParam == IDOK)
+            ClassicConvert(hDlg, c, r);
+        else if (c && wParam == lst1 && HIWORD(lParam) == LBN_SELCHANGE && r
+                 && !(r->ofn->Flags & OFN_ALLOWMULTISELECT))
+            PostMessage(hDlg, WM_NS_LONGEDIT, 0, 0L);
+        break;
+    case WM_NS_LONGEDIT:
+        if (c)
+            ClassicLongEdit(hDlg, c);
+        return TRUE;
+    case WM_DESTROY:
+        if (c) {
+            HGLOBAL h = (HGLOBAL)GlobalHandle(FP_SEG(c));
+            uRet = r && r->lpfnHook ? r->lpfnHook(hDlg, msg, wParam, lParam) : FALSE;
+            RemoveProp(hDlg, PROP_CLASSIC);
+            if (c->hPool) {
+                GlobalUnlock(c->hPool);
+                GlobalFree(c->hPool);
+            }
+            GlobalUnlock(h);
+            GlobalFree(h);
+            return uRet;
+        }
+        break;
+    }
+    return r && r->lpfnHook ? r->lpfnHook(hDlg, msg, wParam, lParam) : FALSE;
+}
+
+/* COMMDLG's dialog for a program with a hook or template, with NSDLG's
+   hook in front of the program's */
+static BOOL RunClassic(int n, LPOPENFILENAME lpofn)
+{
+    CLASSICREG *r = NULL;
+    HINSTANCE hSelf;
+    DWORD dwHookFlag = lpofn->Flags & OFN_ENABLEHOOK;
+    CLASSICHOOK lpfnHook = (CLASSICHOOK)lpofn->lpfnHook;
+    int i;
+    BOOL bRet;
+
+    if (!LfnActive())
+        return CallOriginal(n, lpofn);
+    for (i = 0; i < MAX_CLASSIC; i++)
+        if (!s_reg[i].ofn) {
+            r = &s_reg[i];
+            break;
+        }
+    if (!r)
+        return CallOriginal(n, lpofn);
+    _fmemset(r, 0, sizeof(*r));
+    r->ofn = lpofn;
+    r->bSave = n == 1;
+    r->lpfnHook = dwHookFlag ? lpfnHook : NULL;
+    s_nPending = i;
+    lpofn->Flags |= OFN_ENABLEHOOK;
+    lpofn->lpfnHook = (LPOFNHOOKPROC)NsClassicHook;
+    hSelf = LoadLibrary("NSDLG.DLL");
+    s_nRunning++;
+    bRet = CallOriginal(n, lpofn);
+    s_nRunning--;
+    /* the program gets its structure back as it gave it */
+    lpofn->lpfnHook = (LPOFNHOOKPROC)lpfnHook;
+    lpofn->Flags = (lpofn->Flags & ~OFN_ENABLEHOOK) | dwHookFlag;
+    if (r->bOverwriteCleared)
+        lpofn->Flags |= OFN_OVERWRITEPROMPT;
+    /* a file made for a long name that was not chosen in the end */
+    if (r->szCreated[0] && (!bRet || !lpofn->lpstrFile
+                            || lstrcmpi(lpofn->lpstrFile, r->szCreated) != 0)
+        && IsEmptyFile(r->szCreated))
+        LfnDelete(r->szCreated);
+    if (s_nPending == i)
+        s_nPending = -1;
+    r->ofn = NULL;
+    if ((UINT)hSelf > 32)
+        FreeLibrary(hSelf);
+    return bRet;
+}
+
+/* Programs that rely on COMMDLG's own dialog get it (with long names
+   when they bring a hook or template: RunClassic) */
 static BOOL NeedsOriginal(LPOPENFILENAME lpofn)
 {
-    return s_nLook == NSDLG_OFF || !lpofn || lpofn->lStructSize != sizeof(OPENFILENAME)
-           || (lpofn->Flags & (OFN_ENABLEHOOK | OFN_ENABLETEMPLATE | OFN_ENABLETEMPLATEHANDLE));
+    return s_nLook == NSDLG_OFF || !lpofn || lpofn->lStructSize != sizeof(OPENFILENAME);
+}
+
+static BOOL NeedsClassic(LPOPENFILENAME lpofn)
+{
+    return (lpofn->Flags & (OFN_ENABLEHOOK | OFN_ENABLETEMPLATE | OFN_ENABLETEMPLATEHANDLE)) != 0;
 }
 
 static BOOL RunDialog(BOOL bSave, LPOPENFILENAME lpofn)
@@ -3208,6 +3747,8 @@ static BOOL RunDialog(BOOL bSave, LPOPENFILENAME lpofn)
 
     if (NeedsOriginal(lpofn))
         return CallOriginal(bSave ? 1 : 0, lpofn);
+    if (NeedsClassic(lpofn))
+        return RunClassic(bSave ? 1 : 0, lpofn);
     hState = GlobalAlloc(GMEM_MOVEABLE | GMEM_ZEROINIT, sizeof(FDLG));
     hItems = GlobalAlloc(GMEM_MOVEABLE | GMEM_ZEROINIT, (DWORD)MAX_ITEMS * sizeof(DITEM));
     hPool = GlobalAlloc(GMEM_MOVEABLE, POOL_SIZE);

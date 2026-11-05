@@ -64,8 +64,8 @@ Usable as the Windows 3.1 shell, with nearly all of Calmira's features:
   names.
 - **Open and Save As dialogs** of Windows 95, XP or 11 (following the
   theme) for every Windows 3.1 program, with long names, returning 8.3
-  names (`NSDLG.DLL`); programs with their own dialog hooks keep the old
-  dialog.
+  names (`NSDLG.DLL`); programs with their own dialog hooks (Write,
+  Paintbrush) keep the old dialog, which then shows long names too.
 - As the shell it runs `load=`/`run=` and the StartUp group.
 
 It looks consistent both on a plain Windows 3.1 and with the
