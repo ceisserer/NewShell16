@@ -4,8 +4,8 @@ LFNTSR - long file names for MS-DOS
 LFNTSR gives DOS 3.10 and newer the long file name functions of
 Windows 95 (INT 21h, functions 71xxh) on FAT12 and FAT16 disks, which
 NewShell16 uses for long file names. It runs on any PC, 8086 and 286
-included, and takes about 19 KB of memory (it can be loaded high with
-LH). The long names are stored as Windows 95 stores them, so Windows 95,
+included, and takes about 23 KB of memory (19 KB with /T:0; it can be
+loaded high with LH). The long names are stored as Windows 95 stores them, so Windows 95,
 Linux and mtools read them too.
 
 NewShell16 Setup adds this line to AUTOEXEC.BAT when "Long file names in
@@ -14,8 +14,12 @@ NewShell16 is removed):
 
   C:\NEWSHELL\LFNTSR\LFNTSR.COM /Q
 
-  LFNTSR [/U] [/F] [/Q]     /U uninstall, /F install even if another long
-                            file name driver is there, /Q quiet
+  LFNTSR [/U] [/F] [/Q] [/H:n] [/T:n]
+    /U    uninstall
+    /F    install even if another long file name driver is there
+    /Q    quiet
+    /H:n  find handles, 1-64 (default 8)
+    /T:n  long names remembered for tunnelling, 0-32 (default 8; 0 off)
 
 LFNTSR is free software under the GNU General Public License, version 3
 or later (COPYING.TXT in the NewShell16 directory). Its source is in SRC\
@@ -24,13 +28,18 @@ https://github.com/ceisserer/lnf286 (this build: commit @COMMIT@).
 
 Good to know:
 
-  - Programs for MS-DOS and Windows 3.1 only know the 8.3 names. A
-    program that saves by deleting or renaming the old file and writing
-    a new one under the same 8.3 name loses the long name, and the old
-    long name entries stay behind on the disk (CHKDSK and ScanDisk do not
-    mind them; Windows 95's ScanDisk removes them).
+  - Programs for MS-DOS and Windows 3.1 only know the 8.3 names. Like
+    Windows 95, LFNTSR keeps their long names anyway ("tunnelling"): a
+    file deleted or renamed by its 8.3 name and created again under the
+    same 8.3 name in the same directory within 15 seconds gets its long
+    name and creation time back (Write's Save As, temp file + rename
+    saves), and the long name entries of files deleted or renamed by 8.3
+    name are removed, so none stay behind on the disk.
   - Network drives, CD-ROMs and FAT32 drives get 8.3 names only.
   - Windows for Workgroups 3.11: turn 32-bit file access off
     (Control Panel > 386 Enhanced > Virtual Memory > Change) when LFNTSR
     is used; Windows' own file system would bypass it. 32-bit disk access
     can stay on.
+  - Windows programs that call the long file name functions from
+    protected mode get 8.3 names (NewShell16 calls them in real mode
+    and is not affected).
