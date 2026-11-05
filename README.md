@@ -57,7 +57,8 @@ Usable as the Windows 3.1 shell, with nearly all of Calmira's features:
   and a shutdown screen, and the folder windows of the last session.
 - Folder windows refresh by themselves when files change.
 - **Long file names**, as in Calmira LFN: with a DOS long file name
-  driver (LFNDOS, DOSLFN, or Windows 95's MS-DOS 7) folder windows, the
+  driver (DOSLFN, which Setup can add to `AUTOEXEC.BAT`, LFNDOS, or
+  Windows 95's MS-DOS 7) folder windows, the
   tree, Find, Properties, the Bin, rename, copy and move use long names;
   programs still get 8.3 names. Without one everything works with 8.3
   names.
