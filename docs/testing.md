@@ -26,6 +26,19 @@ tools/emu/winemu.py --windir ~/win31/Win/WINDOWS --work /tmp/nsemu --out shots \
   comma separated), `type:TEXT` (`_` for spaces), `move:DX,DY`,
   `goto:X,Y`, `click:N`, `dclick:N`, `down:N`, `up:N`.
 
+`--lfn` starts DOSBox-X's DOS as version 7.1 with long file names
+(`[dos] lfn=true`), the same LFN API that DOSLFN, LFNDOS or Windows 95
+give: files made in the scratch drive (`WORK/c`) from Linux keep their
+long names. Without it NewShell16 runs with 8.3 names. Example: the Open
+dialog of Notepad in the Windows XP look:
+
+```sh
+mkdir -p "/tmp/nsemu/c/My Documents" && echo hi > "/tmp/nsemu/c/My Documents/A long name.txt"
+tools/emu/winemu.py --lfn --windir ~/win31/Win/WINDOWS --work /tmp/nsemu --out shots \
+    --set 'WIN.INI:windows:run=NOTEPAD.EXE' --set 'NEWSHELL.INI:FileDialog:Style=2' \
+    --script "sleep:30 key:alt+f key:o sleep:3 type:C:\\My_Documents key:Return sleep:2 shot:open.png"
+```
+
 Setting `taskman.exe=` to NewShell16 makes Ctrl+Esc open NewShell16's Task
 Manager (or, with `--set 'NEWSHELL.INI:Taskbar:CtrlEscStart=1'`, the Start
 menu), which allows driving most of the shell from the keyboard.

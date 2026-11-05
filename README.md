@@ -56,6 +56,15 @@ Usable as the Windows 3.1 shell, with nearly all of Calmira's features:
   addresses opening in a browser, users with their own settings, a splash
   and a shutdown screen, and the folder windows of the last session.
 - Folder windows refresh by themselves when files change.
+- **Long file names**, as in Calmira LFN: with a DOS long file name
+  driver (LFNDOS, DOSLFN, or Windows 95's MS-DOS 7) folder windows, the
+  tree, Find, Properties, the Bin, rename, copy and move use long names;
+  programs still get 8.3 names. Without one everything works with 8.3
+  names.
+- **Open and Save As dialogs** of Windows 95, XP or 11 (following the
+  theme) for every Windows 3.1 program, with long names, returning 8.3
+  names (`NSDLG.DLL`); programs with their own dialog hooks keep the old
+  dialog.
 - As the shell it runs `load=`/`run=` and the StartUp group.
 
 It looks consistent both on a plain Windows 3.1 and with the

@@ -28,6 +28,7 @@
 #include <windows.h>
 #include <shellapi.h>
 #include "resource.h"
+#include "lfn.h"
 
 #define NS_VERSION      "0.2"
 #define NS_APPNAME      "NewShell16"
@@ -76,6 +77,7 @@ extern HFONT     g_hfontBold;       /* MS Sans Serif 8 bold */
 void DoShutdownDialog(void);
 void CloseShell(void);
 void HookApplySettings(void);
+void FileDlgApply(void);        /* NSDLG.DLL: the Open and Save As dialogs */
 
 /* ---- settings.c ------------------------------------------------------ */
 typedef struct tagNSCONFIG {
@@ -106,6 +108,7 @@ typedef struct tagNSCONFIG {
     BOOL bRightClose;       /* right click on minimise/maximise boxes closes */
     BOOL bFlatToolbar;      /* toolbar buttons flat until pointed at */
     BOOL bHideExt;          /* no extension for programs with their own icon */
+    BOOL bLongNames;        /* long file names, where an LFN driver has them */
 } NSCONFIG;
 
 extern NSCONFIG g_cfg;
@@ -419,7 +422,7 @@ void   FormatBytes(DWORD dw, LPSTR lpBuf);
 BOOL FileOpRegister(void);
 BOOL FileOpCopyMove(HWND hwndOwner, HGLOBAL hList, LPCSTR lpDestDir, BOOL bMove);
 BOOL FileOpDelete(HWND hwndOwner, HGLOBAL hList, BOOL bToBin);
-BOOL FileOpMoveTo(HWND hwndOwner, LPCSTR lpFrom, LPCSTR lpTo);
+BOOL FileOpMoveTo(HWND hwndOwner, LPCSTR lpFrom, LPCSTR lpToDir, LPCSTR lpName);
 BOOL FileOpRemove(HWND hwndOwner, LPCSTR lpPath);
 BOOL FileOpRename(HWND hwndOwner, LPCSTR lpPath, LPCSTR lpNewName);
 BOOL FileOpNewFolder(HWND hwndOwner, LPCSTR lpDir, LPSTR lpName);

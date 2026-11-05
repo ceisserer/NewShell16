@@ -56,6 +56,10 @@ def prepare_drive(windir, work, exe, shell):
         dll = os.path.join(os.path.dirname(exe), "nshook.dll")
         if os.path.exists(dll):
             shutil.copy(dll, os.path.join(cdrive, "NEWSHELL", "NSHOOK.DLL"))
+        for name in ("nsdlg.dll",):
+            src = os.path.join(os.path.dirname(exe), name)
+            if os.path.exists(src):
+                shutil.copy(src, os.path.join(cdrive, "NEWSHELL", name.upper()))
 
     # SYSTEM.INI: choose the shell
     sysini = None
@@ -116,7 +120,7 @@ def ini_set(windir, spec):
         f.write(("\r\n".join(out) + "\r\n").encode("latin-1"))
 
 
-def write_conf(work, cdrive):
+def write_conf(work, cdrive, lfn=False):
     conf = os.path.join(work, "dosbox.conf")
     with open(conf, "w") as f:
         f.write(f"""[sdl]
@@ -131,6 +135,7 @@ cputype=486
 cycles=max
 [mixer]
 nosound=true
+{"[dos]" + chr(10) + "ver=7.10" + chr(10) + "lfn=true" if lfn else ""}
 [autoexec]
 mount c "{cdrive}"
 c:
@@ -165,7 +170,7 @@ def run_script(script, display, out, win):
             time.sleep(float(arg))
         elif kind == "shot":
             path = os.path.join(out, arg)
-            target = win if win else "root"
+            target = "root" if os.environ.get("WINEMU_ROOTSHOT") else (win if win else "root")
             subprocess.run(["import", "-window", target, path], env=env, check=False)
             print("screenshot:", path)
         elif kind == "key":
@@ -216,6 +221,8 @@ def main():
     ap.add_argument("--install", action="append", default=[], metavar="SRC=DEST",
                     help="copy a file or directory to DEST (relative to drive C:)")
     ap.add_argument("--out", default=".", help="directory for screenshots")
+    ap.add_argument("--lfn", action="store_true",
+                    help="DOS 7.1 with long file names (the LFN API of INT 21h 71xxh)")
     args = ap.parse_args()
 
     os.makedirs(args.work, exist_ok=True)
@@ -232,13 +239,13 @@ def main():
             shutil.copy(src, target)
     for spec in args.set:
         ini_set(os.path.join(cdrive, "WINDOWS"), spec)
-    conf = write_conf(args.work, cdrive)
+    conf = write_conf(args.work, cdrive, args.lfn)
 
     xvfb = None
     display = os.environ.get("DISPLAY")
     if not display:
         display = ":77"
-        xvfb = subprocess.Popen(["Xvfb", display, "-screen", "0", "1024x768x24"],
+        xvfb = subprocess.Popen(["Xvfb", display, "-screen", "0", "1280x1024x24"],
                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         time.sleep(1)
 

@@ -400,7 +400,10 @@ static HGLOBAL DropList(HDROP hDrop)
 
     n = DragQueryFile(hDrop, (UINT)-1, NULL, 0);
     for (i = 0; i < n; i++) {
-        DragQueryFile(hDrop, i, szFile, sizeof(szFile));
+        char szDropped[LFN_MAXPATH];
+        DragQueryFile(hDrop, i, szDropped, sizeof(szDropped));
+        if (!LfnShortPath(szDropped, szFile, sizeof(szFile)))
+            lstrcpyn(szFile, szDropped, sizeof(szFile));
         AnsiUpper(szFile);
         PathListAdd(&hList, szFile);
     }
@@ -671,19 +674,25 @@ static DESKICON *AddIcon(LPCSTR lpKey, BYTE bKind, LPCSHORTCUT lpsc, HICON hIcon
 /* A caption for a new shortcut: the file name, capitalised */
 static void CaptionFor(LPCSTR lpPath, LPSTR lpBuf, int cbBuf)
 {
-    char szName[MAXPATHLEN];
+    char szName[LFN_MAXNAME];
     LPSTR lpExt;
+    BOOL bLong;
 
-    lstrcpyn(szName, lpPath, sizeof(szName));
-    if (lstrlen(szName) <= 3) {
-        wsprintf(lpBuf, "Drive %c", szName[0] & ~0x20);
+    if (lstrlen(lpPath) <= 3) {
+        wsprintf(lpBuf, "Drive %c", lpPath[0] & ~0x20);
         return;
     }
+    /* the long name as it is, else "Notepad" for NOTEPAD.EXE */
+    bLong = LfnLongName(lpPath, szName, sizeof(szName))
+            && lstrcmp(szName, PathFileName((LPSTR)lpPath)) != 0;
+    if (!bLong)
+        lstrcpyn(szName, PathFileName((LPSTR)lpPath), sizeof(szName));
     lpExt = PathExtension(szName);
-    if (*lpExt && IsProgramFile(szName))
+    if (*lpExt && IsProgramFile(lpPath))
         lpExt[-1] = '\0';
-    lstrcpyn(lpBuf, PathFileName(szName), cbBuf);
-    AnsiLower(lpBuf + 1);
+    lstrcpyn(lpBuf, szName, cbBuf);
+    if (!bLong)
+        AnsiLower(lpBuf + 1);
 }
 
 /* Makes a shortcut to a file, folder or drive at screen position x, y */

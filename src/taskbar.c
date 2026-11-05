@@ -1408,6 +1408,7 @@ static void ShowBarHint(HWND hwnd)
    icons need to know the new height */
 static void LookChanged(void)
 {
+    FileDlgApply();                 /* the dialogs follow the look */
     if (s_cyBar != s_cyBase + (Win11Look() ? 8 : 0)) {
         TaskbarApplySettings();
         HookApplySettings();

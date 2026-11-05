@@ -42,7 +42,8 @@ OBJS    = $(OBJDIR)/main.obj     &
           $(OBJDIR)/users.obj    &
           $(OBJDIR)/options.obj  &
           $(OBJDIR)/luna.obj     &
-          $(OBJDIR)/win11.obj
+          $(OBJDIR)/win11.obj    &
+          $(OBJDIR)/lfn.obj
 
 # Code segments: one per module (packcode=0), moveable, discardable and
 # loaded on first call, so code that is not used (the Windows XP and 11
@@ -76,7 +77,7 @@ RCFLAGS = -q -r -bt=windows -31 -i="$(%WATCOM)/h" -i="$(%WATCOM)/h/win" -i=$(SRC
 
 .c: $(SRCDIR)
 
-all : $(OBJDIR) $(OBJDIR)/$(NAME).exe $(OBJDIR)/nshook.dll .SYMBOLIC
+all : $(OBJDIR) $(OBJDIR)/$(NAME).exe $(OBJDIR)/nshook.dll $(OBJDIR)/nsdlg.dll .SYMBOLIC
 
 $(OBJDIR)/$(NAME).exe : $(OBJDIR) $(OBJS) $(OBJDIR)/$(NAME).res $(OBJDIR)/$(NAME).lnk
     $(LD) @$(OBJDIR)/$(NAME).lnk
@@ -90,7 +91,7 @@ $(OBJDIR)/$(NAME).lnk : makefile
     @%append $@ system windows
     @%append $@ name $(OBJDIR)/$(NAME).exe
     @%append $@ option quiet, map=$(OBJDIR)/$(NAME).map
-    @%append $@ option stack=12k, heapsize=8k
+    @%append $@ option stack=16k, heapsize=8k
     @%append $@ option description 'NewShell16'
     @%append $@ library commdlg.lib, shell.lib, toolhelp.lib
     @%append $@ option packcode=0
@@ -112,6 +113,32 @@ $(OBJDIR)/nshook.dll : $(OBJDIR)/nshook.obj makefile
 
 $(OBJDIR)/nshook.obj : $(SRCDIR)/nshook.c $(SRCDIR)/nshook.h
     $(CC) $(DLLFLAGS) -fo=$@ $(SRCDIR)/nshook.c
+
+# NSDLG.DLL: the Open and Save As dialogs, entered from COMMDLG's patched
+# entry points in other programs' tasks (fixed code, DS != SS)
+$(OBJDIR)/nsdlg.dll : $(OBJDIR)/nsdlg.obj $(OBJDIR)/nsdlfn.obj $(OBJDIR)/nsdlg.res makefile
+    %create $(OBJDIR)/nsdlg.lnk
+    @%append $(OBJDIR)/nsdlg.lnk system windows_dll
+    @%append $(OBJDIR)/nsdlg.lnk name $(OBJDIR)/nsdlg.dll
+    @%append $(OBJDIR)/nsdlg.lnk option quiet, map=$(OBJDIR)/nsdlg.map
+    @%append $(OBJDIR)/nsdlg.lnk option oneautodata, heapsize=1k
+    @%append $(OBJDIR)/nsdlg.lnk option description 'NewShell16 Open and Save As dialogs'
+    @%append $(OBJDIR)/nsdlg.lnk segment type code preload fixed
+    @%append $(OBJDIR)/nsdlg.lnk segment type data preload fixed
+    @%append $(OBJDIR)/nsdlg.lnk library shell.lib
+    @%append $(OBJDIR)/nsdlg.lnk file $(OBJDIR)/nsdlg.obj
+    @%append $(OBJDIR)/nsdlg.lnk file $(OBJDIR)/nsdlfn.obj
+    $(LD) @$(OBJDIR)/nsdlg.lnk
+    $(RC) -q -bt=windows -31 $(OBJDIR)/nsdlg.res $(OBJDIR)/nsdlg.dll
+
+$(OBJDIR)/nsdlg.obj : $(SRCDIR)/nsdlg.c $(SRCDIR)/nsdlg.h $(SRCDIR)/nsdlgres.h $(SRCDIR)/lfn.h
+    $(CC) $(DLLFLAGS) -bd -fo=$@ $(SRCDIR)/nsdlg.c
+
+$(OBJDIR)/nsdlfn.obj : $(SRCDIR)/lfn.c $(SRCDIR)/lfn.h
+    $(CC) $(DLLFLAGS) -bd -fo=$@ $(SRCDIR)/lfn.c
+
+$(OBJDIR)/nsdlg.res : $(RESDIR)/nsdlg.rc $(SRCDIR)/nsdlgres.h $(RESDIR)/*.ico $(RESDIR)/small.bmp
+    $(RC) $(RCFLAGS) $(RESDIR)/nsdlg.rc -fo=$@
 
 $(OBJDIR)/$(NAME).res : $(RESFILES)
     $(RC) $(RCFLAGS) $(RESDIR)/$(NAME).rc -fo=$@
@@ -147,6 +174,7 @@ $(OBJDIR)/dialogs.obj  : $(SRCDIR)/dialogs.c
 $(OBJDIR)/system.obj   : $(SRCDIR)/system.c
 $(OBJDIR)/users.obj    : $(SRCDIR)/users.c
 $(OBJDIR)/options.obj  : $(SRCDIR)/options.c
+$(OBJDIR)/lfn.obj      : $(SRCDIR)/lfn.c $(SRCDIR)/lfn.h
 
 # the installer (needs the submodules: git submodule update --init)
 release : .SYMBOLIC

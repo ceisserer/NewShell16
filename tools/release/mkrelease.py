@@ -5,7 +5,7 @@
 
   mkrelease.py [--version X.Y.Z] [--out build/release] [--no-floppy]
 
-Builds NEWSHELL.EXE / NSHOOK.DLL (wmake), Win16Setup's SETUP.EXE
+Builds NEWSHELL.EXE / NSHOOK.DLL / NSDLG.DLL (wmake), Win16Setup's SETUP.EXE
 (external/win16setup) and Retheme16 (external/retheme16: RETHEME.EXE,
 RETHEME.DLL, THEMES.EXE, GALLERY.EXE and its host previewer for the theme previews),
 stages the installation files and lets Win16Setup's packer write:
@@ -98,7 +98,7 @@ def stage(version, files, rt_dir, host_dir, preview_dir):
     """The installation files in files/; returns the theme names."""
     shutil.rmtree(files, ignore_errors=True)
     os.makedirs(os.path.join(files, "RETHEME", "THEMES"))
-    for f in ("NEWSHELL.EXE", "NSHOOK.DLL"):
+    for f in ("NEWSHELL.EXE", "NSHOOK.DLL", "NSDLG.DLL"):
         shutil.copy(os.path.join(ROOT, "build", f.lower()), os.path.join(files, f))
     for f in rt_programs():
         shutil.copy(os.path.join(rt_dir, f), os.path.join(files, "RETHEME", f))

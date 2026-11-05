@@ -23,6 +23,7 @@
  * button while they run.
  */
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <direct.h>
 #include <dos.h>
@@ -183,10 +184,12 @@ static void Step(LPCSTR lpFrom, LPCSTR lpTo)
     s_op.nDone++;
     if (!s_op.hwndProgress)
         return;
-    lstrcpy(szText, lpFrom);
-    SetDlgItemText(s_op.hwndProgress, IDC_PROGTEXT1, PathFileName(szText));
+    LfnLongName(lpFrom, szText, sizeof(szText));
+    SetDlgItemText(s_op.hwndProgress, IDC_PROGTEXT1, szText);
     if (lpTo) {
-        wsprintf(szText, "to %s", lpTo);
+        char szLong[MAXPATHLEN];
+        LfnDisplayPath(lpTo, szLong, sizeof(szLong));
+        wsprintf(szText, "to %s", (LPSTR)szLong);
         SetDlgItemText(s_op.hwndProgress, IDC_PROGTEXT2, szText);
     }
     SendDlgItemMessage(s_op.hwndProgress, IDC_PROGBAR, WM_NS_SETPROGRESS,
@@ -229,9 +232,10 @@ static void EndOp(void)
 
 static void OpError(LPCSTR lpFormat, LPCSTR lpPath)
 {
-    char szMsg[MAXPATHLEN + 100];
+    char szMsg[LFN_MAXPATH + 100], szLong[LFN_MAXPATH];
 
-    wsprintf(szMsg, lpFormat, lpPath);
+    LfnDisplayPath(lpPath, szLong, sizeof(szLong));
+    wsprintf(szMsg, lpFormat, (LPSTR)szLong);
     MessageBox(s_op.hwndProgress ? s_op.hwndProgress : s_op.hwndOwner,
                szMsg, NS_APPNAME, MB_OK | MB_ICONEXCLAMATION);
 }
@@ -339,12 +343,6 @@ static BOOL GetAttr(LPCSTR lpPath, unsigned *puAttr)
     return _dos_getfileattr(szPath, puAttr) == 0;
 }
 
-static BOOL Exists(LPCSTR lpPath)
-{
-    unsigned uAttr;
-    return GetAttr(lpPath, &uAttr);
-}
-
 static BOOL SameDrive(LPCSTR a, LPCSTR b)
 {
     return (a[0] & ~0x20) == (b[0] & ~0x20);
@@ -365,39 +363,52 @@ static BOOL IsInside(LPCSTR lpChild, LPCSTR lpParent)
     return lpChild[n] == '\0' || lpChild[n] == '\\' || lpParent[n - 1] == '\\';
 }
 
+/* The LFN functions keep the long names (and remove their directory
+   entries with the files); without LFN they are the DOS ones */
 static BOOL DosRename(LPCSTR lpFrom, LPCSTR lpTo)
 {
-    char szFrom[MAXPATHLEN], szTo[MAXPATHLEN];
-
-    lstrcpyn(szFrom, lpFrom, sizeof(szFrom));
-    lstrcpyn(szTo, lpTo, sizeof(szTo));
-    return rename(szFrom, szTo) == 0;
+    return LfnRename(lpFrom, lpTo) == 0;
 }
 
 static BOOL DeleteFile(LPCSTR lpPath)
 {
-    char szPath[MAXPATHLEN];
-
-    lstrcpyn(szPath, lpPath, sizeof(szPath));
-    _dos_setfileattr(szPath, _A_NORMAL);
-    return remove(szPath) == 0;
+    LfnSetAttr(lpPath, _A_NORMAL);
+    return LfnDelete(lpPath) == 0;
 }
 
 static BOOL MakeDir(LPCSTR lpPath)
 {
-    char szPath[MAXPATHLEN];
-
-    lstrcpyn(szPath, lpPath, sizeof(szPath));
-    return mkdir(szPath) == 0;
+    return LfnMkDir(lpPath) == 0;
 }
 
 static BOOL RemoveDir(LPCSTR lpPath)
 {
-    char szPath[MAXPATHLEN];
+    LfnSetAttr(lpPath, 0);
+    return LfnRmDir(lpPath) == 0;
+}
 
-    lstrcpyn(szPath, lpPath, sizeof(szPath));
-    _dos_setfileattr(szPath, _A_SUBDIR);
-    return rmdir(szPath) == 0;
+/*
+ * The destination of an item called lpName (long or short) in lpDir:
+ * the short path of what is there already (TRUE), else where the new
+ * item goes: lpDir\lpName, a long path when the drive has long names.
+ */
+static BOOL DestPath(LPCSTR lpDir, LPCSTR lpName, LPSTR lpTo, LPSTR lpNew)
+{
+    char szShort[14];
+
+    lstrcpyn(lpNew, lpDir, LFN_MAXPATH);
+    if (lstrlen(lpNew) + lstrlen(lpName) + 2 >= LFN_MAXPATH)
+        return FALSE;
+    PathAppend(lpNew, lpName);
+    if (LfnShortOf(lpDir, lpName, szShort) == 0) {
+        lstrcpyn(lpTo, lpDir, MAXPATHLEN);
+        PathAppend(lpTo, szShort);
+        return TRUE;
+    }
+    if (!LfnDrive(lpDir))
+        AnsiUpper(lpNew);
+    lstrcpyn(lpTo, lpNew, MAXPATHLEN);
+    return FALSE;
 }
 
 static BOOL CopyFileData(LPCSTR lpFrom, LPCSTR lpTo)
@@ -458,30 +469,39 @@ static BOOL CopyFileData(LPCSTR lpFrom, LPCSTR lpTo)
     return TRUE;
 }
 
+#define FIND_ALL    (_A_NORMAL | _A_RDONLY | _A_HIDDEN | _A_SYSTEM | _A_SUBDIR | _A_ARCH)
+
+/* a search per level of a tree walk, from the heap (it is 340 bytes) */
+static LPLFNFIND NewFind(void)
+{
+    return (LPLFNFIND)malloc(sizeof(LFNFIND));
+}
+
 static int CountTree(LPCSTR lpPath)
 {
-    struct find_t ft;
+    LPLFNFIND f;
     char szPath[MAXPATHLEN];
     unsigned uAttr;
     int n = 1;
 
-    if (!GetAttr(lpPath, &uAttr) || !(uAttr & _A_SUBDIR))
+    if (!GetAttr(lpPath, &uAttr) || !(uAttr & _A_SUBDIR) || !(f = NewFind()))
         return 1;
     lstrcpy(szPath, lpPath);
     PathAppend(szPath, "*.*");
-    if (_dos_findfirst(szPath, _A_NORMAL | _A_RDONLY | _A_HIDDEN | _A_SYSTEM
-                       | _A_SUBDIR | _A_ARCH, &ft) == 0) {
+    if (LfnFindFirst(szPath, FIND_ALL, f) == 0) {
         do {
-            if (ft.name[0] == '.')
+            if (f->szShort[0] == '.')
                 continue;
             lstrcpy(szPath, lpPath);
-            PathAppend(szPath, ft.name);
-            if (ft.attrib & _A_SUBDIR)
+            PathAppend(szPath, f->szShort);
+            if (f->bAttr & _A_SUBDIR)
                 n += CountTree(szPath);
             else
                 n++;
-        } while (_dos_findnext(&ft) == 0);
+        } while (LfnFindNext(f) == 0);
     }
+    LfnFindClose(f);
+    free(f);
     return n;
 }
 
@@ -496,10 +516,42 @@ static int CountList(HGLOBAL hList)
     return n;
 }
 
+/* The 8.3 names in a directory, collected before it is changed */
+static HGLOBAL ListChildren(LPCSTR lpDir)
+{
+    LPLFNFIND f = NewFind();
+    char szPath[MAXPATHLEN];
+    HGLOBAL hNames = NULL;
+
+    if (!f)
+        return NULL;
+    lstrcpy(szPath, lpDir);
+    PathAppend(szPath, "*.*");
+    if (LfnFindFirst(szPath, FIND_ALL, f) == 0)
+        do {
+            if (f->szShort[0] != '.' && !PathListAdd(&hNames, f->szShort))
+                break;
+        } while (LfnFindNext(f) == 0);
+    LfnFindClose(f);
+    free(f);
+    return hNames;
+}
+
+static BOOL IsEmptyDir(LPCSTR lpDir)
+{
+    HGLOBAL h = ListChildren(lpDir);
+
+    if (!h)
+        return TRUE;
+    GlobalFree(h);
+    return FALSE;
+}
+
 /* Deletes a file or a whole directory tree */
 static BOOL DeleteTree(LPCSTR lpPath)
 {
-    struct find_t ft;
+    HGLOBAL hNames;
+    LPCSTR lp;
     char szPath[MAXPATHLEN];
     unsigned uAttr;
     BOOL bOK = TRUE;
@@ -523,21 +575,19 @@ static BOOL DeleteTree(LPCSTR lpPath)
         }
         return TRUE;
     }
-    lstrcpy(szPath, lpPath);
-    PathAppend(szPath, "*.*");
-    if (_dos_findfirst(szPath, _A_NORMAL | _A_RDONLY | _A_HIDDEN | _A_SYSTEM
-                       | _A_SUBDIR | _A_ARCH, &ft) == 0) {
-        do {
-            if (ft.name[0] == '.')
-                continue;
+    hNames = ListChildren(lpPath);
+    if (hNames) {
+        for (lp = PathListFirst(hNames); lp && bOK; lp = PathListNext(lp)) {
             lstrcpy(szPath, lpPath);
-            PathAppend(szPath, ft.name);
-            if (!DeleteTree(szPath)) {
+            PathAppend(szPath, lp);
+            if (!DeleteTree(szPath))
                 bOK = FALSE;
-                break;
-            }
-        } while (_dos_findnext(&ft) == 0);
+        }
+        PathListUnlock(hNames);
+        GlobalFree(hNames);
     }
+    if (bOK && GetAttr(lpPath, &uAttr) && !IsEmptyDir(lpPath))
+        return TRUE;                /* something was kept (No) */
     if (bOK && !RemoveDir(lpPath)) {
         OpError("Cannot remove the folder '%s'.", lpPath);
         bOK = FALSE;
@@ -545,13 +595,16 @@ static BOOL DeleteTree(LPCSTR lpPath)
     return bOK;
 }
 
-/* Copies or moves one file or directory tree to the full path lpTo */
-static BOOL CopyTree(LPCSTR lpFrom, LPCSTR lpTo, BOOL bMove)
+/*
+ * Copies or moves one file or directory tree into lpDestDir, under the
+ * name lpName (the long name when the source has one).
+ */
+static BOOL CopyTree(LPCSTR lpFrom, LPCSTR lpDestDir, LPCSTR lpName, BOOL bMove)
 {
-    struct find_t ft;
-    char szFrom[MAXPATHLEN], szTo[MAXPATHLEN];
+    LPLFNFIND f;
+    char szFrom[MAXPATHLEN], szTo[MAXPATHLEN], szNew[LFN_MAXPATH];
     unsigned uAttr;
-    BOOL bOK = TRUE;
+    BOOL bOK = TRUE, bExists;
 
     if (!Pump())
         return FALSE;
@@ -559,10 +612,11 @@ static BOOL CopyTree(LPCSTR lpFrom, LPCSTR lpTo, BOOL bMove)
         OpError("'%s' could not be found.", lpFrom);
         return FALSE;
     }
+    bExists = DestPath(lpDestDir, lpName, szTo, szNew);
 
     if (!(uAttr & _A_SUBDIR)) {
-        Step(lpFrom, lpTo);
-        if (lstrcmpi(lpFrom, lpTo) == 0) {
+        Step(lpFrom, lpDestDir);
+        if (lstrcmpi(lpFrom, szTo) == 0) {
             OpError("Cannot copy '%s' onto itself.", lpFrom);
             return FALSE;
         }
@@ -574,20 +628,29 @@ static BOOL CopyTree(LPCSTR lpFrom, LPCSTR lpTo, BOOL bMove)
                 s_op.bCancel = TRUE;
                 return FALSE;
             }
-        if (Exists(lpTo)) {
-            switch (AskReplace(lpTo)) {
+        if (bExists) {
+            switch (AskReplace(szTo)) {
             case IDNO:
                 return TRUE;
             case IDCANCEL:
                 s_op.bCancel = TRUE;
                 return FALSE;
             }
-            if (bMove && SameDrive(lpFrom, lpTo))
-                DeleteFile(lpTo);
+            if (bMove && SameDrive(lpFrom, szTo)) {
+                DeleteFile(szTo);
+                bExists = FALSE;
+            }
         }
-        if (bMove && SameDrive(lpFrom, lpTo) && DosRename(lpFrom, lpTo))
+        if (bMove && SameDrive(lpFrom, szTo) && DosRename(lpFrom, szNew))
             return TRUE;
-        if (!CopyFileData(lpFrom, lpTo))
+        if (!bExists && lstrcmp(szTo, szNew) != 0) {
+            /* a long name: create the file under it, fill it by its 8.3 name */
+            if (LfnCreateEmpty(szNew, szTo, sizeof(szTo)) != 0) {
+                OpError("Cannot create '%s'.", szNew);
+                return FALSE;
+            }
+        }
+        if (!CopyFileData(lpFrom, szTo))
             return FALSE;
         if (bMove && !DeleteFile(lpFrom))
             OpError("'%s' was copied but could not be removed.", lpFrom);
@@ -595,18 +658,17 @@ static BOOL CopyTree(LPCSTR lpFrom, LPCSTR lpTo, BOOL bMove)
     }
 
     /* directory */
-    if (IsInside(lpTo, lpFrom)) {
+    if (IsInside(szTo, lpFrom)) {
         OpError("Cannot copy or move '%s' into itself.", lpFrom);
         return FALSE;
     }
-    Step(lpFrom, lpTo);
-    if (Exists(lpTo) && CfgGetInt("Folders", "ConfirmFolders", 1)) {
-        char szName[MAXPATHLEN], szText[MAXPATHLEN + 120];
+    Step(lpFrom, lpDestDir);
+    if (bExists && CfgGetInt("Folders", "ConfirmFolders", 1)) {
+        char szText[LFN_MAXPATH + 120];
 
-        lstrcpy(szName, lpTo);
         wsprintf(szText, "There already is a folder called '%s'.\n\n"
                          "Would you like to %s the files into it?",
-                 (LPSTR)PathFileName(szName), (LPSTR)(bMove ? "move" : "copy"));
+                 lpName, (LPSTR)(bMove ? "move" : "copy"));
         switch (AskAll("Confirm Folder Replace", szText, &s_op.bFolderAll, NULL)) {
         case IDNO:
             return TRUE;
@@ -615,30 +677,56 @@ static BOOL CopyTree(LPCSTR lpFrom, LPCSTR lpTo, BOOL bMove)
             return FALSE;
         }
     }
-    if (bMove && SameDrive(lpFrom, lpTo) && !Exists(lpTo)
-        && DosRename(lpFrom, lpTo))
+    if (bMove && SameDrive(lpFrom, szTo) && !bExists && DosRename(lpFrom, szNew))
         return TRUE;
-    if (!Exists(lpTo) && !MakeDir(lpTo)) {
-        OpError("Cannot create the folder '%s'.", lpTo);
-        return FALSE;
+    if (!bExists) {
+        if (!MakeDir(szNew)) {
+            OpError("Cannot create the folder '%s'.", szNew);
+            return FALSE;
+        }
+        LfnShortPath(szNew, szTo, sizeof(szTo));
     }
+    f = NewFind();
+    if (!f)
+        return FALSE;
     lstrcpy(szFrom, lpFrom);
     PathAppend(szFrom, "*.*");
-    if (_dos_findfirst(szFrom, _A_NORMAL | _A_RDONLY | _A_HIDDEN | _A_SYSTEM
-                       | _A_SUBDIR | _A_ARCH, &ft) == 0) {
+    if (LfnFindFirst(szFrom, FIND_ALL, f) == 0) {
+        /* moving changes the directory being searched: collect first */
+        HGLOBAL hNames = NULL;
+        LPCSTR lp;
         do {
-            if (ft.name[0] == '.')
+            if (f->szShort[0] == '.')
                 continue;
-            lstrcpy(szFrom, lpFrom);
-            PathAppend(szFrom, ft.name);
-            lstrcpy(szTo, lpTo);
-            PathAppend(szTo, ft.name);
-            if (!CopyTree(szFrom, szTo, bMove)) {
-                bOK = FALSE;
-                break;
+            lstrcpy(szFrom, f->szShort);
+            lstrcat(szFrom, "|");
+            if (lstrlen(szFrom) + lstrlen(f->szName) < (int)sizeof(szNew)) {
+                lstrcpy(szNew, szFrom);
+                lstrcat(szNew, f->szName);
+                if (!PathListAdd(&hNames, szNew)) {
+                    bOK = FALSE;
+                    break;
+                }
             }
-        } while (_dos_findnext(&ft) == 0);
+        } while (LfnFindNext(f) == 0);
+        LfnFindClose(f);
+        if (hNames) {
+            for (lp = PathListFirst(hNames); lp && bOK; lp = PathListNext(lp)) {
+                LPCSTR lpBar = _fstrchr(lp, '|');
+                int n = (int)(lpBar - lp);
+                lstrcpy(szFrom, lpFrom);
+                PathAppend(szFrom, "");
+                lstrcpyn(szFrom + lstrlen(szFrom), lp, n + 1);
+                lstrcpyn(szNew, lpBar + 1, sizeof(szNew));
+                if (!CopyTree(szFrom, szTo, szNew, bMove))
+                    bOK = FALSE;
+            }
+            PathListUnlock(hNames);
+            GlobalFree(hNames);
+        }
     }
+    LfnFindClose(f);
+    free(f);
     if (bOK && bMove)
         RemoveDir(lpFrom);
     return bOK;
@@ -661,23 +749,25 @@ static void RefreshParent(LPCSTR lpPath)
 
 BOOL FileOpCopyMove(HWND hwndOwner, HGLOBAL hList, LPCSTR lpDestDir, BOOL bMove)
 {
-    char szTo[MAXPATHLEN], szFrom[MAXPATHLEN];
+    char szFrom[MAXPATHLEN], szName[LFN_MAXNAME];
     LPCSTR lp;
     BOOL bOK = TRUE;
 
     if (CfgGetInt("Folders", "ConfirmCopy", 0)) {
-        char szMsg[MAXPATHLEN + 80];
+        char szMsg[LFN_MAXPATH * 2 + 80], szDest[LFN_MAXPATH];
         int n = PathListCount(hList);
 
         lp = PathListFirst(hList);
         lstrcpyn(szFrom, lp ? lp : "", sizeof(szFrom));
         PathListUnlock(hList);
+        LfnLongName(szFrom, szName, sizeof(szName));
+        LfnDisplayPath(lpDestDir, szDest, sizeof(szDest));
         if (n == 1)
             wsprintf(szMsg, "%s '%s' to %s?", (LPSTR)(bMove ? "Move" : "Copy"),
-                     (LPSTR)PathFileName(szFrom), lpDestDir);
+                     (LPSTR)szName, (LPSTR)szDest);
         else
             wsprintf(szMsg, "%s these %d items to %s?", (LPSTR)(bMove ? "Move" : "Copy"),
-                     n, lpDestDir);
+                     n, (LPSTR)szDest);
         if (MessageBox(hwndOwner, szMsg, bMove ? "Confirm Move" : "Confirm Copy",
                        MB_YESNO | MB_ICONQUESTION) != IDYES)
             return FALSE;
@@ -690,9 +780,11 @@ BOOL FileOpCopyMove(HWND hwndOwner, HGLOBAL hList, LPCSTR lpDestDir, BOOL bMove)
             OpError("Cannot copy or move a whole drive (%s).", szFrom);
             continue;
         }
-        lstrcpy(szTo, lpDestDir);
-        PathAppend(szTo, PathFileName(szFrom));
-        bOK = CopyTree(szFrom, szTo, bMove);
+        /* the long name goes with it (onto a drive without long names
+           the 8.3 name) */
+        if (!LfnDrive(lpDestDir) || !LfnLongName(szFrom, szName, sizeof(szName)))
+            lstrcpy(szName, PathFileName(szFrom));
+        bOK = CopyTree(szFrom, lpDestDir, szName, bMove);
     }
     PathListUnlock(hList);
     EndOp();
@@ -709,7 +801,7 @@ BOOL FileOpCopyMove(HWND hwndOwner, HGLOBAL hList, LPCSTR lpDestDir, BOOL bMove)
 
 BOOL FileOpDelete(HWND hwndOwner, HGLOBAL hList, BOOL bToBin)
 {
-    char szMsg[MAXPATHLEN + 80], szName[MAXPATHLEN];
+    char szMsg[LFN_MAXPATH + 80], szName[MAXPATHLEN], szLong[LFN_MAXNAME];
     LPCSTR lp;
     int n = PathListCount(hList);
     BOOL bOK = TRUE;
@@ -720,10 +812,11 @@ BOOL FileOpDelete(HWND hwndOwner, HGLOBAL hList, BOOL bToBin)
     lstrcpy(szName, lp);
     PathListUnlock(hList);
     if (g_cfg.bConfirmDelete) {
+        LfnLongName(szName, szLong, sizeof(szLong));
         if (n == 1)
             wsprintf(szMsg, bToBin ? "Are you sure you want to send '%s' to the Bin?"
                                    : "Are you sure you want to delete '%s'?",
-                     (LPSTR)PathFileName(szName));
+                     (LPSTR)szLong);
         else
             wsprintf(szMsg, bToBin ? "Are you sure you want to send these %d items to the Bin?"
                                    : "Are you sure you want to delete these %d items?", n);
@@ -755,9 +848,9 @@ BOOL FileOpDelete(HWND hwndOwner, HGLOBAL hList, BOOL bToBin)
     return bOK;
 }
 
-/* Moves a file or folder with the progress/confirmation machinery; used
-   by the Bin to send and restore items */
-BOOL FileOpMoveTo(HWND hwndOwner, LPCSTR lpFrom, LPCSTR lpTo)
+/* Moves a file or folder into lpToDir, named lpName (a long name where
+   the drive has them); used by the Bin to send and restore items */
+BOOL FileOpMoveTo(HWND hwndOwner, LPCSTR lpFrom, LPCSTR lpToDir, LPCSTR lpName)
 {
     BOOL bOK, bNested = s_bBusy;
 
@@ -769,7 +862,7 @@ BOOL FileOpMoveTo(HWND hwndOwner, LPCSTR lpFrom, LPCSTR lpTo)
             return FALSE;
         s_op.lpBuf = (LPSTR)GlobalLock(s_op.hBuf);
     }
-    bOK = CopyTree(lpFrom, lpTo, TRUE);
+    bOK = CopyTree(lpFrom, lpToDir, lpName, TRUE);
     if (!bNested)
         EndOp();
     return bOK;
@@ -788,30 +881,41 @@ BOOL FileOpRemove(HWND hwndOwner, LPCSTR lpPath)
     return bOK;
 }
 
+/* Renames lpPath (a short path) to lpNewName: a long name on drives with
+   long names, else an 8.3 name */
 BOOL FileOpRename(HWND hwndOwner, LPCSTR lpPath, LPCSTR lpNewName)
 {
-    char szNew[MAXPATHLEN], szMsg[MAXPATHLEN + 80];
-    LPCSTR p;
+    char szNew[LFN_MAXPATH], szDir[MAXPATHLEN], szMsg[LFN_MAXPATH + 80];
+    char szShort[14];
+    BOOL bLong = LfnDrive(lpPath);
 
-    for (p = lpNewName; *p; p++)
-        if (*p == '\\' || *p == '/' || *p == ':' || *p == '*' || *p == '?'
-            || *p == '"' || *p == '<' || *p == '>' || *p == '|' || *p == ' ') {
-            MessageBox(hwndOwner, "A file name cannot contain spaces or any of "
-                       "these characters:\n\\ / : * ? \" < > |",
-                       NS_APPNAME, MB_OK | MB_ICONEXCLAMATION);
-            return FALSE;
-        }
-    lstrcpyn(szNew, lpPath, sizeof(szNew));
-    PathParent(szNew);
+    if (!LfnValidName(lpNewName, bLong)) {
+        MessageBox(hwndOwner, bLong
+                   ? "A file name cannot contain any of these characters:\n"
+                     "\\ / : * ? \" < > |"
+                   : "A file name has up to 8 characters, a full stop and up to 3 "
+                     "more, without spaces and any of these characters:\n"
+                     "\\ / : * ? \" < > | + , ; = [ ]",
+                   NS_APPNAME, MB_OK | MB_ICONEXCLAMATION);
+        return FALSE;
+    }
+    lstrcpyn(szDir, lpPath, sizeof(szDir));
+    PathParent(szDir);
+    lstrcpy(szNew, szDir);
     PathAppend(szNew, lpNewName);
-    AnsiUpper(szNew);
-    if (Exists(szNew)) {
+    if (!bLong)
+        AnsiUpper(szNew);
+    /* something else by that name (a new case of the same name is fine) */
+    if (LfnShortOf(szDir, lpNewName, szShort) == 0
+        && lstrcmpi(szShort, PathFileName((LPSTR)lpPath)) != 0) {
         wsprintf(szMsg, "Cannot rename: '%s' already exists.", (LPSTR)lpNewName);
         MessageBox(hwndOwner, szMsg, NS_APPNAME, MB_OK | MB_ICONEXCLAMATION);
         return FALSE;
     }
     if (!DosRename(lpPath, szNew)) {
-        wsprintf(szMsg, "Cannot rename '%s'.", lpPath);
+        char szLong[LFN_MAXPATH];
+        LfnDisplayPath(lpPath, szLong, sizeof(szLong));
+        wsprintf(szMsg, "Cannot rename '%s'.", (LPSTR)szLong);
         MessageBox(hwndOwner, szMsg, NS_APPNAME, MB_OK | MB_ICONEXCLAMATION);
         return FALSE;
     }
@@ -819,21 +923,27 @@ BOOL FileOpRename(HWND hwndOwner, LPCSTR lpPath, LPCSTR lpNewName)
     return TRUE;
 }
 
-/* Creates "NEWFOLDR" (or NEWFOLD1...) in lpDir; returns its name */
+/* Creates "New Folder" (with long names) or "NEWFOLDR" (NEWFOLD1...) in
+   lpDir; returns its 8.3 name */
 BOOL FileOpNewFolder(HWND hwndOwner, LPCSTR lpDir, LPSTR lpName)
 {
-    char szPath[MAXPATHLEN];
+    char szPath[LFN_MAXPATH], szName[24];
+    BOOL bLong = LfnDrive(lpDir);
     int i;
 
     for (i = 0; i < 100; i++) {
-        if (i == 0)
-            lstrcpy(lpName, "NEWFOLDR");
+        if (bLong)
+            wsprintf(szName, i ? "New Folder (%d)" : "New Folder", i + 1);
+        else if (i == 0)
+            lstrcpy(szName, "NEWFOLDR");
         else
-            wsprintf(lpName, i < 10 ? "NEWFOLD%d" : "NEWFOL%d", i);
+            wsprintf(szName, i < 10 ? "NEWFOLD%d" : "NEWFOL%d", i);
         lstrcpy(szPath, lpDir);
-        PathAppend(szPath, lpName);
-        if (!Exists(szPath)) {
+        PathAppend(szPath, szName);
+        if (LfnShortOf(lpDir, szName, lpName) != 0) {
             if (MakeDir(szPath)) {
+                if (LfnShortOf(lpDir, szName, lpName) != 0)
+                    lstrcpy(lpName, szName);
                 ExplorerRefreshPath(lpDir);
                 return TRUE;
             }
@@ -854,8 +964,7 @@ void FileOpMeasure(LPCSTR lpPath, DWORD FAR *pdwSize, int FAR *pnFiles,
 
     lstrcpy(szPath, lpPath);
     PathAppend(szPath, "*.*");
-    if (_dos_findfirst(szPath, _A_NORMAL | _A_RDONLY | _A_HIDDEN | _A_SYSTEM
-                       | _A_SUBDIR | _A_ARCH, &ft) != 0)
+    if (_dos_findfirst(szPath, FIND_ALL, &ft) != 0)
         return;
     do {
         if (ft.name[0] == '.')

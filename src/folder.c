@@ -71,9 +71,12 @@ static void Layout(HWND hwnd)
 
 static void SetTitle(HWND hwnd)
 {
-    char szTitle[MAXPATHLEN + 32];
+    char szTitle[LFN_MAXPATH + 72], szPath[LFN_MAXPATH];
     LPCSTR lpPath = FViewGetPath(ViewOf(hwnd));
     LPCSTR lpFilter = FViewGetFilter(ViewOf(hwnd));
+
+    LfnDisplayPath(lpPath, szPath, sizeof(szPath));
+    lpPath = szPath;
 
     if (!*lpPath)
         CfgGetStr("Desktop", "ComputerCaption", "Computer", szTitle, 40);

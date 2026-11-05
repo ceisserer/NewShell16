@@ -326,7 +326,10 @@ void FitText(HDC hdc, LPCSTR lpSrc, LPSTR lpDst, int cbDst, int cxMax)
     lstrcpyn(lpDst, lpSrc, cbDst);
     if (TextWidth(hdc, lpDst) <= cxMax)
         return;
-    for (n = lstrlen(lpDst); n > 0; n--) {
+    n = lstrlen(lpDst);
+    if (n > cbDst - 4)
+        n = cbDst - 4;              /* room for the "..." */
+    for (; n > 0; n--) {
         lpDst[n] = '\0';
         lstrcpy(lpDst + n, "...");
         if (TextWidth(hdc, lpDst) <= cxMax)
@@ -538,8 +541,13 @@ void PathAppend(LPSTR lpPath, LPCSTR lpName)
 BOOL PathParent(LPSTR lpPath)
 {
     LPSTR lpName;
+    int n = lstrlen(lpPath);
 
-    PathNormalize(lpPath);
+    /* as PathNormalize, but keeping the case (of long names) */
+    if (n == 2 && lpPath[1] == ':')
+        lstrcat(lpPath, "\\");
+    else if (n > 3 && lpPath[n - 1] == '\\')
+        lpPath[n - 1] = '\0';
     if (lstrlen(lpPath) <= 3)
         return FALSE;
     lpName = PathFileName(lpPath);
@@ -674,13 +682,28 @@ BOOL LaunchCommand(HWND hwnd, LPCSTR lpCmdLine, LPCSTR lpDir, int nShow)
     HINSTANCE hInst;
     int i = 0;
 
+    char szLong[LFN_MAXPATH], szDir[MAXPATHLEN];
+
     while (*lpCmdLine == ' ')
         lpCmdLine++;
     if (IsUrl(lpCmdLine))
         return OpenUrl(hwnd, lpCmdLine);
-    while (*lpCmdLine && *lpCmdLine != ' ' && i < sizeof(szFile) - 1)
-        szFile[i++] = *lpCmdLine++;
-    szFile[i] = '\0';
+    if (*lpCmdLine == '"') {
+        /* "C:\Long Folder\Program.exe" parameters */
+        lpCmdLine++;
+        while (*lpCmdLine && *lpCmdLine != '"' && i < sizeof(szLong) - 1)
+            szLong[i++] = *lpCmdLine++;
+        if (*lpCmdLine == '"')
+            lpCmdLine++;
+    } else
+        while (*lpCmdLine && *lpCmdLine != ' ' && i < sizeof(szLong) - 1)
+            szLong[i++] = *lpCmdLine++;
+    szLong[i] = '\0';
+    /* programs are started by their 8.3 path */
+    if (!LfnShortPath(szLong, szFile, sizeof(szFile)))
+        lstrcpyn(szFile, szLong, sizeof(szFile));
+    if (lpDir && *lpDir && LfnShortPath(lpDir, szDir, sizeof(szDir)))
+        lpDir = szDir;
     while (*lpCmdLine == ' ')
         lpCmdLine++;
     lpParams = lpCmdLine;
