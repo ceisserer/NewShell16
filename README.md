@@ -165,6 +165,11 @@ NewShell16 floppy, boot, and run `win a:\setup.exe` at the DOS prompt:
 qemu-system-i386 -m 16 -hda win31.img -fda newshell-$V-disk.img
 ```
 
+**In the browser (PCjs)**: `tools/pcjs/mkpcjs.py` builds a static web page
+from the same archives that runs Windows 3.1 with NewShell16 installed in
+[PCjs](https://www.pcjs.org), on an emulated IBM PC AT (286, 4 MB, VGA
+640x480 in 16 colours; see [tools/pcjs/README.md](tools/pcjs/README.md)).
+
 ## Testing
 
 [docs/testing.md](docs/testing.md) describes the DOSBox-X harness used to

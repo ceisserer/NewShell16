@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<!--
+  NewShell16 - Copyright (C) 2026 NewShell16 contributors
+  SPDX-License-Identifier: GPL-3.0-or-later
+
+  Template of tools/pcjs/mkpcjs.py (@NAME@ placeholders). The machine markup
+  is what PCjs's components.xsl (PCx86 2.26) makes of a <machine> XML file,
+  written out here so that the page needs no XSLT in the browser. PCx86
+  finds its components by their classes and data-value attributes when the
+  page has loaded. PCjs: https://www.pcjs.org, MIT licence, (c) Jeff Parsons.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>@TITLE@</title>
+<link rel="stylesheet" href="components.css">
+<style>
+  :root { --bg: #f4f1ea; --fg: #1d1d1b; --muted: #5d5a53; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #1b1b1d; --fg: #e9e6df; --muted: #a29e95; }
+  }
+  html, body { margin: 0; background: var(--bg); color: var(--fg);
+               font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 1312px; margin: 0 auto; padding: 16px; box-sizing: border-box; }
+  h1 { font-size: 1.3em; margin: 0 0 4px; }
+  p.note { color: var(--muted); margin: 0 0 12px; }
+  .machine h3 { display: none; }
+  .machine .pcjs-container { color: #1d1d1b; }
+  canvas.pcjs-canvas { width: 100%; max-width: 1280px; height: auto; }
+</style>
+</head>
+<body>
+<main>
+<h1>@TITLE@</h1>
+<p class="note">@MACHINE@. Click the screen to capture the mouse (Esc releases it).
+The disk lives in this page's memory: changes are lost when the page is reloaded.</p>
+
+<div id="win31" class="machine pcx86"><div id="win31.machine" class="pcx86-machine pcx86-component" style="margin:0 auto;clear:both;" data-value="">
+<h3>@MACHINE@</h3>
+<div class="pcjs-container" style="border:1px solid black;border-radius:15px;overflow:auto;background-color:#fff8e7;">
+	<div id="win31.computer" class="pcx86-computer pcx86-component" data-value=""><div class="pcjs-container"><div class="pcx86-computer-object" data-value="{id:'win31.computer',name:'IBM PC AT',autoPower:true,busWidth:24,resume:'0',state:''}"></div></div></div>
+	<div id="win31.ramLow" class="pcx86-ram pcx86-component" data-value=""><div class="pcjs-container"><div class="pcx86-ram-object" data-value="{id:'win31.ramLow',name:'',addr:0x00000,size:0xa0000,file:'',load:null,exec:null,test:false}"></div></div></div>
+	<div id="win31.ramExt" class="pcx86-ram pcx86-component" data-value=""><div class="pcjs-container"><div class="pcx86-ram-object" data-value="{id:'win31.ramExt',name:'',addr:0x100000,size:@RAMEXT@,file:'',load:null,exec:null,test:false}"></div></div></div>
+	<div id="win31.romBIOS" class="pcx86-rom pcx86-component" data-value=""><div class="pcjs-container"><div class="pcx86-rom-object" data-value="{id:'win31.romBIOS',name:'',addr:0xf0000,size:0x10000,alias:0xff0000,file:'rom/ATBIOS-REV3.json5',notify:''}"></div></div></div>
+	<div id="win31.videoVGA" class="pcx86-video pcx86-component" style="margin:0 auto;clear:both;padding:8px;" data-value=""><div class="pcjs-container">
+		<div class="pcjs-title">VGA Color Display</div>
+		<div class="pcx86-control" style="float:right;">
+			<div class="pcx86-control" style="float:left;padding-left:8px;"><div class="pcjs-label" style="text-align:right;">Caps</div><div class="pcx86-binding pcjs-led" data-value="{type:'led',binding:'caps-lock',value:''}" style="display:inline-block;"></div><div style="clear:both"></div></div>
+			<div class="pcx86-control" style="float:left;padding-left:8px;"><div class="pcjs-label" style="text-align:right;">Num</div><div class="pcx86-binding pcjs-led" data-value="{type:'led',binding:'num-lock',value:''}" style="display:inline-block;"></div><div style="clear:both"></div></div>
+			<div class="pcx86-control" style="float:left;padding-left:8px;"><div class="pcjs-label" style="text-align:right;">Scroll</div><div class="pcx86-binding pcjs-led" data-value="{type:'led',binding:'scroll-lock',value:''}" style="display:inline-block;"></div><div style="clear:both"></div></div>
+			<div class="pcx86-control" style="float:left;padding-left:8px;line-height:1em;"><button class="pcx86-binding" style="-webkit-user-select:none;" data-value="{type:'button',binding:'fullScreen',value:''}">Full Screen</button></div>
+		</div>
+		<div class="pcx86-video-object pcjs-screen" data-value="{id:'win31.videoVGA',name:'',model:'vga',mode:null,screenWidth:1280,screenHeight:960,screenColor:'black',screenRotate:0,bufferAddr:0,bufferRAM:false,bufferFormat:'1bpp',bufferCols:0,bufferRows:0,bufferBits:1,bufferLeft:0,bufferRotate:0,memory:0,switches:'',scale:false,cellWidth:1,cellHeight:1,charCols:80,charRows:25,fontROM:'',fontColor:'',touchScreen:'mouse',autoLock:true,aspectRatio:0,smoothing:null,interruptRate:0,refreshRate:60,flicker:0.5,irq:null}"><canvas class="pcjs-canvas" width="1280" height="960" style="height:auto;background-color:black;"></canvas></div>
+		<div id="win31.romVGA" class="pcx86-rom pcx86-component" data-value=""><div class="pcjs-container"><div class="pcx86-rom-object" data-value="{id:'win31.romVGA',name:'',addr:0xc0000,size:0x6000,alias:null,file:'rom/IBM-VGA.json5',notify:'videoVGA[0x378d,0x3f8d,0x4eba]'}"></div></div></div>
+	</div></div>
+	<div id="win31.fdcNEC" class="pcx86-fdc pcx86-component" data-value=""><div class="pcjs-container"><div class="pcx86-fdc-object" data-value="{id:'win31.fdcNEC',name:'',autoMount:'{}',diskettes:'',drives:'',server:'',sortBy:''}"></div></div></div>
+	<div id="win31.hdcAT" class="pcx86-hdc pcx86-component" data-value=""><div class="pcjs-container"><div class="pcx86-hdc-object" data-value="{id:'win31.hdcAT',name:'',drives:'@DRIVES@',type:'AT'}"></div></div></div>
+	<div id="win31.keyboard" class="pcx86-keyboard pcx86-component" data-value=""><div class="pcjs-container"><div class="pcx86-keyboard-object" data-value="{id:'win31.keyboard',name:'',model:'US84'}"></div></div></div>
+	<div id="win31.cpu286" class="pcx86-cpu pcx86-component" style="float:right;padding-right:8px;padding-bottom:8px;" data-value=""><div class="pcjs-container">
+		<div class="pcx86-cpu-object" data-value="{id:'win31.cpu286',name:'',model:'80286',stepping:'',fpu:0,cycles:@CYCLES@,multiplier:1,autoStart:null,addrReset:0,csStart:-1,csInterval:-1,csStop:-1}"></div>
+		<div class="pcjs-controls">
+			<div class="pcx86-control" style="float:left;"><button class="pcx86-binding" style="-webkit-user-select:none;" data-value="{type:'button',binding:'run',value:''}">Run</button></div>
+			<div class="pcx86-control" style="float:left;"><button class="pcx86-binding" style="-webkit-user-select:none;" data-value="{type:'button',binding:'reset',value:''}">Reset</button></div>
+			<div class="pcx86-control" style="float:left;"><button class="pcx86-binding" style="-webkit-user-select:none;" data-value="{type:'button',binding:'setSpeed',value:''}">Speed</button></div>
+		</div>
+	</div></div>
+	<div id="win31.chipset" class="pcx86-chipset pcx86-component" data-value=""><div class="pcjs-container"><div class="pcx86-chipset-object" data-value="{id:'win31.chipset',name:'',model:'5170',scaleTimers:false,sw1:'',sw2:'',sound:true,floppies:[1440,1200],monitor:'vga',dateRTC:''}"></div></div></div>
+	<div id="win31.com1" class="pcx86-serial pcx86-component" data-value=""><div class="pcjs-container"><div class="pcx86-serial-object" data-value="{id:'win31.com1',name:'',adapter:1,baudReceive:0,baudTransmit:0,binding:'',tabSize:0,charBOL:0,upperCase:false}"></div></div></div>
+	<div id="win31.mouse" class="pcx86-mouse pcx86-component" data-value=""><div class="pcjs-container"><div class="pcx86-mouse-object" data-value="{id:'win31.mouse',name:'',adapter:0,binding:'',type:'',scaleMouse:0.5,serial:'com1'}"></div></div></div>
+	<div style="clear:both"></div>
+</div>
+<div class="pcjs-copyright"><a href="https://www.pcjs.org" target="_blank" rel="noopener">PCx86</a> v2.26 &copy; 2012-2026 <a href="https://github.com/jeffpar" target="_blank" rel="noopener">Jeff Parsons</a></div>
+</div></div>
+</main>
+<script src="pcx86.js"></script>
+</body>
+</html>
