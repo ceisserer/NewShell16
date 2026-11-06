@@ -83,3 +83,4 @@ that can grab the pointer, such as `remote-viewer vnc://HOST:5901`
 
 The image keeps every change; run `mkimage.sh` again for a fresh one (about
 a minute). For scripted screenshot tests see [docs/testing.md](../../docs/testing.md).
+To run the same Windows 3.1 in a web browser see [../pcjs/README.md](../pcjs/README.md).
