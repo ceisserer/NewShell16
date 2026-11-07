@@ -35,8 +35,8 @@ Code segments: each module is a code segment of its own
 (`option packcode=0`), moveable, discardable and loaded on first call
 (`segment class 'CODE' ...` in the makefile); only what the shell needs
 as soon as it starts (`PRELOAD` in the makefile) is loaded with it.
-Windows can then drop code that is not running, such as the Windows XP
-and 11 looks, the dialogs or Find, when memory is short, and reloads it
+Windows can then drop code that is not running, such as the Windows XP,
+11, Platinum and Aqua looks, the dialogs or Find, when memory is short, and reloads it
 from `NEWSHELL.EXE` when it is called again. (Open Watcom's
 `segment type code` is not applied by wlink 2.0; `class 'CODE'` is. A
 segment named on its own line gets only the attributes given there.)
@@ -81,8 +81,10 @@ boxes in Setup:
 
 - *Use NewShell16 as the Windows shell* sets `shell=` and `taskman.exe=` in
   `SYSTEM.INI`; turning it off or removing NewShell16 restores the old values.
-- *Windows 95 look (Retheme16)* installs Retheme16 to `RETHEME\`, adds it to
-  `load=` and selects the theme chosen in Setup (with previews). Retheme16's
+- *Windows 95, XP or Mac look (Retheme16)* installs Retheme16 to `RETHEME\`,
+  adds it to `load=` and selects the theme chosen in Setup (with previews; in
+  the order of the themes' `[Theme] Order=`: the Windows themes, then
+  Cupertino Platinum and Aqua, then the others). Retheme16's
   `THEMES.EXE` ("Themes" in the NewShell16 group) switches it later without
   a restart.
 

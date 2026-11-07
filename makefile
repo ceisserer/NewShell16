@@ -43,6 +43,7 @@ OBJS    = $(OBJDIR)/main.obj     &
           $(OBJDIR)/options.obj  &
           $(OBJDIR)/luna.obj     &
           $(OBJDIR)/win11.obj    &
+          $(OBJDIR)/mac.obj      &
           $(OBJDIR)/lfn.obj
 
 # Code segments: one per module (packcode=0), moveable, discardable and

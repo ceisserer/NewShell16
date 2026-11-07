@@ -37,6 +37,7 @@ executable, `NEWSHELL.EXE`.
 | `util.c` | 3D drawing, small images, colours, hints, path helpers, launching, reading the active theme |
 | `luna.c` | The Windows XP ("Luna") look of the taskbar, Start button and Start menu; which look is used |
 | `win11.c` | The Windows 11 look of the taskbar |
+| `mac.c` | The Platinum and Aqua looks of the taskbar and the Start menu |
 | `nshook.c` | `NSHOOK.DLL`: system hooks (see below) |
 | `lfn.c` | Long file names: the LFN API of INT 21h (71xxh), with 8.3 fallbacks (also in `NSDLG.DLL`) |
 | `nsdlg.c` | `NSDLG.DLL`: the Open and Save As dialogs of Windows 95, XP and 11 for every program |
@@ -176,6 +177,34 @@ Down). It is the panel of the two-column menu with another layout; the
 arrow keys move to the nearest item in their direction.
 
 ![NewShell16 with Redmond-11: the Windows 11 taskbar and Start menu](images/win11.png)
+
+### The Platinum and Aqua looks
+
+With Retheme16's Cupertino Platinum theme (`[Shell] Style=OS9`,
+`THEMES\OS9`) or Cupertino Aqua theme (`Style=OSX`, `THEMES\OSX`), or
+`[Taskbar] Look=4` / `5`, `mac.c` draws the taskbar and the classic Start
+menu to match. The layout stays that of Windows 95 (the bar at the bottom,
+the Start button on the left, a button per task, the clock on the right);
+there is no dock and no menu bar at the top.
+
+- *Platinum*: a light grey bar, grey bevel buttons with a dark outline and
+  rounded corners (the active task pressed: dark grey with white text), a
+  sunken clock, a grey Start menu with a lavender banner and a dark blue
+  highlight.
+- *Aqua*: a brushed metal bar, the Start button a blue gel pill, the task
+  buttons clear gel pills (the active one blue), a pinstriped Start menu
+  with an Aqua blue banner and a blue gel highlight.
+
+The brushed metal is drawn once per bar size into a bitmap the width of the
+bar (streaks of random length and brightness from a fixed seed, light at
+the top and darker at the bottom) and copied from there; it is freed with
+the taskbar. The pinstripes are counted from the top of the menu, so the
+items' parts join up. Like the XP look, everything is procedural and the
+code is a discardable segment of its own. The Open and Save As dialogs use
+the Windows 95 look.
+
+![Cupertino Platinum: taskbar and Start menu](images/platinum.png)
+![Cupertino Aqua: brushed metal taskbar, Aqua Start button, pinstriped Start menu](images/aqua.png)
 
 ### The two-column Start menu
 
@@ -475,8 +504,9 @@ DocFirst=0         ; "README.TXT - Notepad"
 LowerDoc=0         ; ... "readme.txt - Notepad"
 Exclude=           ; programs (module names) without a button
 Tray=              ; programs shown as icons beside the clock
-Look=0             ; 0 as the theme says ([Shell] Style=XP or 11), 1 Windows
-                   ; XP, 2 Windows 95, 3 Windows 11
+Look=0             ; 0 as the theme says ([Shell] Style=XP, 11, OS9 or OSX),
+                   ; 1 Windows XP, 2 Windows 95, 3 Windows 11, 4 Platinum,
+                   ; 5 Aqua
 QuickLaunch=1      ; the Quick Launch bar ([Quick Launch] in NSSTART.INI)
 
 [Desktop]

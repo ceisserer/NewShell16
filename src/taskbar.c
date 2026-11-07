@@ -636,8 +636,8 @@ static void PaintQuickLaunch(HDC hdc)
     RECT rc, rcBar;
     int i, off;
     BOOL bLuna = LunaLook();
-
     BOOL b11 = Win11Look();
+    BOOL bMac = MacLook();
 
     if (!s_nQl)
         return;
@@ -657,6 +657,8 @@ static void PaintQuickLaunch(HDC hdc)
         else if (bHot) {
             if (bLuna)
                 LunaDrawQuickButton(hdc, &rc, bDown);
+            else if (bMac)
+                MacDrawButton(hdc, &rc, bDown);
             else
                 Draw3DEdge(hdc, &rc, bDown, FALSE);
         }
@@ -665,7 +667,7 @@ static void PaintQuickLaunch(HDC hdc)
         y = rc.top + (rc.bottom - rc.top - 16) / 2 + off;
         if (s_ql[i].nImage >= 0)
             DrawSmallImage(hdc, x, y, s_ql[i].nImage);
-        else if (bLuna || b11)
+        else if (bLuna || b11 || bMac)
             LunaIconSmall(hdc, x, y, s_ql[i].hIcon);
         else
             DrawIconSmall(hdc, x, y, s_ql[i].hIcon, NsColor(NSC_TASKBAR));
@@ -758,6 +760,8 @@ static void Layout(HWND hwnd, HDC hdc)
     hfOld = SelectObject(hdc, g_hfontBold);
     if (LunaLook())     /* XP: the Start button fills the height of the bar */
         SetRect(&s_rcStart, 0, 0, LunaStartWidth(hdc, rc.bottom), rc.bottom);
+    else if (MacLook())
+        SetRect(&s_rcStart, 2, BTN_TOP, 2 + MacStartWidth(hdc), BTN_TOP + cyBtn);
     else
         SetRect(&s_rcStart, 2, BTN_TOP, 2 + 30 + TextWidth(hdc, "Start"),
                 BTN_TOP + cyBtn);
@@ -875,6 +879,62 @@ static void PaintLuna(HDC hdc, const RECT FAR *lprc)
     SelectObject(hdc, hfOld);
 }
 
+/* The taskbar in the Platinum and Aqua looks (mac.c) */
+static void PaintMac(HDC hdc, const RECT FAR *lprc)
+{
+    HFONT hfOld;
+    RECT rcEdge;
+    char szText[80];
+    int i, off, nInset = MacButtonInset();
+
+    MacDrawBar(hdc, lprc);
+    if (g_cfg.bClock || s_nTray)
+        MacDrawTray(hdc, &s_rcClock);
+    hfOld = SelectObject(hdc, g_hfontBold);
+    MacDrawStart(hdc, &s_rcStart, s_bStartDown);
+    PaintQuickLaunch(hdc);
+
+    SetBkMode(hdc, TRANSPARENT);
+    for (i = 0; i < s_nTasks; i++) {
+        BOOL bActive = (s_tasks[i].hwnd == s_hwndActive);
+        RECT rcB = s_rcTask[i];
+        int xText;
+
+        MacDrawButton(hdc, &rcB, bActive);
+        off = bActive ? 1 : 0;
+        xText = rcB.left + nInset + 1 + off;
+        if (rcB.right - rcB.left >= 48) {
+            LunaIconSmall(hdc, rcB.left + nInset + off,
+                          rcB.top + (rcB.bottom - rcB.top - 16) / 2 + off,
+                          s_tasks[i].hIcon);
+            xText += 19;
+        }
+        SetTextColor(hdc, MacButtonText(bActive));
+        SelectObject(hdc, bActive ? g_hfontBold : g_hfontUI);
+        FitText(hdc, s_tasks[i].szTitle, szText, sizeof(szText),
+                rcB.right - xText - nInset);
+        SetRect(&rcEdge, xText, rcB.top + off, rcB.right - nInset + 1, rcB.bottom + off);
+        DrawText(hdc, szText, -1, &rcEdge,
+                 DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+    }
+
+    if (g_cfg.bClock || s_nTray) {
+        RECT rcTime = s_rcClock;
+
+        SelectObject(hdc, g_hfontUI);
+        SetTextColor(hdc, RGB(0, 0, 0));
+        for (i = 0; i < s_nTray; i++)
+            LunaIconSmall(hdc, s_rcTray.left + 2 + i * TRAY_CX,
+                          s_rcTray.top + (s_rcTray.bottom - s_rcTray.top - 16) / 2,
+                          s_hTrayIcon[i]);
+        rcTime.left = s_rcTray.right;
+        if (g_cfg.bClock)
+            DrawText(hdc, s_szClock, -1, &rcTime,
+                     DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+    }
+    SelectObject(hdc, hfOld);
+}
+
 /* The taskbar in the Windows 11 look (win11.c) */
 static void Paint11(HDC hdc, const RECT FAR *lprc)
 {
@@ -921,9 +981,11 @@ static void PaintTaskbar(HWND hwnd, HDC hdcWin)
     hbm = CreateCompatibleBitmap(hdcWin, rc.right, rc.bottom);
     hbmOld = SelectObject(hdc, hbm);
     Layout(hwnd, hdc);
-    if (LunaLook() || Win11Look()) {
+    if (LunaLook() || Win11Look() || MacLook()) {
         if (LunaLook())
             PaintLuna(hdc, &rc);
+        else if (MacLook())
+            PaintMac(hdc, &rc);
         else
             Paint11(hdc, &rc);
         BitBlt(hdcWin, 0, 0, rc.right, rc.bottom, hdc, 0, 0, SRCCOPY);
@@ -1674,6 +1736,7 @@ LRESULT CALLBACK NSEXPORT TaskbarWndProc(HWND hwnd, UINT msg, WPARAM wParam,
             s_hbrChecker = NULL;
         }
         LunaFree();
+        MacFree();
         QlFree();
         g_hwndTaskbar = NULL;
         return 0;

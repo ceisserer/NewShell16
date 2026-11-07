@@ -23,10 +23,11 @@
  *
  *   [Taskbar]
  *   Look=0             ; 0: as the theme says, 1: Windows XP, 2: Windows 95,
- *                      ; 3: Windows 11
+ *                      ; 3: Windows 11, 4: Platinum, 5: Aqua
  *
  * This module also decides the look of the taskbar as a whole: Style=11
- * (the Redmond-11 theme) selects the Windows 11 look of win11.c.
+ * (the Redmond-11 theme) selects the Windows 11 look of win11.c, Style=OS9
+ * and Style=OSX (Cupertino Platinum and Aqua) the looks of mac.c.
  *
  * Everything is drawn procedurally (gradients and anti-aliased rounded
  * corners), so the look costs no bitmaps and no memory while it is not
@@ -37,10 +38,8 @@
 #include <string.h>
 #include "newshell.h"
 
-/* a gradient stop: position 0..255 from the top, colour */
-typedef struct tagLSTOP {
-    BYTE pos, r, g, b;
-} LSTOP;
+/* a gradient stop: position 0..255 from the top, colour (newshell.h) */
+typedef NSSTOP LSTOP;
 
 static const LSTOP s_stBar[] = {
     {   0,  60, 129, 235 }, {  10, 100, 160, 248 }, {  45,  52, 120, 238 },
@@ -96,6 +95,10 @@ BOOL LunaRefresh(void)
         s_nLook = LOOK_95;
     else if (nLook == 3)
         s_nLook = LOOK_11;
+    else if (nLook == 4)
+        s_nLook = LOOK_OS9;
+    else if (nLook == 5)
+        s_nLook = LOOK_OSX;
     else {
         char szTheme[MAXPATHLEN], szValue[16];
 
@@ -106,13 +109,17 @@ BOOL LunaRefresh(void)
                 s_nLook = LOOK_XP;
             else if (lstrcmpi(szValue, "11") == 0)
                 s_nLook = LOOK_11;
+            else if (lstrcmpi(szValue, "OS9") == 0)
+                s_nLook = LOOK_OS9;
+            else if (lstrcmpi(szValue, "OSX") == 0)
+                s_nLook = LOOK_OSX;
         }
     }
     s_bKnown = TRUE;
     return bWasKnown && s_nLook != nOld;
 }
 
-/* LOOK_95, LOOK_XP or LOOK_11 */
+/* LOOK_95, LOOK_XP, LOOK_11, LOOK_OS9 or LOOK_OSX */
 int ShellLook(void)
 {
     if (!s_bKnown)
@@ -128,6 +135,12 @@ BOOL LunaLook(void)
 BOOL Win11Look(void)
 {
     return ShellLook() == LOOK_11;
+}
+
+/* Platinum or Aqua (mac.c) */
+BOOL MacLook(void)
+{
+    return ShellLook() == LOOK_OS9 || ShellLook() == LOOK_OSX;
 }
 
 /* Called from a timer: the theme engine was started or stopped */
@@ -256,6 +269,29 @@ static void Line(HDC hdc, int x0, int y0, int x1, int y1, COLORREF clr)
 
     SetRect(&rc, x0, y0, x1, y1);
     FillSolid(hdc, &rc, clr);
+}
+
+/* A vertical gradient in a rectangle with all corners rounded (radius r),
+   the corners blended into what is there (for mac.c) */
+void LunaGradient(HDC hdc, const RECT FAR *lprc, const NSSTOP FAR *lpst, int nst, int r)
+{
+    LSTOP st[8];
+    int i;
+
+    for (i = 0; i < nst && i < 8; i++)
+        st[i] = lpst[i];
+    Shape(hdc, lprc, st, i, r, LC_TL | LC_TR | LC_BL | LC_BR);
+}
+
+/* The colour of a gradient at y of cy */
+COLORREF LunaStopColor(const NSSTOP FAR *lpst, int nst, int y, int cy)
+{
+    LSTOP st[8];
+    int i;
+
+    for (i = 0; i < nst && i < 8; i++)
+        st[i] = lpst[i];
+    return StopColor(st, i, y, cy);
 }
 
 /* The taskbar background */
