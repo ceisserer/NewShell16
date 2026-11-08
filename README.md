@@ -85,6 +85,14 @@ in the middle, the clock with the date, and the Windows 11 Start menu
 
 ![NewShell16 with Redmond-11 on Windows 3.1, 800x600, 65536 colours](docs/images/win11.png)
 
+With Retheme16's Cupertino Platinum and Cupertino Aqua themes the windows
+get the grey Platinum or the pinstriped Aqua look of the Macintosh, and the
+taskbar follows: grey bevel buttons, or an Aqua Start button and gel task
+buttons on a brushed metal bar, with a pinstriped Start menu.
+
+![NewShell16 with Cupertino Platinum on Windows 3.1, 800x600, 65536 colours](docs/images/platinum.png)
+![NewShell16 with Cupertino Aqua on Windows 3.1, 800x600, 65536 colours](docs/images/aqua.png)
+
 See [docs/design.md](docs/design.md) for internals, configuration and the
 roadmap, and [docs/calmira-parity.md](docs/calmira-parity.md) for what
 Calmira has that NewShell16 does not have yet.

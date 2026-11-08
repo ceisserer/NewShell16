@@ -125,10 +125,19 @@ void CfgSetStr(LPCSTR lpSection, LPCSTR lpKey, LPCSTR lpValue);
 #define LOOK_95     0
 #define LOOK_XP     1
 #define LOOK_11     2
+#define LOOK_OS9    3           /* Platinum (mac.c) */
+#define LOOK_OSX    4           /* Aqua (mac.c) */
+/* a gradient stop: position 0..255 from the top, colour */
+typedef struct tagNSSTOP {
+    BYTE pos, r, g, b;
+} NSSTOP;
 BOOL LunaRefresh(void);
 int  ShellLook(void);
 BOOL LunaLook(void);
 BOOL Win11Look(void);
+BOOL MacLook(void);
+void LunaGradient(HDC hdc, const RECT FAR *lprc, const NSSTOP FAR *lpst, int nst, int r);
+COLORREF LunaStopColor(const NSSTOP FAR *lpst, int nst, int y, int cy);
 void LunaRoundRect(HDC hdc, const RECT FAR *lprc, int r, COLORREF clr);
 BOOL LunaCheckEngine(void);
 void LunaFree(void);
@@ -279,6 +288,21 @@ void Win11DrawStart(HDC hdc, const RECT FAR *lprc, BOOL bHot, BOOL bDown);
 void Win11DrawIndicator(HDC hdc, const RECT FAR *lprc, BOOL bActive);
 void Win11DrawClock(HDC hdc, const RECT FAR *lprc, LPCSTR lpTime);
 COLORREF Win11BarColor(void);
+
+/* mac.c */
+void MacFree(void);
+void MacDrawBar(HDC hdc, const RECT FAR *lprc);
+void MacDrawButton(HDC hdc, const RECT FAR *lprc, BOOL bDown);
+COLORREF MacButtonText(BOOL bDown);
+int  MacButtonInset(void);
+int  MacStartWidth(HDC hdc);
+void MacDrawStart(HDC hdc, const RECT FAR *lprc, BOOL bDown);
+void MacDrawTray(HDC hdc, const RECT FAR *lprc);
+COLORREF MacMenuFace(void);
+void MacFillMenu(HDC hdc, const RECT FAR *lprc, int yMenu);
+void MacDrawMenuSel(HDC hdc, const RECT FAR *lprc);
+COLORREF MacBannerColor(int y, int cy);
+void MacDrawSeparator(HDC hdc, const RECT FAR *lprc);
 
 /* startxp.c */
 void StartXPShow(HWND hwndOwner, int x, int y, BOOL b11);

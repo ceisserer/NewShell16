@@ -9,7 +9,10 @@ It comes with Retheme16, which gives Windows 3.1 the look of Windows 95
 (title bars, 3D dialog controls, grey menus, Windows 95 scroll bars), or
 with its RedmondExperience theme the blue look of Windows XP; NewShell16's
 taskbar and Start menu then turn into the Windows XP ones too (green Start
-button, blue taskbar). The XP look is made for display drivers with 65536
+button, blue taskbar). Redmond-11 gives the light Windows 11 look, and
+Cupertino Platinum and Cupertino Aqua the grey Platinum and the Aqua look
+of the Macintosh, with a Platinum taskbar or an Aqua Start button on a
+brushed metal taskbar. These looks are made for display drivers with 65536
 or more colours; with 16 or 256 colours Windows uses the nearest colours.
 
 Requirements: Windows 3.1 or Windows for Workgroups 3.11, Standard or
@@ -23,7 +26,8 @@ asks for the directory (default C:\NEWSHELL) and can:
 
   - make NewShell16 the Windows shell instead of Program Manager
     (SYSTEM.INI shell= and taskman.exe=; Windows is restarted)
-  - turn on the Windows 95 or XP look with Retheme16 and pick its theme
+  - turn on a look with Retheme16 (Windows 95, 98, ME, XP, 11, Platinum,
+    Aqua) and pick its theme
   - create a "NewShell16" group in Program Manager
 
 Run Setup again (Start > Programs > NewShell16 > NewShell16 Setup) to change
@@ -34,8 +38,8 @@ finishes there and restarts Windows again.
 
 "Themes" in the same group switches the theme at once, without
 restarting Windows. Start > Settings > Taskbar, page Desktop, "Taskbar
-look" chooses the Windows XP or Windows 95 look of NewShell16's taskbar
-and Start menu regardless of the theme.
+look" chooses the Windows 95, XP, 11, Platinum or Aqua look of
+NewShell16's taskbar and Start menu regardless of the theme.
 
 Silent installation (for scripts and network installs):
 
@@ -45,7 +49,8 @@ Silent installation (for scripts and network installs):
   /D=dir       installation directory
   /NOSHELL     keep Program Manager as the shell
   /NOTHEME     no Windows 95 look
-  /T=theme     theme directory name: WIN95, WIN98, WINME, WINXP or SLATE
+  /T=theme     theme directory name: WIN95, WIN98, WINME, WINXP, WIN11,
+               OS9, OSX or SLATE
   /LFN         long file names in DOS: LFNTSR in AUTOEXEC.BAT (restarts the
                computer with /RESTART)
   /NOGROUP     no Program Manager group

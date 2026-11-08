@@ -118,7 +118,7 @@ static NSDLGINSTALLPROC s_lpfnDlgInstall;
 
 void FileDlgApply(void)
 {
-    static const int s_aLook[] = { NSDLG_95, NSDLG_XP, NSDLG_11 };
+    static const int s_aLook[] = { NSDLG_95, NSDLG_XP, NSDLG_11, NSDLG_95, NSDLG_95 };
     int nStyle = CfgGetInt("FileDialog", "Style", 0), nLook;
 
     if (!s_hDlgDll) {

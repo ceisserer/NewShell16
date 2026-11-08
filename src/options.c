@@ -194,6 +194,8 @@ static void MakeControls(HWND hDlg)
                     SendMessage(hwnd, CB_ADDSTRING, 0, (LPARAM)(LPSTR)"Windows XP");
                     SendMessage(hwnd, CB_ADDSTRING, 0, (LPARAM)(LPSTR)"Windows 95");
                     SendMessage(hwnd, CB_ADDSTRING, 0, (LPARAM)(LPSTR)"Windows 11");
+                    SendMessage(hwnd, CB_ADDSTRING, 0, (LPARAM)(LPSTR)"Platinum");
+                    SendMessage(hwnd, CB_ADDSTRING, 0, (LPARAM)(LPSTR)"Aqua");
                 } else if (lstrcmp(o->lpSection, "FileDialog") == 0) {   /* NSDLG.DLL */
                     SendMessage(hwnd, CB_ADDSTRING, 0, (LPARAM)(LPSTR)"as the taskbar look");
                     SendMessage(hwnd, CB_ADDSTRING, 0, (LPARAM)(LPSTR)"Windows 95");

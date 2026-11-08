@@ -88,9 +88,25 @@ def build(build_dir):
     return setup_dir, rt_dir, host_dir, lfn_dir
 
 
+def theme_order(theme):
+    """[Theme] Order= of a theme: where theme lists put it (the Windows themes
+    first, then the others; themes without it last)."""
+    with open(os.path.join(RETHEME, "themes", theme, "THEME.INI"), encoding="latin-1") as f:
+        for line in f:
+            if line.strip().lower().startswith("order="):
+                try:
+                    return int(line.split("=", 1)[1].split(";")[0])
+                except ValueError:
+                    break
+    return 1000
+
+
 def themes():
+    """The theme directories in the order of [Theme] Order=, then by name;
+    the default theme first."""
     d = os.path.join(RETHEME, "themes")
-    names = sorted(t for t in os.listdir(d) if os.path.isfile(os.path.join(d, t, "THEME.INI")))
+    names = [t for t in os.listdir(d) if os.path.isfile(os.path.join(d, t, "THEME.INI"))]
+    names.sort(key=lambda t: (theme_order(t), t))
     names.remove(DEFAULT_THEME)
     return [DEFAULT_THEME] + names
 
