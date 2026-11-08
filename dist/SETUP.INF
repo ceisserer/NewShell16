@@ -49,7 +49,7 @@ Window=Retheme16
 Wait=RETHEME,RTLOADER
 
 [Choice]
-Label=&Theme (RedmondExperience: Windows XP):
+Label=&Theme:
 Switch=T
 Default=RED95
 NameFrom=RETHEME\THEMES\%ITEM%\THEME.INI,Theme,Name

@@ -10,7 +10,7 @@ and NewShell16 in [PCjs](https://www.pcjs.org)'s PCx86 emulator, as:
 | Windows | 3.1 (3.10.103) in standard mode (a 286 has no 386 enhanced mode) |
 | Disk | 20 MB, IBM AT drive type 2, about 9 MB free |
 | Mouse | serial (COM1), keyboard US 84 keys |
-| Shell | NewShell16 with the Windows 95 look of Retheme16 |
+| Shell | NewShell16 with the Redmond 95 look of Retheme16 |
 
 ```sh
 MEDIA=~/win31 tools/pcjs/mkpcjs.py           # writes build/pcjs

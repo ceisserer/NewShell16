@@ -5,11 +5,11 @@ NewShell16 is a re-implementation of the Calmira shell for Windows 3.1
 and Windows for Workgroups 3.11: a taskbar with a Start menu, desktop
 icons, folder windows, a File System window, a Bin, a Task Manager and Find.
 
-It comes with Retheme16, which gives Windows 3.1 the look of Windows 95
-(title bars, 3D dialog controls, grey menus, Windows 95 scroll bars), or
-with its RedmondExperience theme the blue look of Windows XP; NewShell16's
-taskbar and Start menu then turn into the Windows XP ones too (green Start
-button, blue taskbar). Redmond-11 gives the light Windows 11 look, and
+It comes with Retheme16, which gives Windows 3.1 the Redmond 95 look
+(title bars, 3D dialog controls, grey menus, 3D scroll bars), or with its
+RedmondExperience theme a blue, rounded look; NewShell16's taskbar and
+Start menu then follow (green Start button, blue taskbar). Redmond-11
+gives a light, flat look, and
 Cupertino Platinum and Cupertino Aqua a grey, bevelled and a glossy,
 pinstriped look, with a Platinum taskbar or an Aqua Start button on a
 brushed metal taskbar. These looks are made for display drivers with 65536
@@ -26,8 +26,8 @@ asks for the directory (default C:\NEWSHELL) and can:
 
   - make NewShell16 the Windows shell instead of Program Manager
     (SYSTEM.INI shell= and taskman.exe=; Windows is restarted)
-  - turn on a look with Retheme16 (Windows 95, 98, ME, XP, 11, Platinum,
-    Aqua) and pick its theme
+  - turn on a look with Retheme16 (Redmond 95, 98, ME, Experience, 11,
+    Cupertino Platinum, Aqua) and pick its theme
   - create a "NewShell16" group in Program Manager
 
 Run Setup again (Start > Programs > NewShell16 > NewShell16 Setup) to change
@@ -38,7 +38,7 @@ finishes there and restarts Windows again.
 
 "Themes" in the same group switches the theme at once, without
 restarting Windows. Start > Settings > Taskbar, page Desktop, "Taskbar
-look" chooses the Windows 95, XP, 11, Platinum or Aqua look of
+look" chooses the Redmond 95, Experience, Redmond-11, Platinum or Aqua look of
 NewShell16's taskbar and Start menu regardless of the theme.
 
 Silent installation (for scripts and network installs):
@@ -48,7 +48,7 @@ Silent installation (for scripts and network installs):
 
   /D=dir       installation directory
   /NOSHELL     keep Program Manager as the shell
-  /NOTHEME     no Windows 95 look
+  /NOTHEME     no Retheme16 look
   /T=theme     theme directory name: RED95, RED98, REDME, REDEXP, RED11,
                CUPPLAT, CUPAQUA or SLATE
   /LFN         long file names in DOS: LFNTSR in AUTOEXEC.BAT (restarts the
@@ -111,7 +111,7 @@ driver is used: Windows' own file system would bypass the driver.
 OPEN AND SAVE AS DIALOGS
 
 NSDLG.DLL gives every Windows 3.1 program the Open and Save As dialogs of
-Windows 95, Windows XP (places bar) or Windows 11 (navigation pane,
+Redmond 95, Experience (places bar) or Redmond-11 (navigation pane,
 address bar, search), following the theme, with long file names. The
 program gets 8.3 names back: saving under a new long name creates the file
 first, so it has its 8.3 alias (as Windows 95 does). Programs that bring a
@@ -126,7 +126,7 @@ FILES
 
   NEWSHELL.EXE   the shell
   NSHOOK.DLL     its system hooks
-  NSDLG.DLL      the Open and Save As dialogs of Windows 95, XP and 11
+  NSDLG.DLL      the Open and Save As dialogs (Redmond 95, Experience, 11)
   LFNTSR\        LFNTSR, long file names for DOS (GPL; source in LFNTSR\SRC,
                  https://github.com/ceisserer/lnf286)
   RETHEME\       Retheme16 (RETHEME.EXE, RETHEME.DLL, THEMES.EXE, GALLERY.EXE,

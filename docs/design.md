@@ -11,7 +11,7 @@ executable, `NEWSHELL.EXE`.
 | `main.c` | `WinMain`, hidden main window, shell detection, hook DLL loading, start-up programs, second-instance forwarding |
 | `taskbar.c` | Taskbar window: Start button, Quick Launch, task buttons, clock, task system menus |
 | `startmnu.c` | Owner-drawn Start menu from `NSSTART.INI`, `$` macros, the programs started last |
-| `startxp.c` | The two-column Start menu of Windows XP (pinned and recent programs, All Programs, Log Off, Shut Down) and the Windows 11 Start menu |
+| `startxp.c` | The two-column Start menu (pinned and recent programs, All Programs, Log Off, Shut Down) and the Redmond-11 Start menu |
 | `startprop.c` | Start Menu Properties: the Start menu as an editable tree, its look |
 | `progman.c` | `PROGMAN.INI` / `*.GRP` reader, `load=`/`run=`, StartUp group |
 | `dde.c` | Program Manager DDE server for setup programs |
@@ -35,12 +35,12 @@ executable, `NEWSHELL.EXE`.
 | `users.c` | Users: logon dialog, per-user settings |
 | `settings.c` | `NEWSHELL.INI` |
 | `util.c` | 3D drawing, small images, colours, hints, path helpers, launching, reading the active theme |
-| `luna.c` | The Windows XP ("Luna") look of the taskbar, Start button and Start menu; which look is used |
-| `win11.c` | The Windows 11 look of the taskbar |
+| `luna.c` | The Experience look of the taskbar, Start button and Start menu; which look is used |
+| `win11.c` | The Redmond-11 look of the taskbar |
 | `cupertino.c` | The Platinum and Aqua looks of the taskbar and the Start menu |
 | `nshook.c` | `NSHOOK.DLL`: system hooks (see below) |
 | `lfn.c` | Long file names: the LFN API of INT 21h (71xxh), with 8.3 fallbacks (also in `NSDLG.DLL`) |
-| `nsdlg.c` | `NSDLG.DLL`: the Open and Save As dialogs of Windows 95, XP and 11 for every program |
+| `nsdlg.c` | `NSDLG.DLL`: the Open and Save As dialogs (Redmond 95, Experience and 11 looks) for every program |
 
 ## Windows 3.1 specifics
 
@@ -74,7 +74,7 @@ executable, `NEWSHELL.EXE`.
   `SetWindowPlacement` (as Calmira does) and they are reached through the
   taskbar instead.
 - **Desktop colour.** As the shell, NewShell16 sets the desktop to the
-  Windows 95 teal for the session while `WIN.INI` has no `[colors]`
+  teal of Redmond 95 for the session while `WIN.INI` has no `[colors]`
   `Background=` (no colour chosen in Control Panel); nothing is written.
 - **Desktop icons** are small popup windows forced to the bottom of the
   Z-order; their background is drawn with `USER.PaintDesktop` so the
@@ -95,7 +95,7 @@ executable, `NEWSHELL.EXE`.
 ## Look and feel, with and without a theme engine
 
 NewShell16 draws its own parts (taskbar, Start menu, folder views, status
-bars, pane edges) in the Windows 95 style, and leaves menus, captions and
+bars, pane edges) in the Redmond 95 style, and leaves menus, captions and
 dialog controls to Windows. It is meant to look consistent both on a
 plain Windows 3.1 and with the
 [Retheme16](https://github.com/ceisserer/win31_theme_engine) engine, which
@@ -108,7 +108,7 @@ restyles those system parts:
   Calmira's 3D Start menu, items use the button-face colour, the first
   level has 32x32 icons and a banner (a gradient towards the active
   caption colour), and separators are etched. Without the engine the
-  items also paint a raised Windows 95 frame: its inner lines are part of
+  items also paint a raised 3D frame: its inner lines are part of
   the items, and its outer lines are drawn over the black menu border
   Windows 3.1 draws (the owner-draw DC is not clipped to the item). Items
   are painted into a memory bitmap and blitted, so the engine, which
@@ -119,7 +119,7 @@ restyles those system parts:
 - **Controls** are only placed in dialogs (the engine themes controls in
   dialogs only): the Task Manager is a dialog, like Run, Find, Properties,
   Options and Shut Down. Lists in ordinary windows (File System tree, Bin)
-  are borderless and sit in a sunken Win95 pane edge drawn by NewShell16,
+  are borderless and sit in a sunken 3D pane edge drawn by NewShell16,
   instead of the black 3.1 border.
 - **Taskbar menus** are moved above the taskbar once they are on screen
   (Windows 3.1 has no `TPM_BOTTOMALIGN`).
@@ -128,23 +128,23 @@ restyles those system parts:
 - **Desktop icon labels** use the icon title font from the Control Panel
   (`SPI_GETICONTITLELOGFONT`).
 
-### The Windows XP look
+### The Experience look
 
 When the running Retheme16 theme has `[Shell] Style=Experience` in its
 `THEME.INI` (Retheme16's RedmondExperience theme, `THEMES\REDEXP`; `Base=`
-is followed), `luna.c` draws the taskbar in the Windows XP "Luna" style: a
+is followed), `luna.c` draws the taskbar in the Experience style: a
 blue gradient bar, a green Start button with rounded right corners filling
 the height of the bar and "start" in white italics, rounded light blue task
 buttons (dark blue for the active task), a light blue tray, white text. The
 Start menu gets white items, a light-to-dark blue banner and flat grey
 separators; the engine draws the white menu border.
 
-`[Taskbar] Look=` overrides the theme: 0 follows it, 1 always uses the XP
+`[Taskbar] Look=` overrides the theme: 0 follows it, 1 always uses the Experience
 look (also without the engine), 2 never. The look is re-read when system
 colours change (the theme engine sets and restores them when it starts and
 stops), when `WIN.INI` changes, and when the 500 ms taskbar timer sees the
 engine start or stop. The colour settings of `[Colors]` (taskbar, Start
-menu) do not apply to the XP look.
+menu) do not apply to the Experience look.
 
 Everything is drawn procedurally into the taskbar's memory bitmap:
 gradients row by row with `ExtTextOut(ETO_OPAQUE)`, rounded corners
@@ -157,10 +157,10 @@ the classic look costs little extra. The
 gradients want a 15/16/24-bit display; GDI dithers them with 16 or 256
 colours.
 
-### The Windows 11 look
+### The Redmond-11 look
 
 With Retheme16's Redmond-11 theme (`[Shell] Style=Eleven`, `THEMES\RED11`), or
-`[Taskbar] Look=3`, `win11.c` draws the taskbar of Windows 11: a light bar
+`[Taskbar] Look=3`, `win11.c` draws the Redmond-11 taskbar: a light bar
 8 pixels taller than the others (windows and desktop icons follow when the
 look changes), the Start button (four blue panes), the Quick Launch
 buttons and the task buttons as icons centred on the bar, light rounded
@@ -168,7 +168,7 @@ squares under the mouse and behind the active task, a short grey line under
 running tasks and a longer blue one under the active task (the titles are
 in the hints), and the clock with the date below the time.
 
-The Start menu is then the Windows 11 one, centred above the taskbar: a
+The Start menu is then the Redmond-11 one, centred above the taskbar: a
 grid of pinned programs (`[Pinned]`, then the first level of
 `NSSTART.INI` except Programs and Shut Down; up to 18), All apps (the
 Programs submenu), Recommended (the programs started last) and a footer
@@ -176,14 +176,14 @@ with the user (Log Off when there are users) and the power button (Shut
 Down). It is the panel of the two-column menu with another layout; the
 arrow keys move to the nearest item in their direction.
 
-![NewShell16 with Redmond-11: the Windows 11 taskbar and Start menu](images/win11.png)
+![NewShell16 with Redmond-11: the taskbar and Start menu](images/win11.png)
 
 ### The Platinum and Aqua looks
 
 With Retheme16's Cupertino Platinum theme (`[Shell] Style=Platinum`,
 `THEMES\CUPPLAT`) or Cupertino Aqua theme (`Style=Aqua`, `THEMES\CUPAQUA`), or
 `[Taskbar] Look=4` / `5`, `cupertino.c` draws the taskbar and the classic Start
-menu to match. The layout stays that of Windows 95 (the bar at the bottom,
+menu to match. The layout stays that of Redmond 95 (the bar at the bottom,
 the Start button on the left, a button per task, the clock on the right).
 
 - *Platinum*: a light grey bar, grey bevel buttons with a dark outline and
@@ -198,17 +198,17 @@ The brushed metal is drawn once per bar size into a bitmap the width of the
 bar (streaks of random length and brightness from a fixed seed, light at
 the top and darker at the bottom) and copied from there; it is freed with
 the taskbar. The pinstripes are counted from the top of the menu, so the
-items' parts join up. Like the XP look, everything is procedural and the
+items' parts join up. Like the Experience look, everything is procedural and the
 code is a discardable segment of its own. The Open and Save As dialogs use
-the Windows 95 look.
+the Redmond 95 look.
 
 ![Cupertino Platinum: taskbar and Start menu](images/platinum.png)
 ![Cupertino Aqua: brushed metal taskbar, Aqua Start button, pinstriped Start menu](images/aqua.png)
 
 ### The two-column Start menu
 
-With the XP look (or always, with `[Start Menu] Style=2`) the Start button
-opens the Windows XP Start menu (`startxp.c`) instead of the classic one:
+With the Experience look (or always, with `[Start Menu] Style=2`) the
+Start button opens the two-column Start menu (`startxp.c`) instead of the classic one:
 a header with a picture and the user's name, a white left column with the
 pinned programs (`[Pinned]` in `NSSTART.INI`, large icons, bold) and the
 programs started last from the Start menu (`[Recent]`, up to five, kept by
@@ -217,8 +217,8 @@ blue right column with the first level of `NSSTART.INI` except Programs
 and Shut Down, and a footer with Log Off (when there are users) and Shut
 Down.
 
-![The two-column Start menu with the XP look](images/startxp.png)
-![... and without it (Style=2), with the Windows 95 theme](images/startxp-classic.png)
+![The two-column Start menu with the Experience look](images/startxp.png)
+![... and without it (Style=2), with the Redmond 95 theme](images/startxp-classic.png)
 
 It is a popup window with a modal loop of its own, like a menu: it holds
 the mouse capture (a click outside closes it, also on the Start button)
@@ -228,24 +228,24 @@ ordinary owner-drawn popup menus of the classic Start menu, opened by a
 click, the Right key or after resting the mouse on the item for a moment.
 A click opens them when the button is released (a popup menu opened while
 the button is down would close again on the release), and they open above
-the taskbar, All Programs upwards from the bottom of the panel as in
-Windows XP. With the XP look the green arrow of All Programs, the user
+the taskbar, All Programs upwards from the bottom of the panel. With the
+Experience look the green arrow of All Programs, the user
 picture's frame and the icons of Log Off and Shut Down are drawn in
 `luna.c`, in true colour.
 The command chosen is posted to the taskbar after the window is gone.
-Without the XP look the menu uses the system colours (caption gradient,
-window and Start menu colours), like the classic style of Windows XP.
+Without the Experience look the menu uses the system colours (caption
+gradient, window and Start menu colours).
 
 ### Quick Launch
 
-The Quick Launch bar of the Windows 98 shell (IE4 Desktop Update) sits
+The Quick Launch bar sits
 between the Start button and the task buttons: a separator and grip,
 small flat buttons that rise under the mouse, a separator. Its buttons are
 `[Quick Launch]` in `NSSTART.INI`, in the Start menu's format; by default
 Show Desktop (`$ClearDesktop`, again restores the windows), File System and
 Notepad. The taskbar's right-click menu switches it on and off and opens
 `NSSTART.INI` in Notepad (Edit Quick Launch); the section is read again
-when it changes. With the XP look the buttons sit on the blue bar and use
+when it changes. With the Experience look the buttons sit on the blue bar and use
 the rounded task button shape.
 
 ## Long file names
@@ -329,7 +329,7 @@ why NewShell16 calls it through DPMI in real mode.
 ## The Open and Save As dialogs (NSDLG.DLL)
 
 `NSDLG.DLL` replaces the Open and Save As dialogs of every program with
-those of Windows 95, Windows XP or Windows 11, following the look of the
+its own in the Redmond 95, Experience or Redmond-11 look, following the look of the
 shell (the Retheme16 theme's `[Shell] Style=`) or `[FileDialog] Style=`.
 
 **Patch.** `NsDlgInstall()`, called by NEWSHELL.EXE, loads COMMDLG.DLL
@@ -365,13 +365,13 @@ same with 8.3 names, and names that are not valid 8.3 names are refused.
 
 **Looks.**
 
-- *95*: Look in (an owner-drawn list of the drives and the path), Up One
+- *Redmond 95*: Look in (an owner-drawn list of the drives and the path), Up One
   Level, Create New Folder, List and Details, the file list, File name,
-  Files of type, Open as read-only. Fixed size, as in Windows 95.
-- *XP*: the same with Back, a Views button and the places bar (My
+  Files of type, Open as read-only. Fixed size.
+- *Experience*: the same with Back, a Views button and the places bar (My
   Computer, My Documents, Windows and `[FileDialog] Place1..6=Caption|Path`);
   resizable, its size is kept.
-- *11*: Back and Up, an address bar whose parts can be clicked, a search
+- *Redmond-11*: Back and Up, an address bar whose parts can be clicked, a search
   box (filters the folder as you type), New folder and the view, a
   navigation pane (Quick access, This PC with the drives), details view,
   the name and type on one line, the buttons below; resizable.
@@ -384,7 +384,7 @@ type-ahead, Backspace (up), F2 (rename) and F5. My Documents is
 
 ```ini
 [FileDialog]
-Style=0            ; 0 as the shell look, 1 Windows 95, 2 XP, 3 11,
+Style=0            ; 0 as the shell look, 1 Redmond 95, 2 Experience, 3 11,
                    ; 4 the Windows 3.1 dialogs
 Documents=         ; the My Documents place
 Place1=Projects|D:\Projects  ; more places (up to 6)
@@ -505,7 +505,7 @@ Exclude=           ; programs (module names) without a button
 Tray=              ; programs shown as icons beside the clock
 Look=0             ; 0 as the theme says ([Shell] Style=Experience, Eleven,
                    ; Platinum or Aqua; also XP and 11),
-                   ; 1 Windows XP, 2 Windows 95, 3 Windows 11, 4 Platinum,
+                   ; 1 Experience, 2 Redmond 95, 3 Redmond-11, 4 Platinum,
                    ; 5 Aqua
 QuickLaunch=1      ; the Quick Launch bar ([Quick Launch] in NSSTART.INI)
 
@@ -559,11 +559,11 @@ StatusBar=1        ; View > Status Bar
 RememberLast=1     ; open at the last folder (Last=)
 
 [Start Menu]
-Style=0            ; 0 as the taskbar look: two columns (Windows XP) with the
-                   ; XP look, Windows 11 with the Windows 11 look, else
-                   ; classic; 1 always classic; 2 always two columns;
-                   ; 3 always Windows 11
-UserName=          ; the name in the XP / 11 menus (default: the user)
+Style=0            ; 0 as the taskbar look: two columns with the
+                   ; Experience look, Redmond-11 with the Redmond-11 look,
+                   ; else classic; 1 always classic; 2 always two columns;
+                   ; 3 always Redmond-11
+UserName=          ; the name in the two-column / 11 menus (default: the user)
 Win95Look=1        ; banner and 3D frame, else a plain menu
 ColouredBar=1
 BoldSelect=0

@@ -519,7 +519,7 @@ BEGIN
     PUSHBUTTON      "Move Do&wn", IDC_SPDOWN, 192, 118, 64, 14
     PUSHBUTTON      "&Import Groups", IDC_SPIMPORT, 192, 135, 64, 14
     GROUPBOX        "Look", -1, 8, 148, 248, 64
-    CONTROL         "Windows &95 look: banner and 3D frame", IDC_SP3D, "Button",
+    CONTROL         "&3D look: banner and frame", IDC_SP3D, "Button",
                     BS_AUTOCHECKBOX | WS_TABSTOP, 14, 160, 150, 10
     CONTROL         "&Coloured selection bar", IDC_SPCOLBAR, "Button",
                     BS_AUTOCHECKBOX | WS_TABSTOP, 14, 172, 110, 10

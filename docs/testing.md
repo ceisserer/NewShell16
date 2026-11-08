@@ -30,7 +30,7 @@ tools/emu/winemu.py --windir ~/win31/Win/WINDOWS --work /tmp/nsemu --out shots \
 (`[dos] lfn=true`), the same LFN API that LFNTSR, DOSLFN, LFNDOS or Windows 95
 give: files made in the scratch drive (`WORK/c`) from Linux keep their
 long names. Without it NewShell16 runs with 8.3 names. Example: the Open
-dialog of Notepad in the Windows XP look:
+dialog of Notepad in the Experience look:
 
 ```sh
 mkdir -p "/tmp/nsemu/c/My Documents" && echo hi > "/tmp/nsemu/c/My Documents/A long name.txt"
@@ -61,7 +61,7 @@ With `--set 'SYSTEM.INI:boot:display.drv=vbesvga.drv'` and the other
 settings of `tools/emu/mkvbe.py` in Retheme16 (the files of
 [vbesvga.drv](https://github.com/PluMGMK/vbesvga.drv) installed into
 `WINDOWS/SYSTEM` with `--install`), DOSBox-X runs Windows at 800x600 with
-65536 colours, for the XP and 11 looks with long names.
+65536 colours, for the Experience and Redmond-11 looks with long names.
 
 Setting `taskman.exe=` to NewShell16 makes Ctrl+Esc open NewShell16's Task
 Manager (or, with `--set 'NEWSHELL.INI:Taskbar:CtrlEscStart=1'`, the Start
@@ -98,7 +98,7 @@ tools/emu/winemu.py --windir ~/win31/Win/WINDOWS --work /tmp/nsemu-rt --out shot
 Run the same script with and without the engine and compare the
 screenshots side by side.
 
-## Windows 3.1 in QEMU with 65536 colours (the XP look)
+## Windows 3.1 in QEMU with 65536 colours (the Experience look)
 
 For trying things by hand, [tools/qemu](../tools/qemu/README.md) has two
 scripts: `mkimage.sh` makes such an image with the prebuilt NewShell16 and

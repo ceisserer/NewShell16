@@ -17,16 +17,16 @@ Usable as the Windows 3.1 shell, with nearly all of Calmira's features:
   exclusion list, and a menu to cascade/tile/minimise windows and show
   the desktop. Minimised windows are kept off the desktop and maximised
   windows stop above the taskbar.
-- **Quick Launch** bar beside the Start button, as in Windows 98: Show
+- **Quick Launch** bar beside the Start button: Show
   Desktop and program buttons from `NSSTART.INI`.
 - **Start menu** in Calmira's START.INI format (`NSSTART.INI`), created
   from the Program Manager groups on first use, with icons at every level,
   Calmira's 3D look or a plain menu, and an editor (Start Menu Properties).
   Setup programs add their groups to it over DDE, as they would to
-  Program Manager. With the XP look it is the two-column Windows XP Start
+  Program Manager. With the Experience look it is the two-column Start
   menu: pinned programs, the programs started last, All Programs, the
   first level of the menu on the right, Log Off and Shut Down (also
-  available without the XP look).
+  available without the Experience look).
 - **Desktop** with Computer, Bin and shortcuts made by dragging files,
   folders, drives or programs onto it (shortcut properties, Change Icon,
   Calmira's arrows, a grid), and a right-click menu.
@@ -62,25 +62,25 @@ Usable as the Windows 3.1 shell, with nearly all of Calmira's features:
   tree, Find, Properties, the Bin, rename, copy and move use long names;
   programs still get 8.3 names. Without one everything works with 8.3
   names.
-- **Open and Save As dialogs** of Windows 95, XP or 11 (following the
+- **Open and Save As dialogs** in the Redmond 95, Experience or 11 look (following the
   theme) for every Windows 3.1 program, with long names, returning 8.3
   names (`NSDLG.DLL`); programs with their own dialog hooks (Write,
   Paintbrush) keep the old dialog, which then shows long names too.
 - As the shell it runs `load=`/`run=` and the StartUp group.
 
 It looks consistent both on a plain Windows 3.1 and with the
-[Retheme16](https://github.com/ceisserer/win31_theme_engine) Windows 95
-theme engine. With Retheme16's RedmondExperience theme (the Windows XP
-"Luna" look) the taskbar and the Start menu turn into the Windows XP ones:
+[Retheme16](https://github.com/ceisserer/win31_theme_engine) theme
+engine. With Retheme16's RedmondExperience theme (a blue, rounded look)
+the taskbar and the Start menu follow:
 a green Start button, a blue taskbar with rounded task buttons, a light
-blue tray and the two-column Windows XP Start menu (best with a display
+blue tray and the two-column Start menu (best with a display
 driver for 65536 colours, see [docs/testing.md](docs/testing.md)).
 
 ![NewShell16 with RedmondExperience on Windows 3.1, 800x600, 65536 colours](docs/images/luna.png)
 
-With Retheme16's Redmond-11 theme the taskbar becomes the Windows 11 one:
+With Retheme16's Redmond-11 theme the taskbar becomes a light, flat one:
 a light bar with the Start button, Quick Launch and the programs as icons
-in the middle, the clock with the date, and the Windows 11 Start menu
+in the middle, the clock with the date, and the Redmond-11 Start menu
 (pinned programs, All apps, Recommended, the power button).
 
 ![NewShell16 with Redmond-11 on Windows 3.1, 800x600, 65536 colours](docs/images/win11.png)
@@ -114,7 +114,7 @@ Details in [docs/building.md](docs/building.md).
 Unzip a release (or `wmake release`, see
 [docs/building.md](docs/building.md)) and run `SETUP.EXE` from Windows. Setup
 can make NewShell16 the Windows shell and optionally installs the Retheme16
-Windows 95 look with a theme of your choice; both can be changed later by
+Redmond or Cupertino look with a theme of your choice; both can be changed later by
 running Setup again from the NewShell16 group. `SETUP /?` lists the switches
 for silent installation.
 

@@ -42,13 +42,13 @@ it is missing.
 Then:
 
 ```sh
-tools/qemu/mkimage.sh -d 16            # 800x600, 65536 colours (Windows XP look)
+tools/qemu/mkimage.sh -d 16            # 800x600, 65536 colours (Experience look)
 tools/qemu/run.sh                      # boots tools/qemu/win31.img
 ```
 
 In Windows, File > Run `C:\NSSETUP\SETUP.EXE` in Program Manager installs
-NewShell16 (choose "Windows 95 or XP look" and the RedmondExperience theme
-for the XP look). Setup restarts Windows with NewShell16 as the shell.
+NewShell16 (choose "Redmond or Cupertino look" and the RedmondExperience
+theme for the Experience look). Setup restarts Windows with NewShell16 as the shell.
 
 `mkimage.sh` options: `-o IMAGE`, `-d 4|8|16` (16 colours, the default;
 256; 65536 with the VBE SVGA driver), `-s 1024x768`, `-b` (build the

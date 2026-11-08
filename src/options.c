@@ -191,22 +191,22 @@ static void MakeControls(HWND hDlg)
                 SendMessage(hwnd, WM_SETFONT, (WPARAM)hf, 0L);
                 if (lstrcmp(o->lpKey, "Look") == 0) {     /* luna.c */
                     SendMessage(hwnd, CB_ADDSTRING, 0, (LPARAM)(LPSTR)"as the theme says");
-                    SendMessage(hwnd, CB_ADDSTRING, 0, (LPARAM)(LPSTR)"Windows XP");
-                    SendMessage(hwnd, CB_ADDSTRING, 0, (LPARAM)(LPSTR)"Windows 95");
-                    SendMessage(hwnd, CB_ADDSTRING, 0, (LPARAM)(LPSTR)"Windows 11");
+                    SendMessage(hwnd, CB_ADDSTRING, 0, (LPARAM)(LPSTR)"Experience");
+                    SendMessage(hwnd, CB_ADDSTRING, 0, (LPARAM)(LPSTR)"Redmond 95");
+                    SendMessage(hwnd, CB_ADDSTRING, 0, (LPARAM)(LPSTR)"Redmond-11");
                     SendMessage(hwnd, CB_ADDSTRING, 0, (LPARAM)(LPSTR)"Platinum");
                     SendMessage(hwnd, CB_ADDSTRING, 0, (LPARAM)(LPSTR)"Aqua");
                 } else if (lstrcmp(o->lpSection, "FileDialog") == 0) {   /* NSDLG.DLL */
                     SendMessage(hwnd, CB_ADDSTRING, 0, (LPARAM)(LPSTR)"as the taskbar look");
-                    SendMessage(hwnd, CB_ADDSTRING, 0, (LPARAM)(LPSTR)"Windows 95");
-                    SendMessage(hwnd, CB_ADDSTRING, 0, (LPARAM)(LPSTR)"Windows XP");
-                    SendMessage(hwnd, CB_ADDSTRING, 0, (LPARAM)(LPSTR)"Windows 11");
+                    SendMessage(hwnd, CB_ADDSTRING, 0, (LPARAM)(LPSTR)"Redmond 95");
+                    SendMessage(hwnd, CB_ADDSTRING, 0, (LPARAM)(LPSTR)"Experience");
+                    SendMessage(hwnd, CB_ADDSTRING, 0, (LPARAM)(LPSTR)"Redmond-11");
                     SendMessage(hwnd, CB_ADDSTRING, 0, (LPARAM)(LPSTR)"Windows 3.1 (as they were)");
                 } else if (lstrcmp(o->lpKey, "Style") == 0) {    /* startxp.c */
                     SendMessage(hwnd, CB_ADDSTRING, 0, (LPARAM)(LPSTR)"as the taskbar look");
                     SendMessage(hwnd, CB_ADDSTRING, 0, (LPARAM)(LPSTR)"classic");
-                    SendMessage(hwnd, CB_ADDSTRING, 0, (LPARAM)(LPSTR)"Windows XP, two columns");
-                    SendMessage(hwnd, CB_ADDSTRING, 0, (LPARAM)(LPSTR)"Windows 11");
+                    SendMessage(hwnd, CB_ADDSTRING, 0, (LPARAM)(LPSTR)"Experience, two columns");
+                    SendMessage(hwnd, CB_ADDSTRING, 0, (LPARAM)(LPSTR)"Redmond-11");
                 } else {
                     SendMessage(hwnd, CB_ADDSTRING, 0, (LPARAM)(LPSTR)"where Windows puts them");
                     SendMessage(hwnd, CB_ADDSTRING, 0, (LPARAM)(LPSTR)"cascaded");

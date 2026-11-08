@@ -21,4 +21,4 @@ test system is `Win_31.zip` (WfW 3.11): unpack it and pass its
 `Win/WINDOWS` directory to the DOSBox-X harness. A real Windows 3.1 is
 installed from the 3.10.103 floppies and MS-DOS into a QEMU image with
 Retheme16's tools, optionally with a 16-bit colour display driver for the
-Windows XP look (see [testing.md](testing.md)).
+Experience look (see [testing.md](testing.md)).
