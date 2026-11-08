@@ -37,7 +37,7 @@ executable, `NEWSHELL.EXE`.
 | `util.c` | 3D drawing, small images, colours, hints, path helpers, launching, reading the active theme |
 | `luna.c` | The Windows XP ("Luna") look of the taskbar, Start button and Start menu; which look is used |
 | `win11.c` | The Windows 11 look of the taskbar |
-| `mac.c` | The Platinum and Aqua looks of the taskbar and the Start menu |
+| `cupertino.c` | The Platinum and Aqua looks of the taskbar and the Start menu |
 | `nshook.c` | `NSHOOK.DLL`: system hooks (see below) |
 | `lfn.c` | Long file names: the LFN API of INT 21h (71xxh), with 8.3 fallbacks (also in `NSDLG.DLL`) |
 | `nsdlg.c` | `NSDLG.DLL`: the Open and Save As dialogs of Windows 95, XP and 11 for every program |
@@ -130,8 +130,8 @@ restyles those system parts:
 
 ### The Windows XP look
 
-When the running Retheme16 theme has `[Shell] Style=XP` in its
-`THEME.INI` (Retheme16's RedmondExperience theme, `THEMES\WINXP`; `Base=`
+When the running Retheme16 theme has `[Shell] Style=Experience` in its
+`THEME.INI` (Retheme16's RedmondExperience theme, `THEMES\REDEXP`; `Base=`
 is followed), `luna.c` draws the taskbar in the Windows XP "Luna" style: a
 blue gradient bar, a green Start button with rounded right corners filling
 the height of the bar and "start" in white italics, rounded light blue task
@@ -159,7 +159,7 @@ colours.
 
 ### The Windows 11 look
 
-With Retheme16's Redmond-11 theme (`[Shell] Style=11`, `THEMES\WIN11`), or
+With Retheme16's Redmond-11 theme (`[Shell] Style=Eleven`, `THEMES\RED11`), or
 `[Taskbar] Look=3`, `win11.c` draws the taskbar of Windows 11: a light bar
 8 pixels taller than the others (windows and desktop icons follow when the
 look changes), the Start button (four blue panes), the Quick Launch
@@ -180,12 +180,11 @@ arrow keys move to the nearest item in their direction.
 
 ### The Platinum and Aqua looks
 
-With Retheme16's Cupertino Platinum theme (`[Shell] Style=OS9`,
-`THEMES\OS9`) or Cupertino Aqua theme (`Style=OSX`, `THEMES\OSX`), or
-`[Taskbar] Look=4` / `5`, `mac.c` draws the taskbar and the classic Start
+With Retheme16's Cupertino Platinum theme (`[Shell] Style=Platinum`,
+`THEMES\CUPPLAT`) or Cupertino Aqua theme (`Style=Aqua`, `THEMES\CUPAQUA`), or
+`[Taskbar] Look=4` / `5`, `cupertino.c` draws the taskbar and the classic Start
 menu to match. The layout stays that of Windows 95 (the bar at the bottom,
-the Start button on the left, a button per task, the clock on the right);
-there is no dock and no menu bar at the top.
+the Start button on the left, a button per task, the clock on the right).
 
 - *Platinum*: a light grey bar, grey bevel buttons with a dark outline and
   rounded corners (the active task pressed: dark grey with white text), a
@@ -504,7 +503,8 @@ DocFirst=0         ; "README.TXT - Notepad"
 LowerDoc=0         ; ... "readme.txt - Notepad"
 Exclude=           ; programs (module names) without a button
 Tray=              ; programs shown as icons beside the clock
-Look=0             ; 0 as the theme says ([Shell] Style=XP, 11, OS9 or OSX),
+Look=0             ; 0 as the theme says ([Shell] Style=Experience, Eleven,
+                   ; Platinum or Aqua; also XP and 11),
                    ; 1 Windows XP, 2 Windows 95, 3 Windows 11, 4 Platinum,
                    ; 5 Aqua
 QuickLaunch=1      ; the Quick Launch bar ([Quick Launch] in NSSTART.INI)

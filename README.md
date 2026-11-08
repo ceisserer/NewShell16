@@ -86,7 +86,7 @@ in the middle, the clock with the date, and the Windows 11 Start menu
 ![NewShell16 with Redmond-11 on Windows 3.1, 800x600, 65536 colours](docs/images/win11.png)
 
 With Retheme16's Cupertino Platinum and Cupertino Aqua themes the windows
-get the grey Platinum or the pinstriped Aqua look of the Macintosh, and the
+get a grey, bevelled Platinum or a pinstriped, glossy Aqua look, and the
 taskbar follows: grey bevel buttons, or an Aqua Start button and gel task
 buttons on a brushed metal bar, with a pinstriped Start menu.
 

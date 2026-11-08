@@ -18,7 +18,7 @@
 /*
  * win11.c - the Windows 11 look of the taskbar
  *
- * Used while the active Retheme16 theme has [Shell] Style=11 (the
+ * Used while the active Retheme16 theme has [Shell] Style=Eleven (the
  * Redmond-11 theme), or with [Taskbar] Look=3 (luna.c decides). The bar is
  * light, the Start button (the four blue panes), Quick Launch and the task
  * buttons are icons centred on it; the task buttons have a short line under

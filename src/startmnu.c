@@ -85,7 +85,7 @@ static int      s_cyTop, s_cySub;   /* item heights for the current font */
 static HFONT    s_hfMenu;           /* GetMenuFont() when the menu opened */
 static BOOL     s_bThemed;          /* the theme engine draws the menus */
 static BOOL     s_bLuna;            /* the Windows XP look (luna.c) */
-static BOOL     s_bMac;             /* the Platinum or Aqua look (mac.c) */
+static BOOL     s_bCup;             /* the Platinum or Aqua look (cupertino.c) */
 static HFONT    s_hfBanner, s_hfBannerLight;
 static int      s_cyBannerFont;
 static HFONT    s_hfCustom;         /* [Start Menu] Font=, if set */
@@ -548,7 +548,7 @@ BOOL SmBegin(void)
     ReadOptions();
     s_bThemed = ThemeEngineActive();
     s_bLuna = LunaLook();
-    s_bMac = MacLook();
+    s_bCup = CupLook();
     {
         TEXTMETRIC tm;
         HDC hdc = GetDC(NULL);
@@ -859,7 +859,7 @@ static void DrawBanner(HDC hdc, const RECT FAR *lprcItem, LPSMITEM p)
         long f = s_cyMenu > 0 ? (long)y * 256 / s_cyMenu : 256;
         /* XP: from light to dark Luna blue */
         HBRUSH hbr = CreateSolidBrush(s_bLuna ? LunaBannerColor(y, s_cyMenu)
-                                      : s_bMac ? MacBannerColor(y, s_cyMenu)
+                                      : s_bCup ? CupBannerColor(y, s_cyMenu)
                                       : RGB(GetRValue(clr) * f / 256,
                                             GetGValue(clr) * f / 256,
                                             GetBValue(clr) * f / 256));
@@ -875,7 +875,7 @@ static void DrawBanner(HDC hdc, const RECT FAR *lprcItem, LPSMITEM p)
         HFONT hfOld = SelectObject(hdc, s_hfBanner);
         int nOldMode = SetBkMode(hdc, TRANSPARENT);
         /* Platinum and Aqua themes have black caption text */
-        COLORREF clrOld = SetTextColor(hdc, s_bMac ? RGB(255, 255, 255)
+        COLORREF clrOld = SetTextColor(hdc, s_bCup ? RGB(255, 255, 255)
                                             : GetSysColor(COLOR_CAPTIONTEXT));
         int x = lprcItem->left + (BANNER_W - s_cyBannerFont) / 2 - 1;
         int yBase = yMenu + s_cyMenu - 6;
@@ -906,13 +906,13 @@ static BOOL IsLastItem(LPSMITEM p)
 static void PaintItem(HDC hdc, RECT rc, LPSMITEM p, BOOL bSel)
 {
     BOOL bTop = HasBanner(p), bLarge = IsLarge(p);
-    COLORREF clrFace = s_bLuna ? LunaMenuFace() : s_bMac ? MacMenuFace()
+    COLORREF clrFace = s_bLuna ? LunaMenuFace() : s_bCup ? CupMenuFace()
                        : s_b3D ? NsColor(NSC_STARTMENU) : GetSysColor(COLOR_MENU);
     RECT rcIn, rcText;
     int cy;
 
-    if (s_bMac)
-        MacFillMenu(hdc, &rc, p->yTop);
+    if (s_bCup)
+        CupFillMenu(hdc, &rc, p->yTop);
     else
         FillSolid(hdc, &rc, clrFace);
     if (bTop) {
@@ -920,7 +920,7 @@ static void PaintItem(HDC hdc, RECT rc, LPSMITEM p, BOOL bSel)
         rc.left += BANNER_W;
     }
     rcIn = rc;
-    if (!s_bThemed && s_b3D && !s_bLuna && !s_bMac) {
+    if (!s_bThemed && s_b3D && !s_bLuna && !s_bCup) {
         RECT rcLine;
 
         if (!bTop) {
@@ -947,8 +947,8 @@ static void PaintItem(HDC hdc, RECT rc, LPSMITEM p, BOOL bSel)
         LunaDrawSeparator(hdc, &rcIn);
         return;
     }
-    if ((p->bFlags & SF_SEP) && s_bMac) {
-        MacDrawSeparator(hdc, &rcIn);
+    if ((p->bFlags & SF_SEP) && s_bCup) {
+        CupDrawSeparator(hdc, &rcIn);
         return;
     }
     if (p->bFlags & SF_SEP) {
@@ -958,8 +958,8 @@ static void PaintItem(HDC hdc, RECT rc, LPSMITEM p, BOOL bSel)
         return;
     }
 
-    if (bSel && s_bMac)
-        MacDrawMenuSel(hdc, &rcIn);
+    if (bSel && s_bCup)
+        CupDrawMenuSel(hdc, &rcIn);
     else if (bSel && s_bColBar)
         FillSolid(hdc, &rcIn, NsColor(NSC_SELECTION));
     else if (bSel) {
@@ -985,7 +985,7 @@ static void PaintItem(HDC hdc, RECT rc, LPSMITEM p, BOOL bSel)
         cy = rc.top + (rc.bottom - rc.top - 16) / 2;
         if (p->nImage >= 0)
             DrawSmallImage(hdc, rc.left + SUB_ICON_X, cy, p->nImage);
-        else if (p->hIcon && s_bMac)    /* over pinstripes or the gel */
+        else if (p->hIcon && s_bCup)    /* over pinstripes or the gel */
             LunaIconSmall(hdc, rc.left + SUB_ICON_X, cy, p->hIcon);
         else if (p->hIcon)
             DrawIconSmall(hdc, rc.left + SUB_ICON_X, cy, p->hIcon,
@@ -995,7 +995,7 @@ static void PaintItem(HDC hdc, RECT rc, LPSMITEM p, BOOL bSel)
     {
         HFONT hfOld = SelectObject(hdc, bSel && s_hfBoldMenu ? s_hfBoldMenu : s_hfMenu);
         int nOldMode = SetBkMode(hdc, TRANSPARENT);
-        COLORREF clrOld = SetTextColor(hdc, s_bMac
+        COLORREF clrOld = SetTextColor(hdc, s_bCup
             ? (bSel ? RGB(255, 255, 255) : (p->bFlags & SF_EMPTY) ? RGB(136, 136, 136) : RGB(0, 0, 0))
             : GetSysColor(bSel && s_bColBar ? COLOR_HIGHLIGHTTEXT
                         : (p->bFlags & SF_EMPTY) ? COLOR_GRAYTEXT
@@ -1053,7 +1053,7 @@ BOOL StartMenuDrawItem(DRAWITEMSTRUCT FAR *lpdis)
         if (hdcMem)
             DeleteDC(hdcMem);
         PaintItem(lpdis->hDC, rc, p, bSel);
-        if (!s_bThemed && s_b3D && !s_bLuna && !s_bMac)
+        if (!s_bThemed && s_b3D && !s_bLuna && !s_bCup)
             DrawOuterFrame(lpdis->hDC, &rc, p);
         return TRUE;
     }
@@ -1065,7 +1065,7 @@ BOOL StartMenuDrawItem(DRAWITEMSTRUCT FAR *lpdis)
     SelectObject(hdcMem, hbmOld);
     DeleteObject(hbm);
     DeleteDC(hdcMem);
-    if (!s_bThemed && s_b3D && !s_bLuna && !s_bMac)
+    if (!s_bThemed && s_b3D && !s_bLuna && !s_bCup)
         DrawOuterFrame(lpdis->hDC, &rc, p);
     return TRUE;
 }

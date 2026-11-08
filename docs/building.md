@@ -81,7 +81,7 @@ boxes in Setup:
 
 - *Use NewShell16 as the Windows shell* sets `shell=` and `taskman.exe=` in
   `SYSTEM.INI`; turning it off or removing NewShell16 restores the old values.
-- *Windows 95, XP or Mac look (Retheme16)* installs Retheme16 to `RETHEME\`,
+- *Redmond or Cupertino look (Retheme16)* installs Retheme16 to `RETHEME\`,
   adds it to `load=` and selects the theme chosen in Setup (with previews; in
   the order of the themes' `[Theme] Order=`: the Windows themes, then
   Cupertino Platinum and Aqua, then the others). Retheme16's

@@ -39,7 +39,7 @@ Autoexec1=%DIR%\LFNTSR\LFNTSR.COM /Q
 
 ; the bundled Retheme16 engine, started through load=
 [Option.Theme]
-Label=Windows &95, XP or Mac look (Retheme16)
+Label=Redmond or Cupertino &look (Retheme16)
 Switch=THEME
 Default=1
 Ini1=%DIR%\RETHEME\RETHEME.INI,Engine,Theme,%DIR%\RETHEME\THEMES\%CHOICE%
@@ -51,7 +51,7 @@ Wait=RETHEME,RTLOADER
 [Choice]
 Label=&Theme (RedmondExperience: Windows XP):
 Switch=T
-Default=WIN95
+Default=RED95
 NameFrom=RETHEME\THEMES\%ITEM%\THEME.INI,Theme,Name
 Preview=RETHEME\THEMES\%ITEM%\PREVIEW.BMP
 @THEMES@

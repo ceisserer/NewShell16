@@ -10,8 +10,8 @@ It comes with Retheme16, which gives Windows 3.1 the look of Windows 95
 with its RedmondExperience theme the blue look of Windows XP; NewShell16's
 taskbar and Start menu then turn into the Windows XP ones too (green Start
 button, blue taskbar). Redmond-11 gives the light Windows 11 look, and
-Cupertino Platinum and Cupertino Aqua the grey Platinum and the Aqua look
-of the Macintosh, with a Platinum taskbar or an Aqua Start button on a
+Cupertino Platinum and Cupertino Aqua a grey, bevelled and a glossy,
+pinstriped look, with a Platinum taskbar or an Aqua Start button on a
 brushed metal taskbar. These looks are made for display drivers with 65536
 or more colours; with 16 or 256 colours Windows uses the nearest colours.
 
@@ -44,13 +44,13 @@ NewShell16's taskbar and Start menu regardless of the theme.
 Silent installation (for scripts and network installs):
 
   SETUP /S [/D=C:\NEWSHELL] [/SHELL | /NOSHELL] [/THEME | /NOTHEME]
-        [/T=WIN95] [/LFN | /NOLFN] [/NOGROUP] [/NOSTART] [/RESTART]
+        [/T=RED95] [/LFN | /NOLFN] [/NOGROUP] [/NOSTART] [/RESTART]
 
   /D=dir       installation directory
   /NOSHELL     keep Program Manager as the shell
   /NOTHEME     no Windows 95 look
-  /T=theme     theme directory name: WIN95, WIN98, WINME, WINXP, WIN11,
-               OS9, OSX or SLATE
+  /T=theme     theme directory name: RED95, RED98, REDME, REDEXP, RED11,
+               CUPPLAT, CUPAQUA or SLATE
   /LFN         long file names in DOS: LFNTSR in AUTOEXEC.BAT (restarts the
                computer with /RESTART)
   /NOGROUP     no Program Manager group

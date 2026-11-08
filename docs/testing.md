@@ -140,7 +140,7 @@ which NewShell16 runs as the shell), boots, and takes screenshots:
 
 ```sh
 (cd external/retheme16 && make win16)
-$E/run.py --base win31hc.img --out shots --theme WINXP --gallery styles --boot 55 \
+$E/run.py --base win31hc.img --out shots --theme REDEXP --gallery styles --boot 55 \
     --step "shot desktop" --step "click 30 588" --step 2 --step "shot start"
 ```
 

@@ -33,7 +33,7 @@ RETHEME = os.path.abspath(os.environ.get("RETHEME16_DIR") or os.path.join(ROOT, 
 PACK = os.path.join(W16SETUP, "tools", "w16pack.py")
 # LFNTSR (ceisserer/lnf286): long file names for DOS, built with NASM
 LFNTSR = os.path.join(ROOT, "external", "lfntsr")
-DEFAULT_THEME = "WIN95"
+DEFAULT_THEME = "RED95"
 
 
 def rt_programs():

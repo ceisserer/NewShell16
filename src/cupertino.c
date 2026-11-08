@@ -16,10 +16,11 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 /*
- * mac.c - the Platinum and Aqua looks of the taskbar and the Start menu
+ * cupertino.c - the Platinum and Aqua looks of the taskbar and the Start menu
  *
- * Used while the active Retheme16 theme has [Shell] Style=OS9 (Cupertino
- * Platinum) or Style=OSX (Cupertino Aqua), or with [Taskbar] Look=4 / 5
+ * Used while the active Retheme16 theme has [Shell] Style=Platinum
+ * (Cupertino Platinum) or Style=Aqua (Cupertino Aqua), or with
+ * [Taskbar] Look=4 / 5
  * (luna.c decides). The taskbar keeps its Windows layout (Start button on
  * the left, task buttons, the clock on the right); only the drawing
  * changes:
@@ -81,7 +82,7 @@ static int     s_cxMetal, s_cyMetal;
 
 static BOOL Aqua(void)
 {
-    return ShellLook() == LOOK_OSX;
+    return ShellLook() == LOOK_AQUA;
 }
 
 static void Fill(HDC hdc, int l, int t, int r, int b, COLORREF clr)
@@ -92,7 +93,7 @@ static void Fill(HDC hdc, int l, int t, int r, int b, COLORREF clr)
     FillSolid(hdc, &rc, clr);
 }
 
-void MacFree(void)
+void CupFree(void)
 {
     if (s_hbmMetal) {
         DeleteObject(s_hbmMetal);
@@ -116,10 +117,10 @@ static void MakeMetal(HDC hdc, int cx, int cy)
     unsigned long seed = 12345UL;
     int x, y;
 
-    MacFree();
+    CupFree();
     s_hbmMetal = CreateCompatibleBitmap(hdc, cx, cy);
     if (!hdcMem || !s_hbmMetal) {
-        MacFree();
+        CupFree();
         if (hdcMem)
             DeleteDC(hdcMem);
         return;
@@ -149,7 +150,7 @@ static void MakeMetal(HDC hdc, int cx, int cy)
     s_cyMetal = cy;
 }
 
-void MacDrawBar(HDC hdc, const RECT FAR *lprc)
+void CupDrawBar(HDC hdc, const RECT FAR *lprc)
 {
     int cx = lprc->right - lprc->left, cy = lprc->bottom - lprc->top;
 
@@ -212,7 +213,7 @@ static void Bevel(HDC hdc, const RECT FAR *lprc, BOOL bDown)
 }
 
 /* A task or Quick Launch button; bDown: the active task, or pressed */
-void MacDrawButton(HDC hdc, const RECT FAR *lprc, BOOL bDown)
+void CupDrawButton(HDC hdc, const RECT FAR *lprc, BOOL bDown)
 {
     if (Aqua())
         Gel(hdc, lprc, bDown ? s_stBlue : s_stClear,
@@ -223,24 +224,24 @@ void MacDrawButton(HDC hdc, const RECT FAR *lprc, BOOL bDown)
 }
 
 /* The text colour on a button */
-COLORREF MacButtonText(BOOL bDown)
+COLORREF CupButtonText(BOOL bDown)
 {
     return bDown && !Aqua() ? RGB(255, 255, 255) : RGB(0, 0, 0);
 }
 
 /* Where a button's content starts: Aqua's round ends need more room */
-int MacButtonInset(void)
+int CupButtonInset(void)
 {
     return Aqua() ? 9 : 5;
 }
 
-int MacStartWidth(HDC hdc)
+int CupStartWidth(HDC hdc)
 {
     return (Aqua() ? 18 : 10) + 16 + 5 + TextWidth(hdc, "Start") + (Aqua() ? 14 : 8);
 }
 
 /* The Start button: Aqua: a blue gel pill; Platinum: a bevel button */
-void MacDrawStart(HDC hdc, const RECT FAR *lprc, BOOL bDown)
+void CupDrawStart(HDC hdc, const RECT FAR *lprc, BOOL bDown)
 {
     RECT rc = *lprc;
     int off = bDown ? 1 : 0, x, nOldMode;
@@ -256,7 +257,7 @@ void MacDrawStart(HDC hdc, const RECT FAR *lprc, BOOL bDown)
     }
     DrawSmallImage(hdc, x + off, rc.top + (rc.bottom - rc.top - 16) / 2 + off, SMI_START);
     nOldMode = SetBkMode(hdc, TRANSPARENT);
-    clrOld = SetTextColor(hdc, MacButtonText(bDown));
+    clrOld = SetTextColor(hdc, CupButtonText(bDown));
     rc.left = x + 16 + 5 + off;
     rc.top += off;
     rc.bottom += off;
@@ -267,7 +268,7 @@ void MacDrawStart(HDC hdc, const RECT FAR *lprc, BOOL bDown)
 
 /* The notification area: Platinum: sunken; Aqua: an etched line before
    it, on the metal */
-void MacDrawTray(HDC hdc, const RECT FAR *lprc)
+void CupDrawTray(HDC hdc, const RECT FAR *lprc)
 {
     if (Aqua()) {
         Fill(hdc, lprc->left, lprc->top + 2, lprc->left + 1, lprc->bottom - 2, RGB(140, 140, 140));
@@ -286,14 +287,14 @@ void MacDrawTray(HDC hdc, const RECT FAR *lprc)
 /* -------------------------------------------------------------------- */
 
 /* The face of the items, where one colour is needed (icons) */
-COLORREF MacMenuFace(void)
+COLORREF CupMenuFace(void)
 {
     return Aqua() ? A_STRIPE_A : P_FACE;
 }
 
 /* The background of an item: Aqua: pinstripes, two pixels each, counted
    from the top of the menu (yMenu: lprc->top in the menu) */
-void MacFillMenu(HDC hdc, const RECT FAR *lprc, int yMenu)
+void CupFillMenu(HDC hdc, const RECT FAR *lprc, int yMenu)
 {
     int y;
 
@@ -312,7 +313,7 @@ void MacFillMenu(HDC hdc, const RECT FAR *lprc, int yMenu)
 }
 
 /* The highlight of the selected item: Aqua: blue gel; Platinum: dark blue */
-void MacDrawMenuSel(HDC hdc, const RECT FAR *lprc)
+void CupDrawMenuSel(HDC hdc, const RECT FAR *lprc)
 {
     if (Aqua())
         LunaGradient(hdc, lprc, s_stMenuSel, NSTOPS(s_stMenuSel), 0);
@@ -321,7 +322,7 @@ void MacDrawMenuSel(HDC hdc, const RECT FAR *lprc)
 }
 
 /* The banner of the first level: lavender to dark blue, or Aqua blue */
-COLORREF MacBannerColor(int y, int cy)
+COLORREF CupBannerColor(int y, int cy)
 {
     if (Aqua())
         return LunaStopColor(s_stBannerA, NSTOPS(s_stBannerA), y, cy);
@@ -329,7 +330,7 @@ COLORREF MacBannerColor(int y, int cy)
 }
 
 /* A separator: a grey line (Platinum: with a white one below) */
-void MacDrawSeparator(HDC hdc, const RECT FAR *lprc)
+void CupDrawSeparator(HDC hdc, const RECT FAR *lprc)
 {
     int y = lprc->top + (lprc->bottom - lprc->top) / 2;
 

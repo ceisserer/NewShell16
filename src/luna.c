@@ -18,16 +18,18 @@
 /*
  * luna.c - the Windows XP ("Luna") look of the taskbar and the Start menu
  *
- * Used while the active Retheme16 theme asks for it ([Shell] Style=XP in
- * its THEME.INI, e.g. the RedmondExperience theme), or always / never with
+ * Used while the active Retheme16 theme asks for it ([Shell]
+ * Style=Experience in its THEME.INI, the RedmondExperience theme), or
+ * always / never with
  *
  *   [Taskbar]
  *   Look=0             ; 0: as the theme says, 1: Windows XP, 2: Windows 95,
  *                      ; 3: Windows 11, 4: Platinum, 5: Aqua
  *
- * This module also decides the look of the taskbar as a whole: Style=11
- * (the Redmond-11 theme) selects the Windows 11 look of win11.c, Style=OS9
- * and Style=OSX (Cupertino Platinum and Aqua) the looks of mac.c.
+ * This module also decides the look of the taskbar as a whole:
+ * Style=Eleven (the Redmond-11 theme) selects the look of win11.c,
+ * Style=Platinum and Style=Aqua (Cupertino Platinum and Aqua) the looks of
+ * cupertino.c. The older values XP and 11 of released themes still work.
  *
  * Everything is drawn procedurally (gradients and anti-aliased rounded
  * corners), so the look costs no bitmaps and no memory while it is not
@@ -96,30 +98,30 @@ BOOL LunaRefresh(void)
     else if (nLook == 3)
         s_nLook = LOOK_11;
     else if (nLook == 4)
-        s_nLook = LOOK_OS9;
+        s_nLook = LOOK_PLATINUM;
     else if (nLook == 5)
-        s_nLook = LOOK_OSX;
+        s_nLook = LOOK_AQUA;
     else {
         char szTheme[MAXPATHLEN], szValue[16];
 
         s_nLook = LOOK_95;
         if (s_bEngineSeen && ThemeDirectory(szTheme, sizeof(szTheme))
             && ReadThemeString(szTheme, "Shell", "Style", szValue, sizeof(szValue))) {
-            if (lstrcmpi(szValue, "XP") == 0)
+            if (lstrcmpi(szValue, "Experience") == 0 || lstrcmpi(szValue, "XP") == 0)
                 s_nLook = LOOK_XP;
-            else if (lstrcmpi(szValue, "11") == 0)
+            else if (lstrcmpi(szValue, "Eleven") == 0 || lstrcmpi(szValue, "11") == 0)
                 s_nLook = LOOK_11;
-            else if (lstrcmpi(szValue, "OS9") == 0)
-                s_nLook = LOOK_OS9;
-            else if (lstrcmpi(szValue, "OSX") == 0)
-                s_nLook = LOOK_OSX;
+            else if (lstrcmpi(szValue, "Platinum") == 0)
+                s_nLook = LOOK_PLATINUM;
+            else if (lstrcmpi(szValue, "Aqua") == 0)
+                s_nLook = LOOK_AQUA;
         }
     }
     s_bKnown = TRUE;
     return bWasKnown && s_nLook != nOld;
 }
 
-/* LOOK_95, LOOK_XP, LOOK_11, LOOK_OS9 or LOOK_OSX */
+/* LOOK_95, LOOK_XP, LOOK_11, LOOK_PLATINUM or LOOK_AQUA */
 int ShellLook(void)
 {
     if (!s_bKnown)
@@ -137,10 +139,10 @@ BOOL Win11Look(void)
     return ShellLook() == LOOK_11;
 }
 
-/* Platinum or Aqua (mac.c) */
-BOOL MacLook(void)
+/* Platinum or Aqua (cupertino.c) */
+BOOL CupLook(void)
 {
-    return ShellLook() == LOOK_OS9 || ShellLook() == LOOK_OSX;
+    return ShellLook() == LOOK_PLATINUM || ShellLook() == LOOK_AQUA;
 }
 
 /* Called from a timer: the theme engine was started or stopped */
@@ -272,7 +274,7 @@ static void Line(HDC hdc, int x0, int y0, int x1, int y1, COLORREF clr)
 }
 
 /* A vertical gradient in a rectangle with all corners rounded (radius r),
-   the corners blended into what is there (for mac.c) */
+   the corners blended into what is there (for cupertino.c) */
 void LunaGradient(HDC hdc, const RECT FAR *lprc, const NSSTOP FAR *lpst, int nst, int r)
 {
     LSTOP st[8];

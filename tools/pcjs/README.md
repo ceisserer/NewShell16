@@ -58,7 +58,7 @@ about a minute.
 
 1. `tools/qemu/mkimage.sh -d 4` installs MS-DOS and Windows 3.1 in QEMU,
    unattended (or `--image` takes an image it made earlier).
-2. NewShell16 Setup runs silently in QEMU (`SETUP /S /T=WIN95`) and makes
+2. NewShell16 Setup runs silently in QEMU (`SETUP /S /T=RED95`) and makes
    NewShell16 the shell.
 3. The FAT16 volume is copied onto a disk with the geometry of an IBM AT
    drive type (PCjs loads a raw image only with the geometry of the drive
@@ -76,7 +76,7 @@ about a minute.
 | `--out DIR` | output directory (default `build/pcjs`) |
 | `--image IMG` | start from an image of `mkimage.sh -d 4` instead of making one |
 | `--build` | `mkimage.sh -b`: build NewShell16 from source instead of a release package |
-| `--theme NAME` | Retheme16 theme for Setup (`WIN95`, `WIN98`, ...) or `none` for the plain Windows 3.1 look |
+| `--theme NAME` | Retheme16 theme for Setup (`RED95`, `RED98`, ...) or `none` for the plain Windows 3.1 look |
 | `--no-newshell` | keep Program Manager; the setup files stay in `C:\NSSETUP` |
 | `--drive-type N` | IBM AT drive type (default 2: 20 MB; 3: 30 MB, 4: 62 MB, ...) |
 | `--mhz N` | CPU clock (default 12); the Speed button under the screen runs faster |

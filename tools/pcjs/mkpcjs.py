@@ -20,7 +20,7 @@ Steps:
     into a QEMU image with the NewShell16 setup files in C:\\NSSETUP (or
     --image takes an image made by it).
  2. NewShell16 Setup runs silently in QEMU (SETUP /S), as the shell, with
-    the bundled Retheme16 look (--theme, default WIN95).
+    the bundled Retheme16 look (--theme, default RED95).
  3. The FAT16 volume is moved onto an IBM PC AT drive type that PCjs
     knows (--drive-type, default 2: 615 cylinders, 4 heads, 17 sectors,
     20 MB), with the MS-DOS boot code kept, and set up for a 286.
@@ -313,7 +313,7 @@ def main():
     ap.add_argument("--out", default=os.path.join(ROOT, "build", "pcjs"), help="output directory")
     ap.add_argument("--image", help="an image made by tools/qemu/mkimage.sh -d 4 (default: make one)")
     ap.add_argument("--build", action="store_true", help="mkimage.sh -b: build NewShell16 from source")
-    ap.add_argument("--theme", default="WIN95", help="Retheme16 theme for NewShell16 Setup, or none")
+    ap.add_argument("--theme", default="RED95", help="Retheme16 theme for NewShell16 Setup, or none")
     ap.add_argument("--no-newshell", action="store_true",
                     help="keep Program Manager; leave the setup files in C:\\NSSETUP")
     ap.add_argument("--drive-type", type=int, default=2, choices=sorted(AT_DRIVE_TYPES),

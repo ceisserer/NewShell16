@@ -637,7 +637,7 @@ static void PaintQuickLaunch(HDC hdc)
     int i, off;
     BOOL bLuna = LunaLook();
     BOOL b11 = Win11Look();
-    BOOL bMac = MacLook();
+    BOOL bCup = CupLook();
 
     if (!s_nQl)
         return;
@@ -657,8 +657,8 @@ static void PaintQuickLaunch(HDC hdc)
         else if (bHot) {
             if (bLuna)
                 LunaDrawQuickButton(hdc, &rc, bDown);
-            else if (bMac)
-                MacDrawButton(hdc, &rc, bDown);
+            else if (bCup)
+                CupDrawButton(hdc, &rc, bDown);
             else
                 Draw3DEdge(hdc, &rc, bDown, FALSE);
         }
@@ -667,7 +667,7 @@ static void PaintQuickLaunch(HDC hdc)
         y = rc.top + (rc.bottom - rc.top - 16) / 2 + off;
         if (s_ql[i].nImage >= 0)
             DrawSmallImage(hdc, x, y, s_ql[i].nImage);
-        else if (bLuna || b11 || bMac)
+        else if (bLuna || b11 || bCup)
             LunaIconSmall(hdc, x, y, s_ql[i].hIcon);
         else
             DrawIconSmall(hdc, x, y, s_ql[i].hIcon, NsColor(NSC_TASKBAR));
@@ -760,8 +760,8 @@ static void Layout(HWND hwnd, HDC hdc)
     hfOld = SelectObject(hdc, g_hfontBold);
     if (LunaLook())     /* XP: the Start button fills the height of the bar */
         SetRect(&s_rcStart, 0, 0, LunaStartWidth(hdc, rc.bottom), rc.bottom);
-    else if (MacLook())
-        SetRect(&s_rcStart, 2, BTN_TOP, 2 + MacStartWidth(hdc), BTN_TOP + cyBtn);
+    else if (CupLook())
+        SetRect(&s_rcStart, 2, BTN_TOP, 2 + CupStartWidth(hdc), BTN_TOP + cyBtn);
     else
         SetRect(&s_rcStart, 2, BTN_TOP, 2 + 30 + TextWidth(hdc, "Start"),
                 BTN_TOP + cyBtn);
@@ -879,19 +879,19 @@ static void PaintLuna(HDC hdc, const RECT FAR *lprc)
     SelectObject(hdc, hfOld);
 }
 
-/* The taskbar in the Platinum and Aqua looks (mac.c) */
-static void PaintMac(HDC hdc, const RECT FAR *lprc)
+/* The taskbar in the Platinum and Aqua looks (cupertino.c) */
+static void PaintCup(HDC hdc, const RECT FAR *lprc)
 {
     HFONT hfOld;
     RECT rcEdge;
     char szText[80];
-    int i, off, nInset = MacButtonInset();
+    int i, off, nInset = CupButtonInset();
 
-    MacDrawBar(hdc, lprc);
+    CupDrawBar(hdc, lprc);
     if (g_cfg.bClock || s_nTray)
-        MacDrawTray(hdc, &s_rcClock);
+        CupDrawTray(hdc, &s_rcClock);
     hfOld = SelectObject(hdc, g_hfontBold);
-    MacDrawStart(hdc, &s_rcStart, s_bStartDown);
+    CupDrawStart(hdc, &s_rcStart, s_bStartDown);
     PaintQuickLaunch(hdc);
 
     SetBkMode(hdc, TRANSPARENT);
@@ -900,7 +900,7 @@ static void PaintMac(HDC hdc, const RECT FAR *lprc)
         RECT rcB = s_rcTask[i];
         int xText;
 
-        MacDrawButton(hdc, &rcB, bActive);
+        CupDrawButton(hdc, &rcB, bActive);
         off = bActive ? 1 : 0;
         xText = rcB.left + nInset + 1 + off;
         if (rcB.right - rcB.left >= 48) {
@@ -909,7 +909,7 @@ static void PaintMac(HDC hdc, const RECT FAR *lprc)
                           s_tasks[i].hIcon);
             xText += 19;
         }
-        SetTextColor(hdc, MacButtonText(bActive));
+        SetTextColor(hdc, CupButtonText(bActive));
         SelectObject(hdc, bActive ? g_hfontBold : g_hfontUI);
         FitText(hdc, s_tasks[i].szTitle, szText, sizeof(szText),
                 rcB.right - xText - nInset);
@@ -981,11 +981,11 @@ static void PaintTaskbar(HWND hwnd, HDC hdcWin)
     hbm = CreateCompatibleBitmap(hdcWin, rc.right, rc.bottom);
     hbmOld = SelectObject(hdc, hbm);
     Layout(hwnd, hdc);
-    if (LunaLook() || Win11Look() || MacLook()) {
+    if (LunaLook() || Win11Look() || CupLook()) {
         if (LunaLook())
             PaintLuna(hdc, &rc);
-        else if (MacLook())
-            PaintMac(hdc, &rc);
+        else if (CupLook())
+            PaintCup(hdc, &rc);
         else
             Paint11(hdc, &rc);
         BitBlt(hdcWin, 0, 0, rc.right, rc.bottom, hdc, 0, 0, SRCCOPY);
@@ -1736,7 +1736,7 @@ LRESULT CALLBACK NSEXPORT TaskbarWndProc(HWND hwnd, UINT msg, WPARAM wParam,
             s_hbrChecker = NULL;
         }
         LunaFree();
-        MacFree();
+        CupFree();
         QlFree();
         g_hwndTaskbar = NULL;
         return 0;

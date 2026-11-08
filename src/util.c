@@ -763,7 +763,7 @@ BOOL ThemeEngineActive(void)
 
 /*
  * The directory of the theme the running engine uses (RETHEME.INI next to
- * RETHEME.DLL, [Engine] Theme=, default THEMES\WIN95). FALSE if the engine
+ * RETHEME.DLL, [Engine] Theme=, default THEMES\RED95). FALSE if the engine
  * does not run.
  */
 BOOL ThemeDirectory(LPSTR lpDir, int cbDir)
@@ -778,7 +778,7 @@ BOOL ThemeDirectory(LPSTR lpDir, int cbDir)
     lstrcpy(szIni, szHome);
     lstrcat(szIni, "RETHEME.INI");
     lstrcpy(szTheme, szHome);
-    lstrcat(szTheme, "THEMES\\WIN95");
+    lstrcat(szTheme, "THEMES\\RED95");
     GetPrivateProfileString("Engine", "Theme", szTheme, szTheme, sizeof(szTheme), szIni);
     lstrcpyn(lpDir, szTheme, cbDir);
     return TRUE;
