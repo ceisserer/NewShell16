@@ -128,7 +128,7 @@ FILES
   NSHOOK.DLL     its system hooks
   NSDLG.DLL      the Open and Save As dialogs of Windows 95, XP and 11
   LFNTSR\        LFNTSR, long file names for DOS (GPL; source in LFNTSR\SRC,
-                 https://github.com/ceisserer/lnf286)
+                 https://github.com/ceisserer/lnf8086)
   RETHEME\       Retheme16 (RETHEME.EXE, RETHEME.DLL, THEMES.EXE, GALLERY.EXE,
                  themes)
 

@@ -53,7 +53,7 @@ not been found yet.
 
 The installer is built with [Win16Setup](https://github.com/ceisserer/Win16Setup)
 and bundles the [Retheme16](https://github.com/ceisserer/win31_theme_engine)
-theme engine and the [LFNTSR](https://github.com/ceisserer/lnf286) long file
+theme engine and the [LFNTSR](https://github.com/ceisserer/lnf8086) long file
 name driver for DOS. All three are git submodules in `external/`:
 
 ```sh
