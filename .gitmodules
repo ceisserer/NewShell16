@@ -8,5 +8,5 @@
 	branch = main
 [submodule "external/lfntsr"]
 	path = external/lfntsr
-	url = https://github.com/ceisserer/lnf286.git
+	url = https://github.com/ceisserer/lnf8086.git
 	branch = main

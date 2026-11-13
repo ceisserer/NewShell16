@@ -24,7 +24,7 @@ NewShell16 is removed):
 LFNTSR is free software under the GNU General Public License, version 3
 or later (COPYING.TXT in the NewShell16 directory). Its source is in SRC\
 (NASM: nasm -f bin -I SRC\ -o LFNTSR.COM SRC\LFNTSR.ASM) and at
-https://github.com/ceisserer/lnf286 (this build: commit @COMMIT@).
+https://github.com/ceisserer/lnf8086 (this build: commit @COMMIT@).
 
 Good to know:
 

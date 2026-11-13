@@ -253,7 +253,7 @@ the rounded task button shape.
 
 Windows 3.1 has no long file names, but DOS can have them: Windows 95's
 MS-DOS 7, and under MS-DOS 3.10 to 6 the drivers
-[LFNTSR](https://github.com/ceisserer/lnf286) (GPL, 8086, bundled),
+[LFNTSR](https://github.com/ceisserer/lnf8086) (GPL, 8086, bundled),
 [LFNDOS](https://www.ibiblio.org/pub/micro/pc-stuff/freedos/files/repositories/latest/pkg-html/lfndos.html)
 (GPL) and [DOSLFN](https://github.com/adoxa/doslfn) (freeware with source)
 provide the LFN API of INT 21h (functions 71xxh: find first/next with long
@@ -299,7 +299,7 @@ With Windows for Workgroups 3.11, 32-bit file access must be off when a
 DOS driver provides the long names (VFAT would bypass it).
 
 **LFNTSR in Setup.** The release carries
-[LFNTSR](https://github.com/ceisserer/lnf286) (submodule `external/lfntsr`,
+[LFNTSR](https://github.com/ceisserer/lnf8086) (submodule `external/lfntsr`,
 built with NASM by `mkrelease.py`): `LFNTSR\LFNTSR.COM`, a README
 (`dist/LFNTSR.TXT`) and, as it is GPL software, its source in
 `LFNTSR\SRC`. It is 8086 code (any PC) for DOS 3.10 and newer, about

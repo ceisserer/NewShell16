@@ -31,7 +31,7 @@ W16SETUP = os.path.join(ROOT, "external", "win16setup")
 # RETHEME16_DIR selects another Retheme16 checkout (e.g. a branch with new themes)
 RETHEME = os.path.abspath(os.environ.get("RETHEME16_DIR") or os.path.join(ROOT, "external", "retheme16"))
 PACK = os.path.join(W16SETUP, "tools", "w16pack.py")
-# LFNTSR (ceisserer/lnf286): long file names for DOS, built with NASM
+# LFNTSR (ceisserer/lnf8086): long file names for DOS, built with NASM
 LFNTSR = os.path.join(ROOT, "external", "lfntsr")
 DEFAULT_THEME = "WIN95"
 
